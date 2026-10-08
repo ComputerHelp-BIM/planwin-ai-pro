@@ -10,7 +10,151 @@ from ..core.frame import FrameAnalysis, FrameModel
 from ..core.model import Project
 from ..core.plan_engine import PlanResult
 from ..design.report import DesignReport
+from ..units import Units
 from .report_common import DISCLAIMER
+
+#: kN based unit symbols in report headers, most specific first
+_HEADER_UNITS = (
+    ("kN·m", "moment"),
+    ("kNm", "moment"),
+    ("kN/m³", "unit_weight"),
+    ("kN/m²", "area"),
+    ("kN/m2", "area"),
+    ("kN/m", "line"),
+    ("kN", "force"),
+)
+
+
+def header_quantity(header: str) -> str | None:
+    """The converted quantity (force, moment, ...) a report column header is expressed in, if any."""
+    for sym, q in _HEADER_UNITS:
+        if sym in str(header):
+            return q
+    return None
+
+
+def convert_rows(headers, rows, units: Units):
+    """Headers and rows in display units: kN based columns (detected from the header) are converted."""
+    qty = [header_quantity(h) for h in headers]
+    if not units.mks or not any(qty):
+        return list(headers), [tuple(r) for r in rows]
+    out = []
+    for r in rows:
+        out.append(
+            tuple(
+                units.show(float(v), q) if q and isinstance(v, (int, float)) and not isinstance(v, bool) else v
+                for v, q in zip(r, qty)
+            )
+            + tuple(r[len(qty) :])
+        )
+    return [units.text(h) for h in headers], out
+
+
+def seismic_method_summary(project: Project, fm: FrameModel | None, fa: FrameAnalysis | None, rep) -> dict:
+    """Seismic analysis method used and why (IS 1893-1:2016 cl 7.7.1), with modal / RS results."""
+    s = project.seismic
+    rs = dict(getattr(fa, "rs", None) or getattr(fm, "rs", None) or {})
+    modal = getattr(fa, "modal", None) or getattr(rep, "modal", None)
+    irr = list(getattr(fa, "irregularities", None) or getattr(rep, "irregularities", None) or [])
+    if fa is not None:
+        required = bool(fa.dynamic_required)
+    else:
+        from ..core.dynamics import dynamic_analysis_required
+        from ..core.irregularity import is_regular
+
+        if fm is not None and fm.levels:
+            base = fm.levels[s.base_level].z if s.base_level < len(fm.levels) else 0.0
+            height = fm.levels[-1].z - base
+        else:
+            el = project.elevations()
+            height = el[-1] - (el[s.base_level] if s.base_level < len(el) else 0.0)
+        required = s.enabled and dynamic_analysis_required(project, height, is_regular(irr))
+    if not s.enabled:
+        method, why = "none", "Seismic loads are disabled for this project"
+    elif rs:
+        method = "Response spectrum (IS 1893-1:2016 cl 7.7.3, CQC)"
+        if s.method == "response_spectrum":
+            why = "Response spectrum method selected by the user"
+        else:
+            why = "cl 7.7.1: dynamic analysis required (not a regular building below 15 m in zone II)"
+    else:
+        method = "Equivalent static (IS 1893-1:2016 cl 7.6)"
+        if s.method == "response_spectrum" or (s.method == "auto" and required):
+            why = "Response spectrum analysis was not possible – equivalent static method used (see warnings)"
+        elif required:
+            why = "WARNING: cl 7.7.1 requires dynamic analysis – static method selected by the user"
+        elif s.method == "static":
+            why = "Equivalent static method selected by the user; permitted by cl 7.7.1"
+        else:
+            why = "cl 7.7.1: regular building below 15 m in zone II – equivalent static method permitted"
+    return {
+        "method": method,
+        "why": why,
+        "setting": s.method,
+        "required": required,
+        "rs": rs,
+        "modal": modal,
+        "irregular": any(bool(i.irregular) for i in irr),
+    }
+
+
+def storey_shear_rows(fm: FrameModel | None, rs: dict) -> list[tuple]:
+    """(level, static VX, static VY, RSX, RSY) per level index, top first – scaled RS storey shears."""
+    if fm is None:
+        return []
+    rows = []
+    for i in range(len(fm.levels) - 1, -1, -1):
+        row: list = [fm.levels[i].name]
+        for d in ("X", "Y"):
+            sr = fm.seismic.get("EQ" + d)
+            row.append(float(sum(sr.forces[i:])) if sr else "")
+        for c in ("RSX", "RSY"):
+            r = rs.get(c)
+            row.append(float(r.storey_shear[i]) if r and i < len(r.storey_shear) else "")
+        rows.append(tuple(row))
+    return rows
+
+
+def boq_rows(groups: dict) -> list[tuple]:
+    """(name, concrete m³, PCC m³, steel kg, formwork m², cost, steel kg/m³) per BOQ group + TOTAL."""
+    rows = []
+    tot = dict.fromkeys(("concrete", "pcc", "steel", "formwork", "cost"), 0.0)
+    for k, v in groups.items():
+        c = v.get("concrete", 0.0)
+        rows.append(
+            (
+                k,
+                c,
+                v.get("pcc", 0.0),
+                v.get("steel", 0.0),
+                v.get("formwork", 0.0),
+                v.get("cost", 0.0),
+                v.get("steel", 0.0) / c if c else 0.0,
+            )
+        )
+        for q in tot:
+            tot[q] += v.get(q, 0.0)
+    if rows:
+        c = tot["concrete"]
+        rows.append(
+            ("TOTAL", c, tot["pcc"], tot["steel"], tot["formwork"], tot["cost"], tot["steel"] / c if c else 0.0)
+        )
+    return rows
+
+
+BOQ_HEADERS = ["Concrete m³", "PCC m³", "Steel kg", "Formwork m²", "Cost ₹", "Steel kg/m³"]
+
+
+def ductile_summary(rep) -> dict:
+    checks = [(d, name, ok, det) for d in rep.ductile for name, ok, det in d.checks]
+    return {
+        "members": len(rep.ductile),
+        "members_failing": sum(not d.ok for d in rep.ductile),
+        "checks": len(checks),
+        "passed": sum(1 for c in checks if c[2]),
+        "failed": sum(1 for c in checks if not c[2]),
+        "failures": [c for c in checks if not c[2]],
+    }
 
 
 def write_excel(
@@ -21,32 +165,67 @@ def write_excel(
     fa: FrameAnalysis | None = None,
     rep: DesignReport | None = None,
     watermark: str = "",
+    units: Units | None = None,
 ) -> str:
+    """Write the workbook.  ``units`` (default: the app-wide :data:`planwin_ai.units.current`)
+    sets the display units of force, moment, line-load and pressure columns."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 
+    if units is None:
+        from .. import units as _units
+
+        units = _units.current
     wb = Workbook()
     head_fill = PatternFill("solid", fgColor="1F3A5F")
     head_font = Font(color="FFFFFF", bold=True)
     bad_fill = PatternFill("solid", fgColor="F8D7DA")
+    sub_font = Font(bold=True, color="1F3A5F")
 
-    def sheet(title, headers, rows, bad_col: int | None = None):
-        ws = wb.create_sheet(title[:31])
-        ws.append(headers)
-        for c in ws[1]:
+    def _cell(v):
+        if isinstance(v, float):
+            return round(v, 3) if v == v and abs(v) != float("inf") else str(v)
+        return v
+
+    def style_header(ws, row: int):
+        for c in ws[row]:
             c.fill, c.font = head_fill, head_font
             c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    def sheet(title, headers, rows, bad_col: int | None = None, pre: list | None = None):
+        """Sheet with a header row; ``pre`` rows (e.g. a summary) are written above the header."""
+        headers, rows = convert_rows(headers, rows, units)
+        ws = wb.create_sheet(title[:31])
+        for r in pre or []:
+            ws.append([_cell(v) for v in r])
+            if r and len(r) == 1:
+                ws.cell(ws.max_row, 1).font = sub_font
+        ws.append(headers)
+        hrow = ws.max_row
+        style_header(ws, hrow)
         for r in rows:
-            ws.append([round(v, 3) if isinstance(v, float) else v for v in r])
+            ws.append([_cell(v) for v in r])
             if bad_col is not None and r[bad_col] in (False, "FAIL", "NO"):
                 for c in ws[ws.max_row]:
                     c.fill = bad_fill
         for i, h in enumerate(headers, 1):
-            width = max([len(str(h))] + [len(str(r[i - 1])) for r in rows[:200]] + [8])
+            width = max([len(str(h))] + [len(str(r[i - 1])) for r in rows[:200] if i - 1 < len(r)] + [8])
             ws.column_dimensions[get_column_letter(i)].width = min(width + 2, 45)
-        ws.freeze_panes = "A2"
+        ws.freeze_panes = f"A{hrow + 1}"
         return ws
+
+    def block(ws, title, headers, rows):
+        """A titled table appended below the existing content of ``ws``."""
+        headers, rows = convert_rows(headers, rows, units)
+        if ws.max_row > 1 or ws.cell(1, 1).value is not None:
+            ws.append([])
+        ws.append([title])
+        ws.cell(ws.max_row, 1).font = sub_font
+        ws.append(headers)
+        style_header(ws, ws.max_row)
+        for r in rows:
+            ws.append([_cell(v) for v in r])
 
     ws = wb.active
     ws.title = "Summary"
@@ -63,6 +242,9 @@ def write_excel(
         ("Height (m)", round(project.elevations()[-1], 3)),
         ("Levels", len(project.levels)),
     ]
+    sm = seismic_method_summary(project, fm, fa, rep)
+    info.append(("Seismic method", sm["method"]))
+    info.append(("Units", "MKS (t, m)" if units.mks else "SI (kN, m)"))
     if watermark:
         info.append(("Licence", watermark))
     for k, v in info:
@@ -176,6 +358,70 @@ def write_excel(
                     rows.append((k, fm.levels[i].name, r.pressures[i], f))
         if rows:
             sheet("Wind", ["Direction", "Level", "pd kN/m2", "Storey force kN"], rows)
+    if project.seismic.enabled and (fm or rep):
+        modal = sm["modal"]
+        pre = [
+            ("Seismic analysis method (IS 1893-1:2016)",),
+            ("Method used", sm["method"]),
+            ("Why", sm["why"]),
+            ("Method setting", sm["setting"]),
+            ("Dynamic analysis required (cl 7.7.1)", "YES" if sm["required"] else "NO"),
+            ("Irregular configuration (Tables 5/6)", "YES" if sm["irregular"] else "NO"),
+            (),
+            ("Modal periods and effective modal mass (cl 7.7.5.2)",),
+        ]
+        rows = []
+        if modal is not None:
+            cx, cy = modal.cumulative("x"), modal.cumulative("y")
+            for i, m in enumerate(modal.modes):
+                rows.append(
+                    (
+                        m.number,
+                        m.period,
+                        100 * m.mass_x,
+                        100 * m.mass_y,
+                        100 * m.mass_rz,
+                        100 * cx[i],
+                        100 * cy[i],
+                    )
+                )
+        ws = sheet(
+            "Seismic method",
+            ["Mode", "T s", "Mass X %", "Mass Y %", "Mass RZ %", "Cumulative X %", "Cumulative Y %"],
+            rows,
+            pre=pre,
+        )
+        ws.column_dimensions["A"].width = 38
+        if sm["rs"]:
+            block(
+                ws,
+                "Response spectrum scaling to the static base shear (cl 7.7.3)",
+                ["Direction", "Modes used", "VB dynamic kN", "VB static kN", "Scale factor"],
+                [(k, r.modes_used, r.vb_dynamic, r.vb_static, r.scale) for k, r in sm["rs"].items()],
+            )
+        block(
+            ws,
+            "Storey shears (response spectrum scaled)" if sm["rs"] else "Storey shears (equivalent static)",
+            ["Level", "Static VX kN", "Static VY kN", "RSX kN", "RSY kN"],
+            storey_shear_rows(fm, sm["rs"]),
+        )
+    if rep and rep.irregularities:
+        sheet(
+            "Irregularity",
+            ["Table", "Irregularity", "Clause", "Regular", "Status", "Detail"],
+            [
+                (
+                    i.table,
+                    i.name,
+                    i.clause,
+                    "-" if i.irregular is None else ("NO" if i.irregular else "YES"),
+                    i.status,
+                    i.detail,
+                )
+                for i in rep.irregularities
+            ],
+            bad_col=3,
+        )
     if rep:
         sheet(
             "Beam design",
@@ -186,13 +432,16 @@ def write_excel(
                 "D m",
                 "Span m",
                 "Mu+ kNm",
-                "Mu- left",
-                "Mu- right",
+                "Mu- left kNm",
+                "Mu- right kNm",
                 "Vu kN",
                 "Bottom",
                 "Top left",
                 "Top right",
                 "Stirrups",
+                "End-zone links (2d)",
+                "Tu kNm",
+                "Side face",
                 "OK",
                 "Notes",
             ],
@@ -211,12 +460,15 @@ def write_excel(
                     b.top_l,
                     b.top_r,
                     b.stirrups,
+                    str(b.links_end) if b.links_end else "",
+                    b.T_max,
+                    b.side_face,
                     "YES" if b.ok else "NO",
                     "; ".join(b.notes),
                 )
                 for b in rep.beams
             ],
-            bad_col=13,
+            bad_col=16,
         )
         sheet(
             "Column design",
@@ -231,6 +483,8 @@ def write_excel(
                 "Steel %",
                 "Bars",
                 "Ties",
+                "Confining hoops (l0)",
+                "l0 m",
                 "Governing",
                 "Interaction",
                 "OK",
@@ -248,6 +502,8 @@ def write_excel(
                     c.steel_pct,
                     c.bars,
                     c.ties,
+                    str(c.tie_confined) if c.tie_confined else "",
+                    c.l0 if c.tie_confined else "",
                     c.governing,
                     c.utilisation,
                     "YES" if c.ok else "NO",
@@ -255,7 +511,7 @@ def write_excel(
                 )
                 for c in rep.columns
             ],
-            bad_col=12,
+            bad_col=14,
         )
         sheet(
             "Footing design",
@@ -330,6 +586,143 @@ def write_excel(
             + [
                 ("TOTAL", "", "", "", boq.get("cost", 0.0)),
                 ("Steel / concrete", "kg/m³", boq.get("steel_per_m3", 0.0), "", ""),
+            ],
+        )
+        if boq.get("by_level"):
+            sheet("BOQ by floor", ["Floor", *BOQ_HEADERS], boq_rows(boq["by_level"]))
+        if boq.get("by_type"):
+            sheet("BOQ by type", ["Member type", *BOQ_HEADERS], boq_rows(boq["by_type"]))
+        if rep.walls:
+            sheet(
+                "Walls",
+                [
+                    "Level",
+                    "Wall",
+                    "t m",
+                    "Lw m",
+                    "Height m",
+                    "Pu kN",
+                    "Mu kNm",
+                    "Vu kN",
+                    "ρv",
+                    "ρh",
+                    "Curtains",
+                    "Vertical",
+                    "Horizontal",
+                    "Boundary elements",
+                    "Utilisation",
+                    "OK",
+                    "Notes",
+                ],
+                [
+                    (
+                        w.level,
+                        w.mark,
+                        w.t,
+                        w.Lw,
+                        w.height,
+                        w.Pu,
+                        w.Mu,
+                        w.Vu,
+                        round(w.rho_v, 5),
+                        round(w.rho_h, 5),
+                        w.curtains,
+                        w.vertical,
+                        w.horizontal,
+                        w.boundary,
+                        w.utilisation,
+                        "YES" if w.ok else "NO",
+                        "; ".join(w.notes),
+                    )
+                    for w in rep.walls
+                ],
+                bad_col=15,
+            )
+        if rep.combined_footings:
+            sheet(
+                "Combined footings",
+                [
+                    "Columns",
+                    "P service kN",
+                    "L m",
+                    "B m",
+                    "D m",
+                    "x m",
+                    "y m",
+                    "Angle °",
+                    "q kN/m²",
+                    "Top (between columns)",
+                    "Bottom",
+                    "Transverse",
+                    "OK",
+                    "Notes",
+                ],
+                [
+                    (
+                        " + ".join(c.marks),
+                        c.P_service,
+                        c.L,
+                        c.B,
+                        c.D,
+                        c.x,
+                        c.y,
+                        c.angle,
+                        c.q,
+                        c.top,
+                        c.bottom,
+                        "; ".join(c.transverse),
+                        "YES" if c.ok else "NO",
+                        "; ".join(c.notes),
+                    )
+                    for c in rep.combined_footings
+                ],
+                bad_col=12,
+            )
+        if rep.ductile:
+            ds = ductile_summary(rep)
+            pre = [
+                ("IS 13920:2016 ductile detailing checks",),
+                ("Members checked", ds["members"]),
+                ("Members failing", ds["members_failing"]),
+                ("Checks", ds["checks"]),
+                ("Passed", ds["passed"]),
+                ("Failed", ds["failed"]),
+                (),
+            ]
+            sheet(
+                "IS 13920",
+                ["Kind", "Member", "Level", "Check", "Result", "Detail"],
+                [
+                    (d.kind, d.mark, d.level, name, "PASS" if ok else "FAIL", det)
+                    for d in rep.ductile
+                    for name, ok, det in d.checks
+                ],
+                bad_col=4,
+                pre=pre,
+            )
+            sheet(
+                "IS 13920 detailing",
+                ["Kind", "Member", "Level", "Detailing"],
+                [(d.kind, d.mark, d.level, line) for d in rep.ductile for line in d.detailing],
+            )
+    revs = (project.meta or {}).get("revisions") or []
+    if len(revs) >= 2:
+        from ..design.quantities import compare_revisions
+
+        a, b = revs[-2], revs[-1]
+        sheet(
+            "Revision compare",
+            [
+                "Group",
+                "Item",
+                f"A: {a.get('label', '')} {a.get('date', '')}".strip(),
+                f"B: {b.get('label', '')} {b.get('date', '')}".strip(),
+                "Change",
+                "Change %",
+            ],
+            [
+                (g, item, va, vb, ch, pct if abs(pct) != float("inf") else "new")
+                for g, item, va, vb, ch, pct in compare_revisions(a, b)
             ],
         )
     wb.save(path)

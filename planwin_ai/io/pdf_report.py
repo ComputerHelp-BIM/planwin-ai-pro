@@ -6,11 +6,50 @@ import datetime as _dt
 from xml.sax.saxutils import escape as _esc
 
 from .. import APP_NAME, COMPANY, __version__
-from ..core.frame import FrameModel
+from ..core.frame import FrameAnalysis, FrameModel
 from ..core.model import Project
 from ..core.plan_engine import PlanResult
 from ..design.report import DesignReport
+from ..units import Units
+from .excel_report import (
+    BOQ_HEADERS,
+    boq_rows,
+    convert_rows,
+    ductile_summary,
+    seismic_method_summary,
+    storey_shear_rows,
+)
 from .report_common import DISCLAIMER
+
+#: characters outside the standard PDF fonts (WinAnsi) used in the design notes
+_PLAIN = str.maketrans(
+    {
+        "≥": ">=",
+        "≤": "<=",
+        "√": "sqrt",
+        "→": "->",
+        "ρ": "rho",
+        "τ": "tau",
+        "Σ": "sum ",
+        "φ": "phi",
+        "α": "alpha",
+        "β": "beta",
+        "γ": "gamma",
+        "δ": "delta",
+        "Δ": "delta ",
+        "λ": "lambda",
+        "₹": "INR",
+        "≈": "~",
+        "≠": "!=",
+        "−": "-",
+        "σ": "sigma",
+    }
+)
+
+
+def _plain(s: str) -> str:
+    """Text that renders with the built-in Helvetica font."""
+    return str(s).translate(_PLAIN)
 
 
 def write_pdf(
@@ -20,14 +59,31 @@ def write_pdf(
     fm: FrameModel | None = None,
     rep: DesignReport | None = None,
     watermark: str = "",
+    fa: FrameAnalysis | None = None,
+    units: Units | None = None,
 ) -> str:
+    """Write the PDF report.  ``fa`` adds the response spectrum results (else taken from ``fm.rs``);
+    ``units`` (default: the app-wide :data:`planwin_ai.units.current`) sets force/moment display units."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
-    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import (
+        KeepTogether,
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
 
+    if units is None:
+        from .. import units as _units
+
+        units = _units.current
     styles = getSampleStyleSheet()
+    cell_style = ParagraphStyle("cell", parent=styles["Normal"], fontSize=7, leading=8.5)
     doc = SimpleDocTemplate(
         path,
         pagesize=landscape(A4),
@@ -39,11 +95,26 @@ def write_pdf(
     )
     story = []
 
-    def table(headers, rows, widths=None):
-        body = [[(f"{v:.2f}" if isinstance(v, float) else str(v)) for v in r] for r in rows]
-        data = ([headers] if headers else []) + body
+    def fmt(v, wrap: int):
+        if isinstance(v, float):
+            return f"{v:.2f}"
+        if hasattr(v, "wrapOn"):  # already a flowable (e.g. a Paragraph)
+            return v
+        v = _plain(v)
+        return Paragraph(_esc(v), cell_style) if wrap and len(v) > wrap else v
+
+    def table(headers, rows, widths=None, wrap: int = 0):
+        """``wrap``: cells longer than this many characters wrap (0 = never)."""
+        if headers:
+            headers, rows = convert_rows(headers, rows, units)
+        body = [[fmt(v, wrap) for v in r] for r in rows]
+        data = ([[_plain(h) for h in headers]] if headers else []) + body
         t = Table(data, repeatRows=1 if headers else 0, colWidths=widths)
-        st = [("FONTSIZE", (0, 0), (-1, -1), 7.5), ("GRID", (0, 0), (-1, -1), 0.25, colors.grey)]
+        st = [
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]
         if headers:
             st += [
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F3A5F")),
@@ -60,6 +131,10 @@ def write_pdf(
                 st.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#F8D7DA")))
         t.setStyle(TableStyle(st))
         return t
+
+    def sub(title: str, flowable) -> None:
+        """Sub-heading kept on the same page as the start of its table."""
+        story.append(KeepTogether([Paragraph(title, styles["Heading3"]), flowable]))
 
     story.append(Paragraph(f"<b>{_esc(project.name)}</b>", styles["Title"]))
     story.append(
@@ -82,7 +157,9 @@ def write_pdf(
         ],
         [
             "Codes",
-            "IS 456:2000, IS 875 (Parts 1-3), IS 1893 (Part 1):2016",
+            "IS 456:2000, IS 875 (Parts 1-3), IS 1893 (Part 1):2016"
+            + (", IS 13920:2016" if rep and rep.ductile else "")
+            + f"; units {'MKS (t, m)' if units.mks else 'SI (kN, m)'}",
             "Height",
             f"{project.elevations()[-1]:.2f} m",
         ],
@@ -94,7 +171,7 @@ def write_pdf(
     story.append(Paragraph("Load take-down check (PlanWin)", styles["Heading2"]))
     story.append(
         table(
-            ["Plan", "Applied DL", "Applied LL", "Reaction DL", "Reaction LL", "Imbalance %", "Errors"],
+            ["Plan", "Applied DL kN", "Applied LL kN", "Reaction DL kN", "Reaction LL kN", "Imbalance %", "Errors"],
             [
                 (n, r.applied["D"], r.applied["L"], r.reacted["D"], r.reacted["L"], r.imbalance_pct, len(r.errors))
                 for n, r in plan_results.items()
@@ -110,12 +187,77 @@ def write_pdf(
         if rows:
             story.append(Spacer(1, 3 * mm))
             story.append(table(["Wind dir", "Base shear (kN)"], rows))
+    sm = seismic_method_summary(project, fm, fa, rep)
+    if project.seismic.enabled and (fm or rep):
+        story.append(Paragraph("Seismic analysis method (IS 1893-1:2016 cl 7.7.1)", styles["Heading2"]))
+        story.append(
+            table(
+                None,
+                [
+                    ["Method used", sm["method"], "Dynamic analysis required", "YES" if sm["required"] else "NO"],
+                    [
+                        "Why",
+                        Paragraph(_esc(_plain(sm["why"])), cell_style),
+                        "Irregular configuration",
+                        "YES" if sm["irregular"] else "NO",
+                    ],
+                ],
+                widths=[38 * mm, 120 * mm, 45 * mm, 20 * mm],
+            )
+        )
+        modal = sm["modal"]
+        if modal is not None:
+            story.append(Spacer(1, 3 * mm))
+            cx, cy = modal.cumulative("x"), modal.cumulative("y")
+            sub(
+                "Modal periods and effective modal mass (cl 7.7.5.2)",
+                table(
+                    ["Mode", "T (s)", "Mass X %", "Mass Y %", "Mass RZ %", "Cumulative X %", "Cumulative Y %"],
+                    [
+                        (m.number, m.period, 100 * m.mass_x, 100 * m.mass_y, 100 * m.mass_rz, 100 * cx[i], 100 * cy[i])
+                        for i, m in enumerate(modal.modes)
+                    ],
+                ),
+            )
+        if sm["rs"]:
+            story.append(Spacer(1, 3 * mm))
+            sub(
+                "Response spectrum scaled to the static base shear (cl 7.7.3)",
+                table(
+                    ["Direction", "Modes used", "VB dynamic kN", "VB static kN", "Scale factor"],
+                    [(k, r.modes_used, r.vb_dynamic, r.vb_static, r.scale) for k, r in sm["rs"].items()],
+                ),
+            )
+        rows = storey_shear_rows(fm, sm["rs"])
+        if rows:
+            story.append(Spacer(1, 3 * mm))
+            sub("Storey shears", table(["Level", "Static VX kN", "Static VY kN", "RSX kN", "RSY kN"], rows))
+    if rep and rep.irregularities:
+        story.append(Paragraph("Irregularity (IS 1893-1:2016 Tables 5 and 6)", styles["Heading2"]))
+        story.append(
+            table(
+                ["Table", "Irregularity", "Clause", "Regular", "Status", "Detail"],
+                [
+                    (
+                        i.table,
+                        i.name,
+                        i.clause,
+                        "-" if i.irregular is None else ("NO" if i.irregular else "YES"),
+                        i.status,
+                        i.detail,
+                    )
+                    for i in rep.irregularities
+                ],
+                widths=[28 * mm, 55 * mm, 20 * mm, 15 * mm, 34 * mm, 121 * mm],
+                wrap=60,
+            )
+        )
     if rep:
         story.append(PageBreak())
         story.append(Paragraph("Column design (IS 456 cl 39.6 biaxial)", styles["Heading2"]))
         story.append(
             table(
-                ["Level", "Col", "b x D (mm)", "Pu kN", "Mux", "Muy", "p %", "Bars", "Ties", "Ratio", "OK"],
+                ["Level", "Col", "b x D (mm)", "Pu kN", "Mux kNm", "Muy kNm", "p %", "Bars", "Ties", "Ratio", "OK"],
                 [
                     (
                         c.level,
@@ -134,6 +276,49 @@ def write_pdf(
                 ],
             )
         )
+        if rep.walls:
+            story.append(Spacer(1, 5 * mm))
+            story.append(Paragraph("Shear wall design (IS 456 cl 32 / IS 13920 cl 10)", styles["Heading2"]))
+            story.append(
+                table(
+                    [
+                        "Level",
+                        "Wall",
+                        "t x Lw (m)",
+                        "Pu kN",
+                        "Mu kNm",
+                        "Vu kN",
+                        "Vert. %",
+                        "Horiz. %",
+                        "Vertical",
+                        "Horizontal",
+                        "Boundary",
+                        "Ratio",
+                        "OK",
+                    ],
+                    [
+                        (
+                            w.level,
+                            w.mark,
+                            f"{w.t:.2f} x {w.Lw:.2f}",
+                            w.Pu,
+                            w.Mu,
+                            w.Vu,
+                            100 * w.rho_v,
+                            100 * w.rho_h,
+                            w.vertical,
+                            w.horizontal,
+                            w.boundary,
+                            w.utilisation,
+                            "YES" if w.ok else "NO",
+                        )
+                        for w in rep.walls
+                    ],
+                    widths=[16 * mm, 12 * mm, 20 * mm, 15 * mm, 16 * mm, 14 * mm, 14 * mm, 14 * mm]
+                    + [36 * mm, 36 * mm, 56 * mm, 12 * mm, 12 * mm],
+                    wrap=20,
+                )
+            )
         story.append(PageBreak())
         story.append(Paragraph("Beam design", styles["Heading2"]))
         story.append(
@@ -143,14 +328,16 @@ def write_pdf(
                     "Beam",
                     "b x D",
                     "Span",
-                    "Mu+",
-                    "Mu- L",
-                    "Mu- R",
-                    "Vu",
+                    "Mu+ kNm",
+                    "Mu- L kNm",
+                    "Mu- R kNm",
+                    "Vu kN",
+                    "Tu kNm",
                     "Bottom",
                     "Top L",
                     "Top R",
                     "Stirrups",
+                    "End zone (2d)",
                     "OK",
                 ],
                 [
@@ -163,10 +350,12 @@ def write_pdf(
                         b.M_hog_l,
                         b.M_hog_r,
                         b.V_max,
+                        b.T_max,
                         b.bottom,
                         b.top_l,
                         b.top_r,
                         b.stirrups,
+                        str(b.links_end) if b.links_end else "-",
                         "YES" if b.ok else "NO",
                     )
                     for b in rep.beams
@@ -192,6 +381,29 @@ def write_pdf(
                 ],
             )
         )
+        if rep.combined_footings:
+            story.append(Spacer(1, 5 * mm))
+            story.append(Paragraph("Combined footings", styles["Heading2"]))
+            story.append(
+                table(
+                    ["Columns", "P (kN)", "L x B x D (m)", "q (kN/m²)", "Top", "Bottom", "Transverse", "OK"],
+                    [
+                        (
+                            " + ".join(c.marks),
+                            c.P_service,
+                            f"{c.L:.2f} x {c.B:.2f} x {c.D:.2f}",
+                            c.q,
+                            c.top,
+                            c.bottom,
+                            "; ".join(c.transverse),
+                            "YES" if c.ok else "NO",
+                        )
+                        for c in rep.combined_footings
+                    ],
+                    widths=[30 * mm, 20 * mm, 35 * mm, 20 * mm, 35 * mm, 35 * mm, 85 * mm, 13 * mm],
+                    wrap=40,
+                )
+            )
         story.append(Spacer(1, 5 * mm))
         story.append(Paragraph("Slab design", styles["Heading2"]))
         story.append(
@@ -213,6 +425,36 @@ def write_pdf(
                 ],
             )
         )
+        if rep.ductile:
+            ds = ductile_summary(rep)
+            story.append(PageBreak())
+            story.append(Paragraph("Ductile detailing – IS 13920:2016", styles["Heading2"]))
+            by_kind = {}
+            for d in rep.ductile:
+                k = by_kind.setdefault(d.kind, [0, 0])
+                k[0] += 1
+                k[1] += not d.ok
+            story.append(
+                table(
+                    ["Member kind", "Members checked", "Members failing"],
+                    [(k, v[0], v[1]) for k, v in by_kind.items()] + [("All", ds["members"], ds["members_failing"])],
+                )
+            )
+            story.append(Spacer(1, 2 * mm))
+            story.append(
+                Paragraph(f"{ds['checks']} checks: {ds['passed']} passed, {ds['failed']} failed.", styles["Normal"])
+            )
+            if ds["failures"]:
+                story.append(Spacer(1, 3 * mm))
+                sub(
+                    "Failed checks",
+                    table(
+                        ["Kind", "Member", "Level", "Check", "Result", "Detail"],
+                        [(d.kind, d.mark, d.level, name, "FAIL", det) for d, name, _ok, det in ds["failures"]],
+                        widths=[16 * mm, 18 * mm, 22 * mm, 60 * mm, 14 * mm, 143 * mm],
+                        wrap=40,
+                    ),
+                )
         story.append(PageBreak())
         story.append(Paragraph("Quantities &amp; cost estimate", styles["Heading2"]))
         story.append(
@@ -221,11 +463,17 @@ def write_pdf(
                 list(rep.boq.get("lines", [])) + [("TOTAL", "", "", "", rep.boq.get("cost", 0.0))],
             )
         )
+        if rep.boq.get("by_level"):
+            story.append(Spacer(1, 4 * mm))
+            sub("Quantities by floor", table(["Floor", *BOQ_HEADERS], boq_rows(rep.boq["by_level"])))
+        if rep.boq.get("by_type"):
+            story.append(Spacer(1, 4 * mm))
+            sub("Quantities by member type", table(["Member type", *BOQ_HEADERS], boq_rows(rep.boq["by_type"])))
         if rep.warnings:
             story.append(Spacer(1, 4 * mm))
             story.append(Paragraph("Warnings", styles["Heading2"]))
             for w in rep.warnings:
-                story.append(Paragraph(f"• {_esc(w)}", styles["Normal"]))
+                story.append(Paragraph(f"• {_esc(_plain(w))}", styles["Normal"]))
 
     def footer(canvas, _doc):
         canvas.saveState()
