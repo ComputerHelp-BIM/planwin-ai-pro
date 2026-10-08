@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.model import Beam, Column, Level, PartLoad, Plan, PointLoad, Slab
+from ..core.model import Beam, Column, Level, PartLoad, Plan, PointLoad, Slab, Wall
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
@@ -341,6 +341,15 @@ COLUMN_FIELDS = [
     ("angle", "Angle (°)", "float"),
     ("grade", "Grade", GRADES),
 ]
+WALL_FIELDS = [
+    ("mark", "Mark", "str"),
+    ("thickness", "Thickness (m)", "float"),
+    ("grade", "Grade", GRADES),
+    ("x1", "Start X", "float"),
+    ("y1", "Start Y", "float"),
+    ("x2", "End X", "float"),
+    ("y2", "End Y", "float"),
+]
 BEAM_FIELDS = [
     ("mark", "Mark", "str"),
     ("b", "Breadth (m)", "float"),
@@ -418,7 +427,15 @@ class PropertiesPanel(QWidget):
             self.apply_btn.setEnabled(False)
             return
         o = self.objs[0]
-        spec = SLAB_FIELDS if isinstance(o, Slab) else COLUMN_FIELDS if isinstance(o, Column) else BEAM_FIELDS
+        spec = (
+            SLAB_FIELDS
+            if isinstance(o, Slab)
+            else COLUMN_FIELDS
+            if isinstance(o, Column)
+            else WALL_FIELDS
+            if isinstance(o, Wall)
+            else BEAM_FIELDS
+        )
         kind = type(o).__name__
         self.title.setText(
             f"{kind} {o.mark}"
@@ -521,6 +538,8 @@ class PropertiesPanel(QWidget):
                     f"(eq. UDL {br.equivalent_udl():.2f} kN/m)"
                 )
                 txt += "\nSupports: " + ", ".join(f"{s.kind} @ {s.x:.2f} m" for s in br.supports)
+        elif isinstance(o, Wall):
+            txt = f"Shear wall {o.length:.3f} m long × {o.thickness * 1000:.0f} mm, {o.grade}"
         else:
             txt = f"{o.b * 1000:.0f} × {o.d * 1000:.0f} mm at ({o.x:.3f}, {o.y:.3f})"
             if res:
