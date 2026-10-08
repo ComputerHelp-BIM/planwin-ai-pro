@@ -411,6 +411,11 @@ class LicenseDialog(QDialog):
         self.resize(520, 340)
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel(f"<b>Status:</b> {state_label}"))
+        from ..licensing.license import machine_code
+
+        code = QLabel(f"<b>Machine code:</b> {machine_code()} (quote it when ordering a licence)")
+        code.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        lay.addWidget(code)
         lay.addWidget(QLabel("Paste the licence text you received from Computer Help, or load the .lic file:"))
         self.text = QPlainTextEdit()
         lay.addWidget(self.text)
