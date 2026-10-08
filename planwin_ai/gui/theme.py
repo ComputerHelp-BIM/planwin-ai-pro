@@ -98,6 +98,23 @@ def qss(theme: str) -> str:
     QStatusBar {{ background: {c["panel"]}; border-top: 1px solid {c["border"]}; }}
     QGroupBox {{ border: 1px solid {c["border"]}; border-radius: 8px; margin-top: 12px; padding-top: 8px; font-weight: 600; }}
     QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}
+    QWidget#Ribbon {{ background: {c["panel"]}; border-bottom: 1px solid {c["border"]}; }}
+    QWidget#RibbonTop {{ background: {ACCENT}; }}
+    QToolButton#AppButton {{ background: #1E5BB0; color: white; font-weight: 600; padding: 4px 14px; border-radius: 0; }}
+    QToolButton#AppButton::menu-indicator {{ image: none; }}
+    QToolButton#QuickButton {{ padding: 2px; border-radius: 4px; }}
+    QToolButton#QuickButton:hover {{ background: rgba(255, 255, 255, 0.25); }}
+    QLabel#RibbonTitle {{ color: white; font-weight: 600; padding-left: 12px; }}
+    QTabBar#RibbonTabs::tab {{ background: transparent; border: none; color: white; padding: 6px 14px; margin: 0;
+                              border-top-left-radius: 4px; border-top-right-radius: 4px; }}
+    QTabBar#RibbonTabs::tab:selected {{ background: {c["panel"]}; color: {c["text"]}; font-weight: 600; }}
+    QTabBar#RibbonTabs::tab:hover:!selected {{ background: rgba(255, 255, 255, 0.18); }}
+    QFrame#RibbonGroup {{ border-right: 1px solid {c["border"]}; }}
+    QLabel#RibbonGroupTitle {{ color: {c["muted"]}; font-size: 8pt; }}
+    QToolButton#RibbonLarge {{ padding: 3px 6px; border-radius: 6px; min-width: 52px; }}
+    QToolButton#RibbonSmall {{ padding: 1px 6px; border-radius: 4px; text-align: left; }}
+    QToolButton#RibbonLarge:checked, QToolButton#RibbonSmall:checked {{ background: rgba(47, 125, 225, 0.18);
+                                                                       border: 1px solid {ACCENT}; }}
     """
 
 
@@ -125,6 +142,42 @@ _SVG = {
     "template": '<rect x="3" y="3" width="8" height="8" fill="none" stroke="{c}" stroke-width="2"/><rect x="13" y="3" width="8" height="8" fill="{c}"/><rect x="3" y="13" width="8" height="8" fill="{c}"/><rect x="13" y="13" width="8" height="8" fill="none" stroke="{c}" stroke-width="2"/>',
     "settings": '<circle cx="12" cy="12" r="3.5" fill="none" stroke="{c}" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="{c}" stroke-width="2"/>',
     "measure": '<path d="M3 17L17 3l4 4L7 21z" fill="none" stroke="{c}" stroke-width="2"/><path d="M8 12l2 2M11 9l2 2M14 6l2 2" stroke="{c}" stroke-width="1.5"/>',
+    "wall": '<rect x="3" y="9" width="18" height="6" fill="{c}"/><path d="M3 9v6M21 9v6" stroke="{c}" stroke-width="2"/>',
+    "area": '<path d="M4 18l2-12 12 2 2 10z" fill="{c}" opacity="0.35" stroke="{c}" stroke-width="2"/><text x="8" y="16" font-size="7" fill="{c}">m²</text>',
+    "grid": '<path d="M7 3v18M17 3v18M3 7h18M3 17h18" stroke="{c}" stroke-width="1.6" stroke-dasharray="3 1.5"/><circle cx="7" cy="3" r="2" fill="{c}"/><circle cx="17" cy="3" r="2" fill="{c}"/>',
+    "dims": '<path d="M3 16h18M3 12v8M21 12v8M6 16l-3 0M18 16h3" stroke="{c}" stroke-width="1.8"/><path d="M5 14l-2 2 2 2M19 14l2 2-2 2" fill="none" stroke="{c}" stroke-width="1.5"/><text x="8" y="11" font-size="7" fill="{c}">4.5</text>',
+    "stairs": '<path d="M3 20h4v-4h4v-4h4V8h4V4h2" fill="none" stroke="{c}" stroke-width="2.2"/>',
+    "tank": '<rect x="5" y="4" width="14" height="10" rx="1" fill="none" stroke="{c}" stroke-width="2"/><path d="M5 10h14" stroke="{c}" stroke-width="1.2"/><path d="M7 14v7M17 14v7" stroke="{c}" stroke-width="2"/>',
+    "compare": '<rect x="3" y="5" width="7" height="14" fill="none" stroke="{c}" stroke-width="2"/><rect x="14" y="9" width="7" height="10" fill="{c}"/><path d="M10 12h4" stroke="{c}" stroke-width="1.5"/>',
+    "revision": '<circle cx="12" cy="12" r="8" fill="none" stroke="{c}" stroke-width="2"/><path d="M12 7v5l3 3" stroke="{c}" stroke-width="2" fill="none"/>',
+    "calc": '<rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="{c}" stroke-width="2"/><rect x="8" y="6" width="8" height="4" fill="{c}"/><path d="M8 14h2M14 14h2M8 18h2M14 18h2" stroke="{c}" stroke-width="2"/>',
+    "bbs": '<path d="M4 6h16M4 6v4M20 6v4M4 14h12l4 4" fill="none" stroke="{c}" stroke-width="2.2"/>',
+    "drawing": '<rect x="3" y="4" width="18" height="16" fill="none" stroke="{c}" stroke-width="2"/><rect x="12" y="14" width="9" height="6" fill="{c}"/><path d="M6 8h8M6 11h5" stroke="{c}" stroke-width="1.5"/>',
+    "ductile": '<path d="M12 2l8 4v6c0 5-4 8-8 10-4-2-8-5-8-10V6z" fill="none" stroke="{c}" stroke-width="2"/><path d="M8 12l3 3 5-6" fill="none" stroke="{c}" stroke-width="2"/>',
+    "irregular": '<path d="M4 20V10l4-2v12M10 20V6l4 2v12M16 20V12l4-2v10" fill="none" stroke="{c}" stroke-width="2"/>',
+    "modal": '<path d="M2 12c3-8 5-8 8 0s5 8 8 0 3-5 4-3" fill="none" stroke="{c}" stroke-width="2"/>',
+    "units": '<text x="2" y="11" font-size="9" font-weight="bold" fill="{c}">kN</text><text x="13" y="21" font-size="9" font-weight="bold" fill="{c}">t</text><path d="M6 20l12-16" stroke="{c}" stroke-width="1.5"/>',
+    "optimize": '<path d="M4 20l6-6 4 4 6-10" fill="none" stroke="{c}" stroke-width="2"/><path d="M16 8h4v4" fill="none" stroke="{c}" stroke-width="2"/>',
+    "autosize": '<rect x="8" y="4" width="8" height="16" fill="none" stroke="{c}" stroke-width="2"/><path d="M4 12h3M17 12h3M5 10l-2 2 2 2M19 10l2 2-2 2" fill="none" stroke="{c}" stroke-width="1.6"/>',
+    "sizes": '<path d="M4 4h16v16H4z" fill="none" stroke="{c}" stroke-width="1.5"/><path d="M4 10h16M4 15h16M10 4v16" stroke="{c}" stroke-width="1.5"/>',
+    "jointload": '<path d="M12 2v12M8 10l4 4 4-4" fill="none" stroke="{c}" stroke-width="2"/><rect x="8" y="16" width="8" height="6" fill="{c}"/>',
+    "levels": '<path d="M3 6h18M3 12h18M3 18h18" stroke="{c}" stroke-width="2.2"/><path d="M6 6v12M18 6v12" stroke="{c}" stroke-width="1.2"/>',
+    "copyfloor": '<rect x="4" y="12" width="14" height="8" fill="none" stroke="{c}" stroke-width="2"/><rect x="7" y="4" width="14" height="8" fill="{c}" opacity="0.5"/>',
+    "view3d": '<path d="M12 3l8 4v10l-8 4-8-4V7z" fill="none" stroke="{c}" stroke-width="2"/><path d="M12 11l8-4M12 11L4 7M12 11v10" stroke="{c}" stroke-width="1.5"/>',
+    "help": '<circle cx="12" cy="12" r="9" fill="none" stroke="{c}" stroke-width="2"/><path d="M9.5 9a2.5 2.5 0 015 0c0 2-2.5 2-2.5 4" fill="none" stroke="{c}" stroke-width="2"/><circle cx="12" cy="17" r="1.2" fill="{c}"/>',
+    "licence": '<rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="{c}" stroke-width="2"/><circle cx="8" cy="12" r="2.5" fill="{c}"/><path d="M13 10h5M13 14h3" stroke="{c}" stroke-width="1.6"/>',
+    "theme": '<circle cx="12" cy="12" r="8" fill="none" stroke="{c}" stroke-width="2"/><path d="M12 4a8 8 0 010 16z" fill="{c}"/>',
+    "delete": '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="{c}" stroke-width="2"/>',
+    "move": '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" fill="none" stroke="{c}" stroke-width="1.8"/>',
+    "mirror": '<path d="M12 3v18" stroke="{c}" stroke-width="1.5" stroke-dasharray="2 2"/><path d="M10 6L3 18h7zM14 6l7 12h-7z" fill="none" stroke="{c}" stroke-width="1.8"/>',
+    "renumber": '<text x="3" y="11" font-size="8" fill="{c}">1 2</text><text x="3" y="21" font-size="8" fill="{c}">3 4</text><path d="M17 5v14M14 16l3 3 3-3" fill="none" stroke="{c}" stroke-width="1.6"/>',
+    "plan": '<rect x="3" y="3" width="18" height="18" fill="none" stroke="{c}" stroke-width="2"/><path d="M3 12h9V3M12 12v9" stroke="{c}" stroke-width="1.5"/>',
+    "folder": '<path d="M3 6h6l2 2h10v11H3z" fill="{c}" opacity="0.4" stroke="{c}" stroke-width="1.6"/>',
+    "staad": '<text x="1" y="16" font-size="9" font-weight="bold" fill="{c}">STD</text>',
+    "etabs": '<text x="1" y="16" font-size="9" font-weight="bold" fill="{c}">E2K</text>',
+    "excel": '<rect x="3" y="3" width="18" height="18" rx="2" fill="{c}"/><path d="M8 8l8 8M16 8l-8 8" stroke="#fff" stroke-width="2.2"/>',
+    "pdf": '<path d="M6 2h8l5 5v15H6z" fill="none" stroke="{c}" stroke-width="2"/><text x="7" y="17" font-size="6.5" font-weight="bold" fill="{c}">PDF</text>',
+    "dxf": '<path d="M6 2h8l5 5v15H6z" fill="none" stroke="{c}" stroke-width="2"/><text x="7" y="17" font-size="6.5" font-weight="bold" fill="{c}">DXF</text>',
 }
 
 
