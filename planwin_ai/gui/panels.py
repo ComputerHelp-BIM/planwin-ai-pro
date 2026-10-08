@@ -764,12 +764,12 @@ class ResultsPanel(QTabWidget):
             bad = bad_col is not None and row[bad_col] in ("NO", False, "error")
             for c, v in enumerate(row):
                 it = QTableWidgetItem()
-                if isinstance(v, float):
-                    it.setData(Qt.DisplayRole, round(u.show(v, "force") if conv[c] else v, 3))
+                if isinstance(v, float):  # plain float(): numpy scalars are stored as opaque objects and show blank
+                    it.setData(Qt.DisplayRole, round(float(u.show(v, "force") if conv[c] else v), 3))
                 elif isinstance(v, int) and not isinstance(v, bool) and conv[c]:
                     it.setData(Qt.DisplayRole, round(u.show(float(v), "force"), 3))
                 else:
-                    it.setData(Qt.DisplayRole, v if isinstance(v, int) and not isinstance(v, bool) else str(v))
+                    it.setData(Qt.DisplayRole, int(v) if isinstance(v, int) and not isinstance(v, bool) else str(v))
                 if bad:
                     it.setBackground(QColor(220, 38, 38, 60))
                 t.setItem(r, c, it)

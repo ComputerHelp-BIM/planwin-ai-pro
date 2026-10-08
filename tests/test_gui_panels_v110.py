@@ -396,3 +396,28 @@ def test_project_panel_lists_walls_stairs_and_tanks(app):
     tips = [pp.plans.item(i).toolTip() for i in range(pp.plans.count())]
     assert any("1 walls" in t for t in tips)
     assert "ST1" in pp.extras_lbl.text() and "T1 (5000 L)" in pp.extras_lbl.text()
+
+
+def test_numpy_scalars_are_displayed(app):
+    """Modal periods are numpy.float64 – they must show as numbers, not blank cells."""
+    import numpy as np
+
+    from planwin_ai.gui.panels import ResultsPanel
+
+    class Main:
+        def current_plan(self):
+            return None
+
+        def frame_model(self):
+            return None
+
+        def frame_analysis(self):
+            return None
+
+        def design_report(self):
+            return None
+
+    rp = ResultsPanel(Main())
+    rp._fill("Modal / RS", ["Mode", "T s", "n"], [["Mode 1", np.float64(0.5513), np.int64(3)]])
+    t = rp.tables["Modal / RS"]
+    assert t.item(0, 1).text() == "0.551" and t.item(0, 2).text() == "3"
