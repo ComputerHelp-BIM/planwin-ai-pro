@@ -446,6 +446,47 @@ class FrameModel:
             lv.master = self._nid
             lv.nodes.append(self._nid)
 
+    def export_model(self) -> tuple[dict[str, dict[int, np.ndarray]], dict[int, tuple[int, list[int]]]]:
+        """Loads and rigid diaphragms in the form other programs need.
+
+        * When the last analysis used the response spectrum method, EQX/EQY carry the
+          equivalent storey forces of the scaled spectral storey shears (cl 7.7.3) instead of
+          the static distribution, so STAAD/ETABS see the design lateral forces.
+        * Loads on the virtual centre-of-mass masters are moved to the real joint of that
+          floor nearest to the centre of mass, with the moment of the shift.
+        Returns (nodal loads by case, {level: (master joint, slave joints)}).
+        """
+        import copy
+
+        nodal = copy.deepcopy(self.nodal)
+        for case, rs_case, axis in (("EQX", "RSX", 0), ("EQY", "RSY", 1)):
+            if rs_case in self.rs and case in nodal:
+                nodal[case] = {}
+                for i, f in enumerate(self.rs[rs_case].storey_force):
+                    self._distribute(case, i, f, axis, target=nodal)
+        connected = {n for m in self.members.values() for n in (m.n1, m.n2)}
+        groups: dict[int, tuple[int, list[int]]] = {}
+        for lv in self.levels:
+            if lv.master is None:
+                continue
+            mn = self.nodes[lv.master]
+            real = [n for n in lv.nodes if n != lv.master and n in connected]
+            if not real:
+                continue
+            pref = [n for n in real if n in lv.column_nodes.values()] or real
+            r = min(pref, key=lambda n: math.hypot(self.nodes[n].x - mn.x, self.nodes[n].y - mn.y))
+            rn = self.nodes[r]
+            for loads in nodal.values():
+                vec = loads.pop(lv.master, None)
+                if vec is None:
+                    continue
+                tgt = loads.setdefault(r, np.zeros(6))
+                tgt[0] += vec[0]
+                tgt[1] += vec[1]
+                tgt[5] += vec[5] + (mn.x - rn.x) * vec[1] - (mn.y - rn.y) * vec[0]
+            groups[lv.index] = (r, [n for n in real if n != r])
+        return nodal, groups
+
     def diaphragm_list(self) -> list[Diaphragm]:
         out = []
         for lv in self.levels:
@@ -525,14 +566,24 @@ class FrameModel:
             vec = self.nodal.setdefault(case, {}).setdefault(n, np.zeros(6))
             vec[axis] += mt * (c - cm) / den
 
-    def _distribute(self, case: str, level: int, force: float, axis: int, at: tuple[float, float] | None = None):
+    def _distribute(
+        self,
+        case: str,
+        level: int,
+        force: float,
+        axis: int,
+        at: tuple[float, float] | None = None,
+        target: dict | None = None,
+    ):
         """Storey force: at the diaphragm master (moved from ``at`` with its moment), else shared by
-        the column joints in proportion to their gravity load."""
+        the column joints in proportion to their gravity load.  Loads go to ``target`` (default
+        ``self.nodal``)."""
+        nodal = self.nodal if target is None else target
         lv = self.levels[level]
         if abs(force) < 1e-12:
             return
         if lv.master is not None:
-            vec = self.nodal.setdefault(case, {}).setdefault(lv.master, np.zeros(6))
+            vec = nodal.setdefault(case, {}).setdefault(lv.master, np.zeros(6))
             vec[axis] += force
             if at is not None:  # force acting at `at`, not at the centre of mass
                 m = self.nodes[lv.master]
@@ -550,7 +601,7 @@ class FrameModel:
         if tot <= 1e-9:
             wts, tot = [1.0] * len(cols), float(len(cols))
         for (_mark, nid), w in zip(cols, wts):
-            vec = self.nodal.setdefault(case, {}).setdefault(nid, np.zeros(6))
+            vec = nodal.setdefault(case, {}).setdefault(nid, np.zeros(6))
             vec[axis] += force * w / tot
 
     def _lateral(self):

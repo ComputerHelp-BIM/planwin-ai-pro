@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from .common import BarMesh, ast_singly, mesh_for, tau_c
 
 
@@ -137,4 +139,124 @@ def design_footing(
         notes,
         mesh_L=mesh_L,
         mesh_B=mesh_B,
+    )
+
+
+# ================================================================ combined footing (two columns)
+@dataclass
+class CombinedFootingResult:
+    L: float  # m, along the line through the two columns
+    B: float  # m
+    D: float  # m
+    x_start: float  # m, footing starts this far before column 1 (along the line)
+    q_service: float  # kN/m², uniform (resultant at the centre)
+    M_hog: float  # kN·m, max hogging (top tension, between the columns)
+    M_sag: float  # kN·m, max sagging (bottom tension, under the columns / cantilevers)
+    top: BarMesh | None
+    bottom: BarMesh | None
+    transverse: list[str]  # bottom bars in the bands under each column
+    ok: bool
+    notes: list[str] = field(default_factory=list)
+
+
+def design_combined_footing(
+    P1: float,
+    P2: float,
+    Pu1: float,
+    Pu2: float,
+    s: float,
+    c1: tuple[float, float],
+    c2: tuple[float, float],
+    sbc: float,
+    fck: float,
+    fy: float,
+    cover: float = 0.05,
+    self_wt_pct: float = 10.0,
+) -> CombinedFootingResult:
+    """Rectangular combined footing for two columns ``s`` m apart (IS 456 cl 34, SP 16 / SP 34 practice).
+
+    ``c1``/``c2`` – (dimension along the line, dimension across) of the columns (m).  The
+    footing is proportioned so that the resultant of the service loads coincides with its
+    centroid (uniform pressure ≤ SBC).  Longitudinally it is a beam loaded by the factored
+    net upward pressure and supported by the columns; transversely each column is spread by a
+    band of width c + 2d·… (taken as c + d each side, SP 34).  Depth from punching shear at
+    d/2 around each column (cl 31.6.3) and one-way shear at d from the column faces
+    (cl 34.2.4.1 a); flexure with 0.12 % minimum steel.  Moments from lateral load cases are
+    not included – check them for footings resisting significant moments.
+    """
+    from ...core.beamcalc import LinLoad, PtLoad, diagrams
+
+    notes: list[str] = []
+    sw = 1 + self_wt_pct / 100
+    xbar = P2 * s / (P1 + P2) if P1 + P2 > 0 else s / 2  # resultant from column 1
+    half = max(xbar + c1[0] / 2 + 0.3, s - xbar + c2[0] / 2 + 0.3)
+    L = math.ceil(2 * half / 0.05) * 0.05
+    x_start = L / 2 - xbar  # footing edge before column 1
+    B = max((P1 + P2) * sw / (sbc * L), max(c1[1], c2[1]) + 0.3)
+    B = math.ceil(B / 0.05) * 0.05
+    q_service = (P1 + P2) * sw / (L * B)
+    qu = (Pu1 + Pu2) / (L * B)  # net factored upward pressure
+    w = qu * B  # kN/m along the footing
+    x1, x2 = x_start, x_start + s
+    # beam statics: soil pressure upwards, columns downwards (sign convention of beamcalc: loads down +)
+    loads = [LinLoad(0.0, L, -w, -w, "D"), PtLoad(x1, Pu1, "D"), PtLoad(x2, Pu2, "D")]
+    dia = diagrams(L, loads, [], None, 241)
+    # beamcalc: moment + = tension at the bottom.  Between the columns the net soil pressure
+    # bends the footing with tension at the TOP (M < 0); under the columns / in the cantilevers
+    # the tension is at the BOTTOM (M > 0).
+    M_top = max(float(-dia["M"].min()), 0.0)
+    M_bot = max(float(dia["M"].max()), 0.0)
+    V = dia["V"]
+    xs = dia["x"]
+    D = 0.4
+    ok = True
+    ast_min = 0.0012 * 1000 * D * 1000
+    while True:
+        d = D - cover - 0.016
+        ok_shear = True
+        for xc, Pu, c in ((x1, Pu1, c1), (x2, Pu2, c2)):
+            bo = 2 * ((c[0] + d) + (c[1] + d))
+            Vp = Pu - qu * (c[0] + d) * (c[1] + d)
+            beta = min(c) / max(c)
+            tp = min(0.5 + beta, 1.0) * 0.25 * math.sqrt(fck)
+            if Vp * 1e3 / (bo * 1e3 * d * 1e3) > tp:
+                ok_shear = False
+            for xf in (xc - c[0] / 2 - d, xc + c[0] / 2 + d):
+                if 0 < xf < L:
+                    v1 = abs(float(np.interp(xf, xs, V)))
+                    if v1 * 1e3 / (B * 1e3 * d * 1e3) > tau_c(0.25, fck):
+                        ok_shear = False
+        a_top = ast_singly(M_top * 1e6 / B, fck, fy, 1000, d * 1000)
+        a_bot = ast_singly(M_bot * 1e6 / B, fck, fy, 1000, d * 1000)
+        if ok_shear and math.isfinite(a_top) and math.isfinite(a_bot):
+            break
+        D = round(D + 0.05, 3)
+        if D > 2.5:
+            ok = False
+            notes.append("depth > 2.5 m – use a raft or piles")
+            break
+    ast_min = 0.0012 * 1000 * D * 1000
+    top = mesh_for(max(a_top, ast_min) if math.isfinite(a_top) else ast_min, (12, 16, 20, 25), 300.0)
+    bottom = mesh_for(max(a_bot, ast_min) if math.isfinite(a_bot) else ast_min, (12, 16, 20, 25), 300.0)
+    transverse = []
+    d = D - cover - 0.016
+    for name, Pu, c in (("column 1", Pu1, c1), ("column 2", Pu2, c2)):
+        band = c[0] + 2 * d  # SP 34: column width + d on each side
+        mt = Pu / B * ((B - c[1]) / 2) ** 2 / 2  # kN·m per metre of band… per unit length of the band
+        a_t = max(ast_singly(mt * 1e6, fck, fy, 1000, d * 1000), 0.0012 * 1000 * D * 1000)
+        mesh = mesh_for(a_t, (12, 16, 20), 300.0)
+        transverse.append(f"{name}: {mesh} over a {band:.2f} m band")
+    return CombinedFootingResult(
+        round(L, 3),
+        round(B, 3),
+        round(D, 3),
+        round(x_start, 3),
+        round(q_service, 1),
+        M_top,
+        M_bot,
+        top,
+        bottom,
+        transverse,
+        ok,
+        notes,
     )

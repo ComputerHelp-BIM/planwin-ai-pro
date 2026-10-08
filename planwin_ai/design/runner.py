@@ -17,7 +17,7 @@ from ..core.frame import FrameAnalysis, FrameModel
 from ..core.model import Project, grade_fck
 from . import is456, is13920
 from .quantities import STEEL_DENSITY, quantities
-from .report import BeamDesign, ColumnDesign, DesignReport, FootingDesign
+from .report import BeamDesign, ColumnDesign, CombinedFootingDesign, DesignReport, FootingDesign, WallDesign
 from .sizing import autosize_columns, default_moment_factor, optimize_sizes
 
 __all__ = [
@@ -82,6 +82,7 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
             ds.min_column_steel_pct,
             ds.max_column_steel_pct,
             ds.effective_length_factor,
+            16 if ductile else 12,
         )
         tie = chk.tie
         if ductile and chk.main_bars is not None:
@@ -141,6 +142,7 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
         mem.n1: mem for mem in m.members.values() if mem.kind in ("column", "wall") and m.nodes[mem.n1].support
     }
     rects = []
+    loads_at: dict[str, tuple[float, float, int]] = {}  # mark -> (service P, max factored P, base node)
     for nid, mem in base_cols.items():
         R = fa.reaction(nid, serv.factors)
         P = float(R[2])
@@ -163,6 +165,7 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
         )
         nd = m.nodes[nid]
         rects.append((mem.mark, nd.x, nd.y, fr.B if not swap else fr.L, fr.L if not swap else fr.B))
+        loads_at[mem.mark] = (P, max((u[0] for u in ult), default=1.5 * P), nid)
         rep.footings.append(
             FootingDesign(
                 mem.mark,
@@ -186,11 +189,8 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
                 angle=mem.angle,
             )
         )
-    for i in range(len(rects)):
-        for j in range(i + 1, len(rects)):
-            a, b = rects[i], rects[j]
-            if abs(a[1] - b[1]) < (a[3] + b[3]) / 2 and abs(a[2] - b[2]) < (a[4] + b[4]) / 2:
-                rep.warnings.append(f"Footings {a[0]} and {b[0]} overlap – design a combined footing")
+    _combined_footings(rep, m, project, rects, loads_at, base_cols)
+    _walls(rep, fa, project, levels)
     # ------------------------------------------------------------- slabs
     done = set()
     for lv in project.levels:
@@ -232,11 +232,160 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
             )
             rep.slabs.append((plan.name, res))
     rep.drifts = fa.storey_drifts()
+    rep.irregularities = list(getattr(fa, "irregularities", []))
+    rep.modal = getattr(fa, "modal", None)
+    rep.seismic_method = "response spectrum" if getattr(fa, "rs", None) else "static"
+    for ir in rep.irregularities:
+        if ir.irregular:
+            rep.warnings.append(f"IS 1893 {ir.clause} {ir.name}: {ir.detail}")
+    if ductile:
+        rep.ductile = is13920.check_ductility(fa, project, rep)
     for d in rep.drifts:
         if not d["ok"]:
             rep.warnings.append(f"Storey drift {d['ratio']:.4f} > 0.004 at {d['level']} ({d['case']})")
     rep.boq = quantities(fa, project, rep)
     return rep
+
+
+def _combined_footings(rep: DesignReport, m: FrameModel, project: Project, rects, loads_at, base_cols) -> None:
+    """Overlapping isolated footings: two columns -> a combined footing; larger groups -> strip/raft advice;
+    total footing area > 50 % of the building footprint -> raft advice."""
+    ds = project.design
+    n = len(rects)
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    gap = 0.075  # footings closer than this (m) cannot be cast separately
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = rects[i], rects[j]
+            if abs(a[1] - b[1]) < (a[3] + b[3]) / 2 + gap and abs(a[2] - b[2]) < (a[4] + b[4]) / 2 + gap:
+                parent[find(i)] = find(j)
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+    replaced: set[str] = set()
+    for idx in groups.values():
+        if len(idx) == 1:
+            continue
+        marks = [rects[i][0] for i in idx]
+        if len(idx) > 2:
+            rep.warnings.append(f"Footings {', '.join(marks)} overlap as a group – design a strip footing or raft")
+            continue
+        (m1, x1, y1, *_), (m2, x2, y2, *_) = rects[idx[0]], rects[idx[1]]
+        P1, Pu1, n1 = loads_at[m1]
+        P2, Pu2, n2 = loads_at[m2]
+        s = math.hypot(x2 - x1, y2 - y1)
+        if s < 1e-3:
+            continue
+        ux, uy = (x2 - x1) / s, (y2 - y1) / s
+
+        c1, c2 = base_cols[n1], base_cols[n2]
+        fck = grade_fck(c1.grade)
+        cf = is456.design_combined_footing(
+            P1,
+            P2,
+            Pu1,
+            Pu2,
+            s,
+            _footprint_along(c1, ux, uy),
+            _footprint_along(c2, ux, uy),
+            ds.sbc,
+            fck,
+            ds.fy_main,
+            ds.footing_cover,
+            ds.footing_self_weight_pct,
+        )
+        cx = x1 + ux * (cf.L / 2 - cf.x_start)
+        cy = y1 + uy * (cf.L / 2 - cf.x_start)
+        rep.combined_footings.append(
+            CombinedFootingDesign(
+                (m1, m2),
+                P1 + P2,
+                cf.L,
+                cf.B,
+                cf.D,
+                cx,
+                cy,
+                math.degrees(math.atan2(uy, ux)),
+                cf.q_service,
+                str(cf.top) if cf.top else "-",
+                str(cf.bottom) if cf.bottom else "-",
+                cf.transverse,
+                cf.ok,
+                cf.notes + ["moments from lateral loads not included – check separately"],
+            )
+        )
+        replaced.update((m1, m2))
+    if replaced:
+        rep.footings = [f for f in rep.footings if f.mark not in replaced]
+    # raft advice (common practice: isolated footings covering more than half the plan area)
+    pts = [(r[1], r[2]) for r in rects]
+    if len(pts) >= 3:
+        x0, y0, x1, y1 = G.bbox(pts)
+        foot = (x1 - x0 + 1.0) * (y1 - y0 + 1.0)
+        area = sum(f.L * f.B for f in rep.footings) + sum(c.L * c.B for c in rep.combined_footings)
+        if foot > 0 and area > 0.5 * foot:
+            rep.warnings.append(
+                f"Footings cover {area / foot:.0%} of the building footprint – a raft foundation "
+                "is likely more economical"
+            )
+
+
+def _footprint_along(mem, ux: float, uy: float) -> tuple[float, float]:
+    """Extent of a (rotated) column footprint along the unit vector (ux, uy) and across it (m)."""
+    a = math.radians(mem.angle)
+    ca, sa = math.cos(a), math.sin(a)
+    along = abs(ux * ca + uy * sa) * mem.b + abs(-ux * sa + uy * ca) * mem.d
+    across = abs(-uy * ca + ux * sa) * mem.b + abs(uy * sa + ux * ca) * mem.d
+    return along, across
+
+
+def _walls(rep: DesignReport, fa: FrameAnalysis, project: Project, levels) -> None:
+    """Shear walls: in-plane axial load, moment (about local y) and shear (along the wall)."""
+    m = fa.model
+    ds = project.design
+    ductile = is13920.required(project) and project.seismic.enabled
+    for mid, mem in m.members.items():
+        if mem.kind != "wall":
+            continue
+        demands = []
+        for c in fa.ultimate:
+            f = fa.forces(mid, c.factors, 3)
+            for k in (0, -1):
+                demands.append((c.name, float(-f.N[k]), float(f.My[k]), float(f.Vz[k])))
+        chk = is456.design_wall(
+            demands, mem.b, mem.d, grade_fck(mem.grade), ds.fy_main, ds.fy_shear, ductile, ds.column_cover
+        )
+        H = abs(m.nodes[mem.n2].z - m.nodes[mem.n1].z)
+        rep.walls.append(
+            WallDesign(
+                mid,
+                mem.mark,
+                levels.get(mem.level, str(mem.level)),
+                mem.b,
+                mem.d,
+                max((d[1] for d in demands), default=0.0),
+                max((abs(d[2]) for d in demands), default=0.0),
+                max((abs(d[3]) for d in demands), default=0.0),
+                chk.rho_v,
+                chk.rho_h,
+                chk.curtains,
+                chk.vertical,
+                chk.horizontal,
+                chk.boundary,
+                chk.ok,
+                chk.ratio,
+                chk.notes,
+                mem.level,
+                H,
+            )
+        )
 
 
 def _end_support(mem, a, b, col_below, col_above, node: int) -> float:

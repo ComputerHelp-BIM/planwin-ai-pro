@@ -133,6 +133,7 @@ def design_column(
     pmin: float = 0.8,
     pmax: float = 4.0,
     k_eff: float = 1.0,
+    min_bar: int = 12,
 ) -> ColumnCheck:
     """Find the minimum steel % satisfying all demands.
 
@@ -207,7 +208,7 @@ def design_column(
                     lo = mid
         p, As, ratio, gov = best
     ok = ratio <= 1.0
-    n, dia, prov = column_bars(As, b, D)
+    n, dia, prov = column_bars(As, b, D, min_bar)
     tie_dia = max(8, math.ceil(dia / 4 / 2) * 2)
     tie_sp = min(b, D, 16 * dia, 300)
     main = BarSet(n, dia)
@@ -217,9 +218,13 @@ def design_column(
     )
 
 
-def column_bars(As: float, b: float, D: float) -> tuple[int, int, float]:
+def column_bars(As: float, b: float, D: float, min_dia: int = 12) -> tuple[int, int, float]:
+    """Even number of bars (≥ 4, ≤ 300 mm apart, cl 26.5.3.1) of one diameter ≥ ``min_dia``.
+
+    Ductile columns use ``min_dia`` = 16 so that the IS 13920 cl 8.2 hoop spacing limit
+    6 db (96 mm) stays above the practical 75 mm minimum."""
     best = None
-    for dia in (12, 16, 20, 25, 32):
+    for dia in (d for d in (12, 16, 20, 25, 32) if d >= min_dia):
         a1 = math.pi * dia * dia / 4
         perim = 2 * (b + D - 4 * 50)
         n = max(4, math.ceil(As / a1), math.ceil(perim / 300))  # cl 26.5.3.1: <= 300 mm apart

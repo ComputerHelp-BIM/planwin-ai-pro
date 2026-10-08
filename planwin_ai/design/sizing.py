@@ -108,9 +108,11 @@ def optimize_sizes(
         bad_cols = [c for c in rep.columns if not c.ok or c.steel_pct > target_col_pct]
         bad_beams = [b for b in rep.beams if not b.ok]
         bad_drift = [d for d in rep.drifts if not d["ok"]]
+        bad_duct = [d for d in rep.ductile if not d.ok]
+        bad_walls = [w for w in rep.walls if not w.ok]
         if progress:
             progress(it, len(bad_cols), len(bad_beams))
-        if not bad_cols and not bad_beams and not bad_drift:
+        if not bad_cols and not bad_beams and not bad_drift and not bad_duct and not bad_walls:
             log.append(f"Iteration {it}: all members and storey drifts pass")
             return log, rep
         drift_lv: dict[int, set[str]] = {}
@@ -143,6 +145,8 @@ def optimize_sizes(
                 bk, dk, ak = project.column_size(c.mark, k, col_k)
                 project.set_column_size(c.mark, k, max(bk, b), max(dk, d), ak)
                 changed.add((c.mark, k))
+        n_duct = _fix_ductile(project, fm, bad_duct, changed, step)
+        n_wall = _thicken_walls(project, bad_walls)
         stiffened_plans = set()
         for i, dirs in drift_lv.items():
             plan = project.plan(project.levels[i - 1].plan)
@@ -177,7 +181,77 @@ def optimize_sizes(
         log.append(
             f"Iteration {it}: enlarged {len(changed)} column segments and {len(beam_ids)} beams"
             + (f" (storey drift at {len(bad_drift)} level/case)" if bad_drift else "")
+            + (f"; {n_duct} IS 13920 fixes" if n_duct else "")
+            + (f"; thickened {n_wall} walls" if n_wall else "")
         )
     fm, fa, rep = run_full(project)
     log.append(f"Stopped after {max_iter} iterations – {rep.failures} member(s) still need attention")
     return log, rep
+
+
+def _grow_column(project: Project, mark: str, level: int, grow_b: float, grow_d: float, changed: set) -> None:
+    """Enlarge column ``mark`` at ``level`` and keep every level below at least as large."""
+    target = None
+    for k in range(level, 0, -1):
+        plan_k = project.plan(project.levels[k - 1].plan)
+        col_k = next((x for x in plan_k.columns if x.mark == mark), None) if plan_k else None
+        if col_k is None:
+            continue
+        bk, dk, ak = project.column_size(mark, k, col_k)
+        if target is None:
+            target = (bk + grow_b, dk + grow_d)
+        project.set_column_size(mark, k, max(bk, target[0]), max(dk, target[1]), ak)
+        changed.add((mark, k))
+
+
+def _fix_ductile(project: Project, fm, bad: list, changed: set, step: float) -> int:
+    """Size changes for IS 13920 failures: strong column–weak beam (enlarge the columns at the joint
+    in the failing direction), column proportions (cl 7.1) and beam proportions (cl 6.1)."""
+    n = 0
+    for dc in bad:
+        names = [name for name, ok, _ in dc.checks if not ok]
+        mem = fm.members.get(dc.member_id) if dc.member_id is not None else None
+        if mem is None:
+            continue
+        if dc.kind == "joint":
+            for name in names:
+                if "7.2.1" not in name:
+                    continue
+                along_x = "along X" in name
+                for lvl in (mem.level, mem.level + 1):
+                    if lvl > len(project.levels):
+                        continue
+                    plan = project.plan(project.levels[lvl - 1].plan)
+                    col = next((x for x in plan.columns if x.mark == dc.mark), None) if plan else None
+                    if col is None or (dc.mark, lvl) in changed:
+                        continue
+                    b, d, ang = project.column_size(dc.mark, lvl, col)
+                    b_along_x = abs(math.cos(math.radians(ang))) >= 0.7
+                    grow_b = along_x == b_along_x
+                    _grow_column(project, dc.mark, lvl, step if grow_b else 0.0, 0.0 if grow_b else step, changed)
+                    n += 1
+        elif dc.kind == "column" and any(x.startswith(("7.1.1", "7.1.2")) for x in names):
+            plan = project.plan(project.levels[mem.level - 1].plan)
+            col = next((x for x in plan.columns if x.mark == dc.mark), None) if plan else None
+            if col is not None and (dc.mark, mem.level) not in changed:
+                b, d, ang = project.column_size(dc.mark, mem.level, col)
+                nb = max(b, 0.3, math.ceil(0.4 * max(b, d) / 0.025) * 0.025)
+                nd = max(d, 0.3, math.ceil(0.4 * max(b, d) / 0.025) * 0.025)
+                _grow_column(project, dc.mark, mem.level, nb - b, nd - d, changed)
+                n += 1
+        elif dc.kind == "beam" and any(x.startswith(("6.1.1", "6.1.2")) for x in names):
+            for plan in project.plans:
+                bm = next((x for x in plan.beams if x.id == mem.group), None)
+                if bm is not None:
+                    bm.b = round(max(bm.b, 0.2, math.ceil(0.3 * bm.d / 0.025) * 0.025), 3)
+                    n += 1
+    return n
+
+
+def _thicken_walls(project: Project, bad: list) -> int:
+    marks = {w.mark for w in bad}
+    for plan in project.plans:
+        for w in plan.walls:
+            if w.mark in marks:
+                w.thickness = round(w.thickness + 0.025, 3)
+    return len(marks)

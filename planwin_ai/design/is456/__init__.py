@@ -30,8 +30,9 @@ from .common import (
     tau_c_max,
     xu_max_ratio,
 )
-from .footing import FootingResult, design_footing
+from .footing import CombinedFootingResult, FootingResult, design_combined_footing, design_footing
 from .slab import SlabResult, design_slab
+from .wall import WallCheck, design_wall
 
 __all__ = [
     "BAR_DIAS",
@@ -42,6 +43,8 @@ __all__ = [
     "ColumnCheck",
     "FlexureResult",
     "FootingResult",
+    "CombinedFootingResult",
+    "design_combined_footing",
     "ShearResult",
     "TorsionResult",
     "torsion_design",
@@ -65,4 +68,6 @@ __all__ = [
     "tau_c",
     "tau_c_max",
     "xu_max_ratio",
+    "WallCheck",
+    "design_wall",
 ]

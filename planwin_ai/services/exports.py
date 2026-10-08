@@ -158,6 +158,41 @@ def _pdf(ctx: ExportContext, path: str) -> str:
     return write_pdf(path, ctx.project, ctx.plan_results(), fm, rep, ctx.watermark)
 
 
+def _bbs(ctx: ExportContext, path: str) -> str:
+    from ..io.bbs import build_bbs, write_bbs_excel
+
+    rep = ctx.design()
+    fm, _ = ctx.frame()
+    return write_bbs_excel(path, build_bbs(ctx.project, fm, rep), ctx.project, ctx.watermark)
+
+
+def _details(ctx: ExportContext, path: str) -> str:
+    from ..io.detail_dxf import write_detail_drawings
+
+    rep = ctx.design()
+    fm, _ = ctx.frame()
+    return write_detail_drawings(path, ctx.project, fm, rep, ctx.watermark)
+
+
+def _calc(ctx: ExportContext, path: str) -> str:
+    from ..io.calc_sheets import write_calc_sheets
+
+    rep = ctx.design()
+    fm, fa = ctx.frame()
+    sel = ctx.params
+    return write_calc_sheets(
+        path,
+        ctx.project,
+        fm,
+        fa,
+        rep,
+        member_ids=sel.get("member_ids"),
+        footing_marks=sel.get("footing_marks"),
+        slabs=sel.get("slabs"),
+        watermark=ctx.watermark,
+    )
+
+
 def _project(ctx: ExportContext, path: str) -> str:
     from ..io.project_io import save_project
 
@@ -174,6 +209,39 @@ register(
 register(ExportFormat("dxf3d", "DXF – 3-D frame", "_3d.dxf", "DXF (*.dxf)", _dxf_frame, group="Drawings"))
 register(ExportFormat("excel", "Excel workbook", ".xlsx", "Excel (*.xlsx)", _excel, ("xlsx",), group="Reports"))
 register(ExportFormat("pdf", "PDF report", ".pdf", "PDF (*.pdf)", _pdf, ("report",), group="Reports"))
+register(
+    ExportFormat(
+        "calc",
+        "Design calculation sheets (PDF)",
+        "_calc.pdf",
+        "PDF (*.pdf)",
+        _calc,
+        ("calcs", "calculations"),
+        group="Reports",
+    )
+)
+register(
+    ExportFormat(
+        "bbs",
+        "Bar bending schedule (Excel)",
+        "_BBS.xlsx",
+        "Excel (*.xlsx)",
+        _bbs,
+        ("bar bending schedule",),
+        group="Reports",
+    )
+)
+register(
+    ExportFormat(
+        "details",
+        "Reinforcement detail drawings (DXF)",
+        "_details.dxf",
+        "DXF (*.dxf)",
+        _details,
+        ("detail", "drawings"),
+        group="Drawings",
+    )
+)
 register(
     ExportFormat(
         "project", "PlanWin AI Pro project", ".pwai", "PlanWin AI Pro (*.pwai)", _project, ("pwai",), group="Project"

@@ -94,6 +94,47 @@ class FootingDesign:
 
 
 @dataclass
+class WallDesign:
+    member_id: int
+    mark: str
+    level: str
+    t: float  # m
+    Lw: float  # m
+    Pu: float  # kN, max compression
+    Mu: float  # kN·m, max in-plane moment
+    Vu: float  # kN, max in-plane shear
+    rho_v: float
+    rho_h: float
+    curtains: int
+    vertical: str
+    horizontal: str
+    boundary: str
+    ok: bool
+    utilisation: float
+    notes: list[str] = field(default_factory=list)
+    level_index: int = 0
+    height: float = 0.0
+
+
+@dataclass
+class CombinedFootingDesign:
+    marks: tuple[str, str]
+    P_service: float  # kN, both columns
+    L: float
+    B: float
+    D: float
+    x: float  # m, footing centre
+    y: float
+    angle: float  # deg, direction of the long side (column 1 -> column 2)
+    q: float  # kN/m² service
+    top: str  # longitudinal top steel (between the columns)
+    bottom: str  # longitudinal bottom steel
+    transverse: list[str]
+    ok: bool
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
 class DesignReport:
     beams: list[BeamDesign] = field(default_factory=list)
     columns: list[ColumnDesign] = field(default_factory=list)

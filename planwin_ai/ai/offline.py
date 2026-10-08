@@ -215,6 +215,11 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
     if re.search(r"\bdesign\b", t) and not re.search(r"design a\b", t):
         actions.append({"action": "design"})
     for key, fmt in (
+        ("bar bending", "bbs"),
+        ("bbs", "bbs"),
+        ("calc", "calc"),
+        ("detail", "details"),
+        ("reinforcement drawing", "details"),
         ("staad", "staad"),
         (".std", "staad"),
         ("etabs", "etabs"),
