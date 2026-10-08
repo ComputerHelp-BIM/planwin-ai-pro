@@ -79,12 +79,22 @@ def test_sheet_numbers_equal_design_report(bungalow):
         assert sh.value("ast_top_l") == pytest.approx(b.ast_top_l, rel=1e-9)
         assert sh.value("ast_top_r") == pytest.approx(b.ast_top_r, rel=1e-9)
         assert sh.value("Mu_pos") == pytest.approx(b.M_sag, rel=1e-9)
-        assert sh.value("Vu") == pytest.approx(b.V_max, rel=1e-9)
+        assert sh.value("V_design") == pytest.approx(b.V_max, rel=1e-9)  # capacity shear when ductile
+        assert sh.value("Tu") == pytest.approx(b.T_max, rel=1e-9)
         if b.links:
             assert sh.value("sv") == b.links.spacing
+        if b.links_end:
+            assert sh.value("sv_end") == b.links_end.spacing
         steps = cs.beam_steps(prj, fa, b)
         assert all(isinstance(s, cs.Step) for s in steps)
         assert any("√" in s.formula for s in steps)  # Ast formula of Annex G-1.1(b)
+    # the bungalow is a ductile frame (zone III, R = 5) with two beams carrying torsion
+    sheets = [cs.beam_sheet(prj, fa, b) for b in rep.beams]
+    clauses = " ".join(s.clause for sh in sheets for s in sh.steps)
+    for clause in ("IS 13920 cl 6.2.1", "IS 13920 cl 6.2.3", "IS 13920 cl 6.3.3", "IS 13920 cl 6.3.5", "cl 41.4.3"):
+        assert clause in clauses
+    tors = [sh for sh, b in zip(sheets, rep.beams) if b.T_max > 1.0]
+    assert tors and all(sh.value("Mt") and sh.value("Ve") for sh in tors)
     for c in rep.columns:
         sh = cs.column_sheet(prj, fa, c)
         assert sh.warnings == [], (c.mark, sh.warnings)
@@ -93,6 +103,10 @@ def test_sheet_numbers_equal_design_report(bungalow):
         assert sh.value("As_req") == pytest.approx(c.As, rel=1e-9)
         assert sh.value("ratio") == pytest.approx(c.utilisation, rel=1e-6)
         assert sh.value("l_unsupported") == pytest.approx(c.clear_height, rel=1e-9)
+        if c.tie_confined is not None:
+            assert sh.value("s_confined") == c.tie_confined.spacing
+            assert sh.value("l0") == pytest.approx(c.l0 * 1000, rel=1e-9)
+            assert sh.value("tie_spacing_out") == c.tie.spacing
     for f in rep.footings:
         sh = cs.footing_sheet(prj, fa, f)
         assert sh.warnings == [], (f.mark, sh.warnings)
