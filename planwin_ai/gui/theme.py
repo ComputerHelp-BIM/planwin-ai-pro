@@ -100,6 +100,7 @@ def qss(theme: str) -> str:
     QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}
     QWidget#Ribbon {{ background: {c["panel"]}; border-bottom: 1px solid {c["border"]}; }}
     QWidget#RibbonTop {{ background: {ACCENT}; }}
+    QWidget#RibbonBody, QWidget#Ribbon QScrollArea {{ background: {c["panel"]}; border: none; }}
     QToolButton#AppButton {{ background: #1E5BB0; color: white; font-weight: 600; padding: 4px 14px; border-radius: 0; }}
     QToolButton#AppButton::menu-indicator {{ image: none; }}
     QToolButton#QuickButton {{ padding: 2px; border-radius: 4px; }}

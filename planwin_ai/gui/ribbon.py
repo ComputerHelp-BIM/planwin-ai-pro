@@ -9,14 +9,15 @@ to its tab row; click any tab to show it again.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtCore import QEvent, QSize, Qt, Signal
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QMenu,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTabBar,
@@ -27,6 +28,34 @@ from PySide6.QtWidgets import (
 
 LARGE_ICON = QSize(30, 30)
 SMALL_ICON = QSize(16, 16)
+
+
+def wrap_label(text: str, width: int = 9) -> str:
+    """Two-line label for a large button: break at the space nearest the middle."""
+    text = text.replace("&", "")
+    if len(text) <= width or " " not in text:
+        return text
+    mid = len(text) / 2
+    cut = min((i for i, ch in enumerate(text) if ch == " "), key=lambda i: abs(i - mid))
+    return text[:cut] + "\n" + text[cut + 1 :]
+
+
+class LargeButton(QToolButton):
+    """Ribbon button with the icon above a label wrapped onto two lines."""
+
+    def _relabel(self) -> None:
+        a = self.defaultAction()
+        if a is not None:
+            self.setText(wrap_label(a.text()))
+
+    def setDefaultAction(self, action: QAction) -> None:  # noqa: N802 (Qt API)
+        super().setDefaultAction(action)
+        self._relabel()
+
+    def actionEvent(self, ev) -> None:  # noqa: N802 (Qt API)
+        super().actionEvent(ev)  # Qt copies the action text back on every change
+        if ev.type() == QEvent.ActionChanged:
+            self._relabel()
 
 
 class RibbonGroup(QFrame):
@@ -52,7 +81,8 @@ class RibbonGroup(QFrame):
         self.buttons: list[QToolButton] = []
 
     def _button(self, action: QAction, large: bool, menu: QMenu | None = None) -> QToolButton:
-        b = QToolButton()
+        """``menu``: the button opens it (the action itself then only labels the button)."""
+        b = LargeButton() if large else QToolButton()
         b.setDefaultAction(action)
         b.setAutoRaise(True)
         if large:
@@ -67,7 +97,7 @@ class RibbonGroup(QFrame):
             b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         if menu is not None:
             b.setMenu(menu)
-            b.setPopupMode(QToolButton.MenuButtonPopup if action.isEnabled() else QToolButton.InstantPopup)
+            b.setPopupMode(QToolButton.InstantPopup)
         self.buttons.append(b)
         return b
 
@@ -99,10 +129,19 @@ class RibbonGroup(QFrame):
         return w
 
 
-class RibbonPage(QWidget):
+class RibbonPage(QScrollArea):
+    """One tab of groups; scrolls sideways when the window is narrower than the groups."""
+
     def __init__(self):
         super().__init__()
-        self.lay = QHBoxLayout(self)
+        self.setFrameShape(QFrame.NoFrame)
+        self.setWidgetResizable(True)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        body = QWidget()
+        body.setObjectName("RibbonBody")
+        self.setWidget(body)
+        self.lay = QHBoxLayout(body)
         self.lay.setContentsMargins(4, 2, 4, 2)
         self.lay.setSpacing(2)
         self.lay.addStretch(1)
@@ -143,6 +182,8 @@ class Ribbon(QWidget):
         self.tabs.setObjectName("RibbonTabs")
         self.tabs.setDrawBase(False)
         self.tabs.setExpanding(False)
+        self.tabs.setUsesScrollButtons(False)
+        self.tabs.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         h.addWidget(self.tabs)
         h.addStretch(1)
         self.title = QLabel(title)
@@ -152,7 +193,7 @@ class Ribbon(QWidget):
         h.addLayout(self.right)
         v.addWidget(top)
         self.stack = QStackedWidget()
-        self.stack.setFixedHeight(96)
+        self.stack.setFixedHeight(100)
         v.addWidget(self.stack)
         self.pages: dict[str, RibbonPage] = {}
         self.tabs.currentChanged.connect(self._tab)
@@ -168,10 +209,14 @@ class Ribbon(QWidget):
             self.tabs.addTab(name)
         return self.pages[name]
 
-    def add_quick(self, action: QAction) -> QToolButton:
+    def add_quick(self, action: QAction, icon: QIcon | None = None) -> QToolButton:
+        """Icon-only button on the title strip; ``icon`` overrides the action's (light on the accent bar)."""
         b = QToolButton()
         b.setObjectName("QuickButton")
         b.setDefaultAction(action)
+        if icon is not None:
+            b.setIcon(icon)
+            action.changed.connect(lambda: b.setIcon(icon))  # Qt resets the icon from the action
         b.setAutoRaise(True)
         b.setIconSize(QSize(18, 18))
         b.setToolButtonStyle(Qt.ToolButtonIconOnly)
