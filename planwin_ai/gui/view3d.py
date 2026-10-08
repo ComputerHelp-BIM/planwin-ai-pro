@@ -11,13 +11,16 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
+from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget
 
 from .theme import PALETTES
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
+
+#: shear-wall panel colour per theme (the palettes have no "wall" key)
+_WALL_COLOURS = {"light": "#8B5CF6", "dark": "#A78BFA"}
 
 
 class _Canvas3D(QWidget):
@@ -75,23 +78,55 @@ class _Canvas3D(QWidget):
                 util[c.member_id] = (c.utilisation, c.ok)
             for b in rep.beams:
                 util[b.member_id] = (b.utilisation, b.ok)
-        lines = []
+            for w in getattr(rep, "walls", None) or []:
+                util[w.member_id] = (w.utilisation, w.ok)
+        wall_col = pal.get("wall", _WALL_COLOURS.get(self.o.main.theme_name, "#7C3AED"))
+        items = []
         for mid, m in fm.members.items():
-            if lvl_filter >= 0 and m.level != lvl_filter + 1:
-                continue
-            a, b = S[idx[m.n1]], S[idx[m.n2]]
-            depth = (a[2] + b[2]) / 2
-            lines.append((depth, mid, m, a, b))
-        lines.sort(key=lambda t: -t[0])
-        for _, mid, m, a, b in lines:
+            if m.kind == "link" or (lvl_filter >= 0 and m.level != lvl_filter + 1):
+                continue  # rigid links are a modelling device, not drawn
+            if m.kind == "wall":
+                # panel of wall length × storey height; the wall runs along local z = angle + 90°
+                t = math.radians(m.angle + 90.0)
+                u = np.array([math.cos(t), math.sin(t), 0.0]) * m.d / 2
+                a3, b3 = P[idx[m.n1]], P[idx[m.n2]]
+                Q = self.project(np.array([a3 - u, a3 + u, b3 + u, b3 - u]), center, size)
+                items.append((float(Q[:, 2].mean()), mid, m, Q))
+            else:
+                a, b = S[idx[m.n1]], S[idx[m.n2]]
+                items.append(((a[2] + b[2]) / 2, mid, m, np.array([a, b])))
+        items.sort(key=lambda t: -t[0])
+        for _, mid, m, Q in items:
             if mode == "Design utilisation" and mid in util:
                 u, ok = util[mid]
                 col = QColor(pal["error"]) if not ok else (QColor(pal["warn"]) if u > 0.85 else QColor(pal["ok"]))
+            elif m.kind == "wall":
+                col = QColor(wall_col)
             else:
                 col = QColor(pal["column"] if m.kind == "column" else pal["beam"])
+            if m.kind == "wall":
+                fill = QColor(col)
+                fill.setAlpha(170)
+                p.setPen(QPen(col.darker(140), 1.2))
+                p.setBrush(fill)
+                p.drawPolygon(QPolygonF([QPointF(q[0], q[1]) for q in Q]))
+                continue
             w = 3.0 if m.kind == "column" else 2.0
             p.setPen(QPen(col, w))
-            p.drawLine(QPointF(a[0], a[1]), QPointF(b[0], b[1]))
+            p.drawLine(QPointF(Q[0][0], Q[0][1]), QPointF(Q[1][0], Q[1][1]))
+        if self.o.show_cm.isChecked():
+            # centre of mass (rigid-diaphragm master) of each floor: crossed circle
+            p.setPen(QPen(QColor(pal["select"]), 1.8))
+            p.setBrush(Qt.NoBrush)
+            for lv in fm.levels:
+                if lv.master is None or lv.master not in idx or (lvl_filter >= 0 and lv.index != lvl_filter + 1):
+                    continue
+                s = S[idx[lv.master]]
+                c, r = QPointF(s[0], s[1]), 7.0
+                p.drawEllipse(c, r, r)
+                d = r * 0.7071
+                p.drawLine(c + QPointF(-d, -d), c + QPointF(d, d))
+                p.drawLine(c + QPointF(-d, d), c + QPointF(d, -d))
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(pal["error"]))
         for n, nd in fm.nodes.items():
@@ -148,6 +183,10 @@ class Frame3DView(QWidget):
         bar.addWidget(self.level)
         bar.addWidget(QLabel("Deflection scale:"))
         bar.addWidget(self.def_scale)
+        self.show_cm = QCheckBox("Show CM")
+        self.show_cm.setToolTip("Mark the centre of mass (rigid-diaphragm master) of each floor")
+        self.show_cm.setChecked(True)
+        bar.addWidget(self.show_cm)
         bar.addStretch(1)
         lay.addLayout(bar)
         self.canvas = _Canvas3D(self)
@@ -155,6 +194,7 @@ class Frame3DView(QWidget):
         for w in (self.mode, self.level):
             w.currentIndexChanged.connect(self.canvas.update)
         self.def_scale.valueChanged.connect(self.canvas.update)
+        self.show_cm.toggled.connect(self.canvas.update)
         self.refresh()
 
     def refresh(self):
