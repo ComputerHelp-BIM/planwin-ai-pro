@@ -108,6 +108,7 @@ class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWi
         self.setMenuWidget(self.ribbon)
         self.ribbon.set_collapsed(self.settings.value("ribbon_collapsed", "false") == "true")
         self.chat.visibilityChanged.connect(self.ai_toggle.setChecked)
+        self.canvas.orthoChanged.connect(self.cmd["flag_ortho"].setChecked)  # F8 / Shift on the canvas
         self._update_recent()
         self.statusBar().addPermanentWidget(self.coord_lbl)
         self.statusBar().addPermanentWidget(self.lic_lbl)
