@@ -262,6 +262,9 @@ class Plan:
     columns: list[Column] = field(default_factory=list)
     beams: list[Beam] = field(default_factory=list)
     walls: list[Wall] = field(default_factory=list)
+    #: drawing dimensions [{"x1", "y1", "x2", "y2", "offset"}] in m; offset = perpendicular distance of the
+    #: dimension line from the measured points, positive to the left of (x1, y1) → (x2, y2)
+    dimensions: list[dict[str, Any]] = field(default_factory=list)
     notes: str = ""
 
     # ------------------------------------------------------------ lookups
