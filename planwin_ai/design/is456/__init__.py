@@ -6,7 +6,7 @@ structural engineer.  ``from planwin_ai.design import is456`` keeps working: eve
 name is re-exported here.
 """
 
-from .beam import FlexureResult, ShearResult, deflection_mf, flexure, select_bars, shear
+from .beam import FlexureResult, ShearResult, TorsionResult, deflection_mf, flexure, select_bars, shear, torsion_design
 from .column import (
     ColumnCheck,
     autosize_depth,
@@ -43,6 +43,8 @@ __all__ = [
     "FlexureResult",
     "FootingResult",
     "ShearResult",
+    "TorsionResult",
+    "torsion_design",
     "SlabResult",
     "ast_singly",
     "autosize_depth",

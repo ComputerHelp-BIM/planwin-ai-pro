@@ -17,27 +17,48 @@ def quantities(fa: FrameAnalysis, project: Project, rep: DesignReport) -> dict:
     m = fa.model
     conc: dict[str, float] = {}
     form = 0.0
-    steel = {"columns": 0.0, "beams": 0.0, "slabs": 0.0, "footings": 0.0}
+    steel = {"columns": 0.0, "walls": 0.0, "beams": 0.0, "slabs": 0.0, "footings": 0.0}
 
     def add_c(grade, v):
         conc[grade] = conc.get(grade, 0.0) + v
 
+    def link_kg(b: float, d: float, length: float, links, cover: float = 0.04) -> float:
+        """Closed links over ``length`` (m) for a b × d section (m)."""
+        dia = links.dia if links else 8
+        sp = (links.spacing / 1000) if links and links.spacing > 0 else 0.15
+        per = 2 * ((b - 2 * cover) + (d - 2 * cover)) + 0.24  # hooks
+        return (length / sp + 1) * per * math.pi * (dia / 1000) ** 2 / 4 * STEEL_DENSITY
+
     cd = {c.member_id: c for c in rep.columns}
     bd = {b.member_id: b for b in rep.beams}
+    wd = {w.member_id: w for w in getattr(rep, "walls", [])}
     slab_t = _beam_slab_thickness(m)
-    col_at = {mem.n2: mem for mem in m.members.values() if mem.kind == "column"}  # column below each node
+    col_at = {mem.n2: mem for mem in m.members.values() if mem.kind in ("column", "wall")}  # support below a node
     for mid, mem in m.members.items():
+        if mem.kind == "link":  # rigid links of the wall model are not real concrete
+            continue
         a, b = m.nodes[mem.n1], m.nodes[mem.n2]
         L = math.dist((a.x, a.y, a.z), (b.x, b.y, b.z))
-        if mem.kind == "column":
+        if mem.kind == "wall":
+            add_c(mem.grade, mem.b * mem.d * L)
+            form += 2 * (mem.b + mem.d) * L
+            w = wd.get(mid)
+            rho = (w.rho_v + w.rho_h) if w else 0.005  # vertical + horizontal steel ratios
+            steel["walls"] += rho * mem.b * mem.d * L * 1.1 * STEEL_DENSITY
+        elif mem.kind == "column":
             add_c(mem.grade, mem.b * mem.d * L)
             form += 2 * (mem.b + mem.d) * L
             c = cd.get(mid)
             if c:
-                n, dia = _parse_bars(c.bars)
-                steel["columns"] += n * math.pi * dia * dia / 4e6 * L * 1.1 * STEEL_DENSITY
-                tie_n = L / 0.15
-                steel["columns"] += tie_n * 2 * (mem.b + mem.d) * math.pi * 0.008**2 / 4 * STEEL_DENSITY
+                if c.main_bars is not None:
+                    n, dia = c.main_bars.count, c.main_bars.dia
+                else:
+                    n, dia = _parse_bars(c.bars)
+                steel["columns"] += n * math.pi * dia * dia / 4e6 * L * 1.1 * STEEL_DENSITY  # +10 % laps
+                l0 = min(2 * c.l0, L) if c.tie_confined else 0.0
+                steel["columns"] += link_kg(mem.b, mem.d, L - l0, c.tie) + (
+                    link_kg(mem.b, mem.d, l0, c.tie_confined) * 1.5 if l0 else 0.0  # cross-ties in l0
+                )
         else:
             # concrete below the slab only (the slab volume is counted with the slabs) and
             # clear length between column faces (the joint is counted with the column)
@@ -49,7 +70,10 @@ def quantities(fa: FrameAnalysis, project: Project, rep: DesignReport) -> dict:
             if d:
                 area = d.ast_bot * L + (d.ast_top_l + d.ast_top_r) * L / 3 + 2 * 113 * L
                 steel["beams"] += area / 1e6 * STEEL_DENSITY
-                steel["beams"] += (L / 0.15) * 2 * (mem.b + mem.d) * math.pi * 0.008**2 / 4 * STEEL_DENSITY
+                zone = min(4 * mem.d, Lc) if d.links_end else 0.0  # 2d at each end
+                steel["beams"] += link_kg(mem.b, mem.d, Lc - zone, d.links, 0.025)
+                if zone:
+                    steel["beams"] += link_kg(mem.b, mem.d, zone, d.links_end, 0.025)
     for lv in project.levels:
         plan = project.plan(lv.plan)
         if not plan:

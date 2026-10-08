@@ -38,6 +38,9 @@ class BeamDesign:
     links: Links | None = None
     group: str = ""  # id of the plan beam this member segment belongs to
     level_index: int = 0
+    links_end: Links | None = None  # IS 13920 cl 6.3.5 hoops within 2d of column faces
+    T_max: float = 0.0  # kN·m, factored torsion (IS 456 cl 41)
+    side_face: str = ""  # side-face reinforcement (cl 26.5.1.3 / 41.4.1)
 
 
 @dataclass
@@ -63,6 +66,8 @@ class ColumnDesign:
     level_index: int = 0
     height: float = 0.0  # storey height (m), node to node
     clear_height: float = 0.0  # unsupported length used for slenderness (m)
+    tie_confined: Links | None = None  # IS 13920 cl 8 special confining hoops within l0
+    l0: float = 0.0  # m, confining length at each end (cl 8.1)
 
 
 @dataclass
@@ -97,6 +102,16 @@ class DesignReport:
     boq: dict = field(default_factory=dict)
     drifts: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    ductile: list = field(default_factory=list)  # is13920.DuctileCheck (empty when IS 13920 does not apply)
+    walls: list = field(default_factory=list)  # WallDesign
+    combined_footings: list = field(default_factory=list)  # CombinedFootingDesign
+    irregularities: list = field(default_factory=list)  # irregularity.Irregularity
+    modal: object | None = None  # dynamics.ModalResult when response spectrum analysis was used
+    seismic_method: str = "static"  # "static" | "response spectrum"
+
+    @property
+    def ductile_failures(self) -> int:
+        return sum(not d.ok for d in self.ductile)
 
     @property
     def failures(self) -> int:
@@ -105,4 +120,7 @@ class DesignReport:
             + sum(not c.ok for c in self.columns)
             + sum(not f.ok for f in self.footings)
             + sum(not s.ok for _, s in self.slabs)
+            + sum(not w.ok for w in self.walls)
+            + sum(not c.ok for c in self.combined_footings)
+            + self.ductile_failures
         )

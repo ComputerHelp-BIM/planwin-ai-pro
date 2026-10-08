@@ -45,19 +45,21 @@ class Combo:
     kind: str = "ultimate"  # ultimate | service
 
 
-def is_combinations(seismic: bool, wind: bool, torsion: bool = False) -> list[Combo]:
+def is_combinations(seismic: bool, wind: bool, torsion: bool = False, spectrum: bool = False) -> list[Combo]:
     """IS 456 Table 18 / IS 1893-1:2016 cl 6.3.4 / IS 875-5 combinations.
 
     25 combinations without accidental torsion (legacy PlanWin set); with
     torsion each seismic combination is taken with ± accidental torsion
-    (ETX / ETY cases), giving 37.
+    (ETX / ETY cases), giving 37.  With ``spectrum`` the seismic cases are the
+    response spectrum envelopes RSX / RSY instead of the static EQX / EQY.
     """
     out = [Combo("1.5(DL+LL)", {"DL": 1.5, "LL": 1.5})]
     lat: list[tuple[str, str | None]] = []
     if wind:
         lat += [("WLX", None), ("WLY", None)]
     if seismic:
-        lat += [("EQX", "ETX" if torsion else None), ("EQY", "ETY" if torsion else None)]
+        ex, ey = ("RSX", "RSY") if spectrum else ("EQX", "EQY")
+        lat += [(ex, "ETX" if torsion else None), (ey, "ETY" if torsion else None)]
 
     def variants(L, T, f):
         for s in (1, -1):
@@ -112,6 +114,7 @@ class FrameModel:
         self._nid = 0
         self._mid = 0
         self.solver: FrameSolver | None = None
+        self.rs: dict = {}  # response spectrum results of the last analysis (for exporters)
 
     # ------------------------------------------------------------ nodes
     def _node(self, lvl: int, x: float, y: float, z: float, create: bool = True, tag: str = "") -> int | None:
@@ -642,15 +645,38 @@ class FrameModel:
             raise FrameSolveError("Frame has no members – build plans and levels first")
         self.solver = FrameSolver(self.nodes, self.members, self.nodal, self.diaphragm_list())
         res = self.solver.solve(self.cases())
-        return FrameAnalysis(
-            self,
-            res,
-            is_combinations(
-                self.p.seismic.enabled,
-                self.p.wind.enabled,
-                self.p.seismic.enabled and self.p.seismic.accidental_torsion,
-            ),
-        )
+        s = self.p.seismic
+        torsion = s.enabled and s.accidental_torsion
+        fa = FrameAnalysis(self, res, is_combinations(s.enabled, self.p.wind.enabled, torsion))
+        if s.enabled:
+            from .dynamics import dynamic_analysis_required, modal_analysis, response_spectrum
+            from .irregularity import check_irregularities, is_regular
+
+            fa.irregularities = check_irregularities(fa)
+            height = self.levels[-1].z - (self.levels[s.base_level].z if s.base_level < len(self.levels) else 0.0)
+            fa.dynamic_required = dynamic_analysis_required(self.p, height, is_regular(fa.irregularities))
+            use_rs = s.method == "response_spectrum" or (s.method == "auto" and fa.dynamic_required)
+            if use_rs:
+                try:
+                    fa.modal = modal_analysis(self)
+                    fa.rs = {
+                        c: response_spectrum(self, fa.modal, c, self.seismic["EQ" + c[-1]].Vb) for c in ("RSX", "RSY")
+                    }
+                    fa.combos = is_combinations(True, self.p.wind.enabled, torsion, spectrum=True)
+                except (ValueError, np.linalg.LinAlgError) as exc:
+                    self._err(
+                        f"Response spectrum analysis not possible ({exc}) – equivalent static method used",
+                        level="warning",
+                    )
+                    fa.modal, fa.rs = None, {}
+            if s.method == "static" and fa.dynamic_required:
+                self._err(
+                    "IS 1893-1:2016 cl 7.7.1 requires dynamic analysis for this building – set the seismic "
+                    "method to 'auto' or 'response spectrum'",
+                    level="warning",
+                )
+        self.rs = fa.rs
+        return fa
 
 
 def _footprint_column(plan, x: float, y: float, tol: float = 0.05):
@@ -692,6 +718,17 @@ class FrameAnalysis:
         self.model = model
         self.res = res
         self.combos = combos
+        self.rs: dict = {}  # "RSX"/"RSY" -> dynamics.RSResult (response spectrum envelopes)
+        self.modal = None  # dynamics.ModalResult
+        self.irregularities: list = []
+        self.dynamic_required = False
+
+    @property
+    def lateral_seismic_cases(self) -> list[str]:
+        """The seismic cases that the design combinations use (RSX/RSY or EQX/EQY)."""
+        if self.rs:
+            return list(self.rs)
+        return [c for c in ("EQX", "EQY") if c in self.res.cases]
 
     @property
     def ultimate(self) -> list[Combo]:
@@ -709,6 +746,11 @@ class FrameAnalysis:
             loads.extend(ld.scaled(a) for ld in m.loads.get(case, []))
         xs = np.linspace(0.0, L, n)
         sf = section_forces(m, self.model.nodes, f, loads, xs)
+        for case, a in factors.items():  # spectral envelopes, taken with the sign of their factor
+            if case in self.rs and a:
+                env = self.rs[case].member_envelope(self.model, mid, xs)
+                for k in ("N", "Vy", "Vz", "T", "My", "Mz"):
+                    sf[k] = sf[k] + a * env[k]
         return MemberForces(sf["x"], sf["N"], sf["Vy"], sf["Vz"], sf["T"], sf["My"], sf["Mz"])
 
     def reaction(self, nid: int, factors: dict[str, float]) -> np.ndarray:
@@ -717,6 +759,8 @@ class FrameAnalysis:
             r = self.res.reactions.get(case, {}).get(nid)
             if r is not None:
                 out += a * r
+            elif case in self.rs:
+                out += a * self.rs[case].reaction_envelope(nid)
         return out
 
     def displacement(self, nid: int, factors: dict[str, float]) -> np.ndarray:
@@ -725,13 +769,20 @@ class FrameAnalysis:
         for case, a in factors.items():
             if case in self.res.disp:
                 out += a * self.res.disp[case][i]
+            elif case in self.rs:
+                out += a * self.rs[case].displacement_envelope(i)
         return out
 
     def storey_drifts(self) -> list[dict]:
-        """Max inter-storey drift ratio per level for unfactored lateral cases (limit 0.004)."""
+        """Max inter-storey drift ratio per level for unfactored lateral cases (limit 0.004, cl 7.11.1).
+
+        With response spectrum analysis the seismic drift is the CQC of the modal drifts
+        (scaled like every other response) instead of the static EQ drift."""
         out = []
         mdl = self.model
-        for case in [c for c in self.res.cases if c[:2] in ("EQ", "WL")]:  # drift without accidental torsion
+        idx = self.res.node_index
+        seismic = list(self.rs) if self.rs else [c for c in self.res.cases if c[:2] == "EQ"]
+        for case in [c for c in self.res.cases if c[:2] == "WL"] + seismic:  # without accidental torsion
             for i in range(1, len(mdl.levels)):
                 h = mdl.levels[i].z - mdl.levels[i - 1].z
                 worst = 0.0
@@ -740,7 +791,10 @@ class FrameAnalysis:
                     if below is None:
                         continue
                     axis = 0 if case.endswith("X") else 1
-                    d = abs(self.displacement(nid, {case: 1})[axis] - self.displacement(below, {case: 1})[axis])
+                    if case in self.rs:
+                        d = self.rs[case].drift_envelope(idx[nid], idx[below], axis)
+                    else:
+                        d = abs(self.displacement(nid, {case: 1})[axis] - self.displacement(below, {case: 1})[axis])
                     worst = max(worst, d)
                 if h > 0:
                     out.append(
