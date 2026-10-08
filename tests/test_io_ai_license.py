@@ -64,7 +64,8 @@ def test_exports(tmp_path):
     assert n_ult == 37 and txt.count("LOAD COMB") == n_ult
     assert "MEMBER RELEASE" not in txt and "PRIS AX" in txt
     njoints = txt.split("JOINT COORDINATES")[1].split("MEMBER INCIDENCES")[0].count(";")
-    assert njoints == len(fm.nodes)
+    masters = {lv.master for lv in fm.levels if lv.master is not None}  # virtual centre-of-mass joints
+    assert njoints == len(fm.nodes) - len(masters)
     e2k = open(etabs.write_etabs(fm, str(tmp_path / "m.e2k"))).read()
     assert "$ STORIES - IN SEQUENCE FROM TOP" in e2k and e2k.count("LINEASSIGN") == len(fm.members)
     plan = prj.plan("Typical")

@@ -368,7 +368,9 @@ class FrameSolver:
         # tiny diagonal springs stabilise local mechanisms (e.g. torsion of a member
         # pinned at both ends); genuine mechanisms are detected after the solve
         diag = Kr.diagonal()
-        eps = 1e-10 * float(diag.max()) if diag.size and diag.max() > 0 else 1e-12
+        pos = diag[diag > 0]
+        # sized from the median stiffness: a diaphragm master's huge diagonal must not stiffen them
+        eps = 1e-10 * float(np.median(pos)) if pos.size else 1e-12
         Kr = (Kr + sp.identity(Kr.shape[0], format="csc") * eps).tocsc()
         try:
             self.lu = spla.splu(Kr)

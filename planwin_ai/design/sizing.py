@@ -239,6 +239,18 @@ def _fix_ductile(project: Project, fm, bad: list, changed: set, step: float) -> 
                 nd = max(d, 0.3, math.ceil(0.4 * max(b, d) / 0.025) * 0.025)
                 _grow_column(project, dc.mark, mem.level, nb - b, nd - d, changed)
                 n += 1
+        elif dc.kind == "beam" and any(x.startswith("6.1.3") for x in names):
+            # cl 6.1.3: depth ≤ clear span / 4 – make short beams shallower (not deeper)
+            for plan in project.plans:
+                bm = next((x for x in plan.beams if x.id == mem.group), None)
+                if bm is None:
+                    continue
+                clear = _clear_span(project, plan, bm)
+                cap = math.floor(clear / 4 / 0.025) * 0.025
+                if 0.3 <= cap < bm.d:
+                    bm.d = round(cap, 3)
+                    bm.b = round(max(bm.b, math.ceil(0.3 * bm.d / 0.025) * 0.025), 3)
+                    n += 1
         elif dc.kind == "beam" and any(x.startswith(("6.1.1", "6.1.2")) for x in names):
             for plan in project.plans:
                 bm = next((x for x in plan.beams if x.id == mem.group), None)
@@ -255,3 +267,31 @@ def _thicken_walls(project: Project, bad: list) -> int:
             if w.mark in marks:
                 w.thickness = round(w.thickness + 0.025, 3)
     return len(marks)
+
+
+def _clear_span(project: Project, plan, bm) -> float:
+    """Beam length between the faces of the columns/walls at its ends (m), using the largest
+    column size (per-level overrides included) of every level that uses this plan."""
+    import copy
+
+    from ..core.frame import _half_along
+    from ..core.plan_engine import column_on_beam
+
+    levels = [i for i, lv in enumerate(project.levels, start=1) if lv.plan == plan.name]
+    clear = bm.length
+    for c in plan.columns:
+        t = column_on_beam(c, bm)
+        if t is None or not (t < 1e-3 or t > 1 - 1e-3):
+            continue
+        half = 0.0
+        for i in levels or [0]:
+            b, d, ang = project.column_size(c.mark, i, c) if i else (c.b, c.d, c.angle)
+            cc = copy.copy(c)
+            cc.b, cc.d, cc.angle = b, d, ang
+            half = max(half, _half_along(cc, bm))
+        clear -= half
+    for w in plan.walls:
+        for p in (bm.p1, bm.p2):
+            if w.contains(p):
+                clear -= w.thickness / 2
+    return max(clear, 0.1)

@@ -661,7 +661,7 @@
      "x2": 7.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -811,7 +811,7 @@
      "x2": 0.0,
      "y2": 7.0,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.475,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -886,7 +886,7 @@
      "x2": 14.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -936,7 +936,7 @@
      "x2": 21.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -986,7 +986,7 @@
      "x2": 28.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -1036,7 +1036,7 @@
      "x2": 35.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.475,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -1839,7 +1839,7 @@
      "x2": 7.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -1989,7 +1989,7 @@
      "x2": 0.0,
      "y2": 7.0,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.475,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -2064,7 +2064,7 @@
      "x2": 14.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -2114,7 +2114,7 @@
      "x2": 21.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -2164,7 +2164,7 @@
      "x2": 28.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -2214,7 +2214,7 @@
      "x2": 35.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.475,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -3017,7 +3017,7 @@
      "x2": 7.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -3167,7 +3167,7 @@
      "x2": 0.0,
      "y2": 7.0,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.475,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -3242,7 +3242,7 @@
      "x2": 14.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -3292,7 +3292,7 @@
      "x2": 21.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -3342,7 +3342,7 @@
      "x2": 28.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.45,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -3392,7 +3392,7 @@
      "x2": 35.0,
      "y2": 9.5,
      "b": 0.3,
-     "d": 0.6,
+     "d": 0.475,
      "grade": "M25",
      "role": "auto",
      "cantilever": false,
@@ -3628,22 +3628,22 @@
  "column_sizes": {
   "C1": {
    "4": [
-    0.45,
+    0.5,
     0.45,
     0.0
    ],
    "3": [
-    0.5,
+    0.55,
     0.45,
     0.0
    ],
    "2": [
-    0.5,
+    0.55,
     0.45,
     0.0
    ],
    "1": [
-    0.5,
+    0.55,
     0.45,
     0.0
    ]
@@ -3765,17 +3765,17 @@
     0.0
    ],
    "3": [
-    0.45,
+    0.4,
     0.6,
     0.0
    ],
    "2": [
-    0.45,
+    0.4,
     0.6,
     0.0
    ],
    "1": [
-    0.45,
+    0.4,
     0.6,
     0.0
    ]
@@ -3875,17 +3875,17 @@
     0.0
    ],
    "3": [
-    0.45,
+    0.4,
     0.6,
     0.0
    ],
    "2": [
-    0.45,
+    0.4,
     0.6,
     0.0
    ],
    "1": [
-    0.45,
+    0.4,
     0.6,
     0.0
    ]
@@ -4072,19 +4072,15 @@
   "grid_spec_is_input": true,
   "template": {
    "key": "school",
-   "failures": 24,
+   "failures": 0,
    "log": [
-    "Iteration 1: enlarged 70 column segments and 0 beams; 56 IS 13920 fixes",
+    "Iteration 1: enlarged 70 column segments and 0 beams; 74 IS 13920 fixes",
     "Iteration 2: enlarged 62 column segments and 0 beams; 52 IS 13920 fixes",
     "Iteration 3: enlarged 63 column segments and 0 beams; 49 IS 13920 fixes",
-    "Iteration 4: enlarged 25 column segments and 0 beams; 22 IS 13920 fixes",
-    "Iteration 5: enlarged 16 column segments and 0 beams; 12 IS 13920 fixes",
-    "Iteration 6: enlarged 23 column segments and 0 beams; 17 IS 13920 fixes",
-    "Iteration 7: enlarged 0 column segments and 0 beams",
-    "Iteration 8: enlarged 0 column segments and 0 beams",
-    "Iteration 9: enlarged 0 column segments and 0 beams",
-    "Iteration 10: enlarged 0 column segments and 0 beams",
-    "Stopped after 10 iterations – 24 member(s) still need attention"
+    "Iteration 4: enlarged 24 column segments and 0 beams; 22 IS 13920 fixes",
+    "Iteration 5: enlarged 22 column segments and 0 beams; 16 IS 13920 fixes",
+    "Iteration 6: enlarged 16 column segments and 0 beams; 12 IS 13920 fixes",
+    "Iteration 7: all members and storey drifts pass"
    ]
   }
  },

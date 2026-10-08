@@ -1141,6 +1141,7 @@ def column_sheet(project: Project, fa: FrameAnalysis, cd: ColumnDesign) -> Sheet
     H = abs(m.nodes[mem.n2].z - m.nodes[mem.n1].z)
     Lu = max(H - dmax, 0.5)
     pmin, pmaxs, keff = ds.min_column_steel_pct, ds.max_column_steel_pct, ds.effective_length_factor
+    min_bar = 16 if (is13920.required(project) and project.seismic.enabled) else 12
     chk = is456.design_column(
         [(n_, P_, x_, y_) for n_, _e, P_, x_, y_ in dem],
         mem.b,
@@ -1152,6 +1153,7 @@ def column_sheet(project: Project, fa: FrameAnalysis, cd: ColumnDesign) -> Sheet
         pmin,
         pmaxs,
         keff,
+        min_bar,
     )
     b, D, cover = mem.b * 1000, mem.d * 1000, ds.column_cover * 1000
     B = _Builder(
@@ -1422,11 +1424,12 @@ def column_sheet(project: Project, fa: FrameAnalysis, cd: ColumnDesign) -> Sheet
         p,
     )
     B.compare("steel %", p, cd.steel_pct, " %", 2, st)
-    nb, dia, prov = is456.column_bars(As, b, D)
+    nb, dia, prov = is456.column_bars(As, b, D, min_bar)
     perim = 2 * (b + D - 4 * 50)
     st = B.step(
         "Longitudinal bars",
-        "least excess; spacing along the perimeter ≤ 300 mm; ≥ 4 bars",
+        "least excess; spacing along the perimeter ≤ 300 mm; ≥ 4 bars"
+        + ("; ≥ T16 so 6 db ≥ 75 mm (IS 13920 cl 8.2)" if min_bar > 12 else ""),
         f"perimeter 2(b + D − 200) = {perim:.0f} mm; spacing = {perim / nb:.0f} mm; "
         f"pprov = {100 * prov / (b * D):.2f} %",
         f"{nb}-T{dia} = {prov:.0f} mm²",
