@@ -52,7 +52,7 @@ class _Canvas3D(QWidget):
         fm = self.o.main.frame_model()
         if fm is None or not fm.members:
             p.setPen(QColor(pal["muted"]))
-            p.drawText(self.rect(), Qt.AlignCenter, "Build the 3-D frame (FrameWin ▸ Build 3-D model) to see it here")
+            p.drawText(self.rect(), Qt.AlignCenter, "Analyse the 3-D frame (Frame ▸ Analyse frame, F6) to see it here")
             return
         ids = sorted(fm.nodes)
         idx = {n: i for i, n in enumerate(ids)}

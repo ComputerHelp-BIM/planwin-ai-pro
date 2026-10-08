@@ -28,16 +28,23 @@ The exe is not code-signed yet, so Windows SmartScreen may warn on first run (*M
 
 1. **File ▸ New from template** (10 ready buildings, all pre-optimised and passing design), or press **Ctrl+K** and type, for example:
    *"G+4 residential in Pune, 3x2 bays of 4.5 m with mumty and 1.2 m balcony"*.
-2. **PlanWin tab:** draw slabs (`R` rectangle, `P` polygon), place columns (`C` or *Auto columns*), then use *Auto beams*.
+2. **Plan tab:** draw slabs (`R` rectangle, `P` polygon), place columns (`C` or *Auto columns*) and shear walls (`W`),
+   then use *Auto beams*. *Grid lines* adds grids (or generates them from the columns).
    Press **F5** to run the load take-down. Applied load must equal the column reactions (≈ 0 % difference).
-3. **Levels table:** assign a plan to each level, with storey heights and concrete grade.
-4. **FrameWin ▸ Project settings:** seismic zone, soil, importance factor, wind city / Vb, SBC.
-5. **F6** builds and analyses the 3-D frame. **F7** designs all members. **FrameWin ▸ Optimise sizes** fixes any failures automatically.
-6. Export to **STAAD (.std)**, **ETABS (.e2k)**, **DXF 2-D/3-D**, **Excel** or **PDF**.
+3. **Frame tab ▸ Levels / Copy floor:** assign a plan to each level, with storey heights and concrete grade.
+4. **Loads tab:** staircase and water-tank wizards, joint loads, and *Project settings* (seismic zone, soil,
+   importance factor, wind city / Vb, SBC). **Frame ▸ Seismic** picks the method (auto / static / response spectrum)
+   and rigid diaphragms.
+5. **F6** builds and analyses the 3-D frame. **F7** designs all members. **Design ▸ Optimise sizes** fixes any
+   failures automatically. Check **IS 13920**, **Irregularity** and **Modal / RS** in the results panel.
+6. **Output tab:** **STAAD (.std)**, **ETABS (.e2k)**, **DXF 2-D/3-D**, **Excel**, **PDF**, **calculation sheets**,
+   **bar bending schedule** and **reinforcement detail drawings**. *Design ▸ Revisions* saves and compares BOQs.
 
-Shortcuts: `S` select · `H` pan · `R` rectangle slab · `P` polygon slab · `C` column · `B` beam · `D` measure ·
-`F` zoom extents · `Del` delete · `Ctrl+Z / Y` undo/redo · `Ctrl+K` AI panel · `F1` help.
-Double-click a beam to see its BM/SF diagrams.
+Shortcuts: `S` select · `H` pan · `R` rectangle slab · `P` polygon slab · `C` column · `B` beam · `W` shear wall ·
+`D` measure · `A` area · `Shift+D` dimension · `F8` ortho · `F` zoom extents · `Del` delete · `Ctrl+Z / Y` undo/redo ·
+`F5 / F6 / F7` analyse plan / frame / design · `Ctrl+K` AI panel · `F1` help.
+Double-click a beam to see its BM/SF diagrams; double-click a ribbon tab to collapse the ribbon.
+View ▸ Units switches the display between kN and tonnes.
 
 ---
 
@@ -89,6 +96,21 @@ Double-click a beam to see its BM/SF diagrams.
 41. Command line for automation: `PlanWinAIPro.exe cli ...` (see below)
 42. Installer with file associations; self-test (`--selftest`) run in CI on every build
 
+### New in 1.1
+43. **Response spectrum analysis** (IS 1893 cl 7.7, CQC, scaled to the static base shear) with an automatic method choice per cl 7.7.1
+44. **Irregularity checks** to IS 1893 Tables 5 and 6
+45. **Rigid floor diaphragms** (master node at the centre of mass of each floor)
+46. **RC shear walls**: plan tool, wide-column model, IS 456 cl 32 / IS 13920 design, STAAD/ETABS export
+47. **IS 13920:2016 ductile detailing** checks and automatic fixes in *Optimise sizes*
+48. **Beam torsion design** (IS 456 cl 41) and side-face reinforcement
+49. **Combined footings** where isolated footings overlap
+50. **Staircase and overhead water-tank wizards**
+51. **Bar bending schedule** (Excel), **reinforcement detail drawings** (DXF) and **calculation sheets** (PDF, for all or selected members)
+52. **BOQ by floor and member type**, saved revisions and revision comparison
+53. **Plan editor:** grid lines, dimensions, area/perimeter, snapping to ends/midpoints/grid intersections, ortho, copy floor
+54. **Ribbon interface** and **kN / tonnes display units**
+55. Tamper-resistant trial and optional machine-bound licences
+
 ---
 
 ## AI assistant
@@ -96,12 +118,14 @@ Double-click a beam to see its BM/SF diagrams.
 | Engine | Setup | Notes |
 |---|---|---|
 | Offline (default) | none | Rule-based. Understands buildings, loads, zones, materials and workflow commands |
-| Claude | Tools ▸ AI settings → paste an Anthropic API key | Default model `claude-sonnet-5-5` (editable) |
+| Claude | Home ▸ AI settings → paste an Anthropic API key | Default model `claude-sonnet-5-5` (editable) |
 | OpenAI | paste an OpenAI key | Any chat-completions model; uses JSON mode |
 | Ollama | install Ollama, `ollama pull llama3.1` | Fully local / private |
 
 The assistant replies with JSON **actions** (`new_building`, `modify_building`, `set_loads`, `set_location`,
-`set_seismic`, `set_wind`, `set_materials`, `set_sbc`, `autosize_columns`, `optimize_sizes`, `analyze`, `design`, `export`).
+`set_seismic` (incl. method and diaphragm), `set_wind`, `set_materials`, `set_sbc`, `add_wall`, `add_staircase`,
+`add_water_tank`, `add_grids`, `autosize_columns`, `optimize_sizes`, `analyze`, `design`, `save_revision`,
+`compare_revisions`, `boq`, `set_units`, `export`).
 Actions are validated and executed by the app, and every AI change can be undone with Ctrl+Z.
 
 ## Command line
@@ -111,6 +135,8 @@ PlanWinAIPro.exe cli templates
 PlanWinAIPro.exe cli new --template office_g5 --out office.pwai
 PlanWinAIPro.exe cli ask "G+4 residential in Pune, 3x2 bays of 4.5 m" --out model.pwai
 PlanWinAIPro.exe cli run model.pwai --design --export staad etabs excel pdf --out-dir results
+PlanWinAIPro.exe cli run model.pwai --method rsa --units MKS --export calc bbs details --out-dir results
+PlanWinAIPro.exe cli boq model.pwai --by floor
 PlanWinAIPro.exe cli import-plw OLD.plw --out converted.pwai
 ```
 
@@ -119,7 +145,7 @@ PlanWinAIPro.exe cli import-plw OLD.plw --out converted.pwai
 ```bash
 python -m venv .venv && .venv\Scripts\activate          # Python 3.12, 64-bit
 pip install -r requirements-dev.txt
-python -m pytest -q                                      # 123 tests
+python -m pytest -q                                      # 343 tests
 python -m planwin_ai                                     # run the app
 scripts\build_windows.bat                                # exe + portable + installer (needs Inno Setup 6)
 ```
@@ -136,54 +162,56 @@ After changing the generator or design code, rebuild the template library with `
 ```
 planwin_ai/
   core/      model.py (data model) · geometry.py · plan_engine.py (PlanWin) · beamcalc.py
-             frame.py (FrameWin 3-D) · solver.py (3-D stiffness) · lateral.py (IS 1893 / IS 875) · generator.py
-  design/    is456.py (beam, column, footing, slab) · runner.py (design all, BOQ, autosize, optimise)
-  io/        project_io (.pwai) · legacy_plw · staad · etabs · dxf_io · reports (Excel/PDF) · cities
+             frame.py (FrameWin 3-D) · solver.py (3-D stiffness, diaphragms) · dynamics.py (modal, RS)
+             irregularity.py · lateral.py (IS 1893 / IS 875) · generator.py
+  design/    is456/ (beam, column, footing, slab, wall) · is13920.py · runner.py (design all) · sizing.py
+             (autosize, optimise) · quantities.py (BOQ, revisions) · wizards.py (stairs, tanks) · report.py
+  io/        project_io (.pwai) · legacy_plw · staad · etabs · dxf_io · excel_report · pdf_report · calc_sheets
+             bbs · detail_dxf · cities
+  services/  exports.py (one registry of every export, used by GUI, AI and CLI)
   ai/        actions (schema + executor) · offline parser · providers (Claude/OpenAI/Ollama) · assistant · templates
-  gui/       main_window · canvas (plan editor) · view3d · panels · chat (AI dock) · dialogs · theme
-  licensing/ license.py (Ed25519 verify + trial)
+  gui/       main_window · ribbon · ribbon_layout · commands/ (file, plan, frame, app) · canvas (plan editor)
+             view3d · panels · chat (AI dock) · dialogs/ · theme
+  licensing/ license.py (Ed25519 verify, tamper-resistant trial, machine codes)
+  units.py   display units (kN / tonnes)
   data/      cities.csv · legacy_samples/*.plw · templates/*.pwai
 tools/       keygen.py (issue licences – internal) · build_templates.py
 packaging/   PyInstaller spec · Inno Setup script · version info
-tests/       123 tests: closed-form solver checks, IS-code values, legacy import, exports, AI, licensing, GUI smoke
+tests/       343 tests: closed-form solver/dynamics checks, IS-code values, legacy import, exports, AI, licensing, GUI
 ```
 
 ## Licensing (Computer Help internal)
 
 ```
 python tools/keygen.py issue --key planwin_license_private_key.pem --name "Client Name" \
-       --company "ABC Consultants" --email a@b.in --expires 2027-12-31 --out ABC.lic
+       --company "ABC Consultants" --email a@b.in --expires 2027-12-31 --out ABC.lic \
+       [--machine 7K2M-Q9XD-4HBR]         # optional: bind to the machine code shown in Help ▸ Licence
 ```
 
-The customer loads the `.lic` file under Tools ▸ Licence. **Never commit the private key.** The public key is in
+The customer loads the `.lic` file under Help ▸ Licence. **Never commit the private key.** The public key is in
 `planwin_ai/licensing/license.py`. To rotate keys, run `keygen.py init` and replace `PUBLIC_KEY_B64` (existing licences then stop working).
 
-## Engineering basis & known limitations (v1.0)
+## Engineering basis & known limitations (v1.1)
 
-- **Codes:** IS 456:2000, IS 875 Parts 1–3 (2015), IS 1893-1:2016 (equivalent static method), IS 13920 minimum column size.
+- **Codes:** IS 456:2000, IS 875 Parts 1–3 (2015), IS 1893-1:2016 (equivalent static and response spectrum),
+  IS 13920:2016 (ductile detailing).
 - **Limitations, see roadmap:**
-  - no response-spectrum (modal) analysis
-  - no rigid diaphragm, shear walls or grouped/legged columns
-  - no rigid end offsets
-  - no combined footings (flagged when footings overlap)
-  - no torsion design of beams
-  - no ductile detailing per IS 13920
+  - no grouped/legged columns and no rigid end offsets
+  - shear walls are straight, single-leaf walls (no flanged/core walls, no openings)
+  - combined footings are rectangular two-column footings; no raft or pile foundations
+  - the irregularity "strength" (weak storey) check needs storey strengths and is reported as not checked
+  - semi-rigid diaphragms are not modelled (each floor is either rigid or flexible)
 - City wind speeds and zones: major cities follow IS 875-3:2015 / IS 1893-1:2016. Others come from the legacy PlanWin table. Always verify for the site.
 - Load take-down uses PlanWin's simple-span assumption by default; continuous beams are optional in Settings.
 
 ## Roadmap
 
-- **1.1:**
-  - response spectrum
-  - rigid diaphragm
-  - shear walls and group columns
-  - rigid offsets
-  - combined footings
-  - code signing of the exe
 - **1.2:**
-  - IS 13920 ductile detailing
-  - BBS export (Shanku integration)
-  - column/footing schedule DXF drawings
+  - group/legged columns and rigid end offsets
+  - flanged and core walls, walls with openings
+  - raft and pile foundations
+  - code signing of the exe
+  - Shanku integration for the bar bending schedule
 - **2.0:**
   - IFC/Revit export
   - Structura viewer link

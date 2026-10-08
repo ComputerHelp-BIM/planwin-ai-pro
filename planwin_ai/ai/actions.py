@@ -435,7 +435,7 @@ def _design(s: Session, p: dict, r: ActionResult):
         r.messages.append("⚠ " + w)
     if rep.failures or any(not d["ok"] for d in rep.drifts):
         r.messages.append(
-            "Tip: say 'optimise sizes' (or FrameWin ▸ Optimise sizes) to enlarge failing members automatically."
+            "Tip: say 'optimise sizes' (or Design ▸ Optimise sizes) to enlarge failing members automatically."
         )
 
 

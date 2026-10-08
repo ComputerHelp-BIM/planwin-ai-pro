@@ -529,6 +529,7 @@
     }
    ],
    "walls": [],
+   "dimensions": [],
    "notes": ""
   },
   {
@@ -1118,6 +1119,7 @@
     }
    ],
    "walls": [],
+   "dimensions": [],
    "notes": ""
   },
   {
@@ -1645,6 +1647,7 @@
     }
    ],
    "walls": [],
+   "dimensions": [],
    "notes": ""
   }
  ],

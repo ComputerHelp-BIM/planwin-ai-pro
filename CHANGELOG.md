@@ -2,6 +2,69 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] – 2026-10-08
+Feature release. Projects saved by 1.0.x open unchanged: they keep the equivalent static method
+and no diaphragm until you switch them on (Frame ▸ Seismic), so their results do not move.
+
+### Added – analysis and design
+- **Response spectrum analysis** (IS 1893-1:2016 cl 7.7): modal analysis with condensed storey
+  masses, CQC combination, base shear scaled up to the static V_B (cl 7.7.3), RS member forces,
+  reactions, displacements and drifts in the ±RSX/±RSY load combinations. Method *Auto* uses the
+  dynamic method wherever cl 7.7.1 requires it.
+- **Irregularity checks** (Tables 5 and 6): torsional, re-entrant corners, diaphragm openings,
+  out-of-plane offsets, non-parallel systems, soft storey, mass, vertical geometry, in-plane
+  discontinuity and floating columns, with the clause consequence of each.
+- **Rigid floor diaphragms:** master–slave constraint at the centre of mass of each floor; storey
+  forces and accidental torsion are applied at the master node.
+- **RC shear walls:** drawn in the plan, modelled as wide columns with rigid links, designed to
+  IS 456 cl 32 / IS 13920 cl 9 (P–M interaction, shear, boundary elements); exported to STAAD and ETABS.
+- **IS 13920:2016 ductile detailing:** beam steel limits, bottom ≥ ½ top, capacity-design shear,
+  end-zone links, column confinement (l0, hoop spacing), strong-column–weak-beam, minimum sizes.
+  *Optimise sizes* now also fixes ductile failures.
+- **Beam torsion design** (IS 456 cl 41): equivalent shear and moment, longitudinal and
+  transverse steel, side-face reinforcement.
+- **Combined footings** wherever isolated footings overlap: rectangular footing centred on the
+  load resultant, longitudinal BM/SF, punching and one-way shear.
+- **Staircase wizard** (waist slab design, loads on the support beams) and **overhead water-tank
+  wizard** (tank and water weight on the supporting columns). Both re-apply without double counting.
+
+### Added – documents and quantities
+- **Bar bending schedule** (Excel) for beams, columns, footings and slabs.
+- **Reinforcement detail drawings** (DXF): beam elevations and sections, column and wall schedule,
+  footing details.
+- **Design calculation sheets** (PDF), step by step with clause references, for all members or
+  only the members selected on the plan.
+- **BOQ by floor and by member type**, saved **revisions** and revision comparison.
+- Excel and PDF reports gain seismic method, modal/RS, irregularity, IS 13920, walls, combined
+  footings and BOQ-by-floor sections.
+
+### Added – application
+- **Ribbon interface** (Home · Plan · Loads · Frame · Design · Output · View · Help) with a File
+  menu and quick-access bar; double-click a tab to collapse it.
+- **Plan editor:** shear-wall tool (`W`), area/perimeter tool (`A`), dimensions (`Shift+D`),
+  grid lines with bubbles (editor or *generate from columns*), snapping to ends, midpoints and
+  grid intersections, ortho mode (`F8`, or hold Shift), *Copy floor* (duplicate a plan, add storeys).
+- **Display units:** kN or tonnes (t, t·m) for tables, properties and reports; models and files stay in kN.
+- 3-D view draws walls as panels and marks each floor's centre of mass.
+- New results tabs: Walls, Combined footings, IS 13920, Irregularity, Modal / RS, BOQ by floor.
+- AI assistant and command line understand the new features (seismic method, diaphragm, walls,
+  stairs, tanks, grids, revisions, BOQ, units, every export). New `cli boq` command and
+  `cli run --method / --diaphragm / --units`.
+
+### Changed
+- **Licensing hardened:** the offline trial is tamper-resistant (signed records in several
+  places; clock rollback cannot extend it), and licences can be bound to a machine code shown
+  in Help ▸ Licence (`keygen issue --machine`). Existing licences keep working.
+- Code reorganised: `design/is456/` package, report writers split, one export registry used by
+  the GUI, AI and CLI, main window split into command modules, dialogs package.
+- Project schema 2 (walls, grids, dimensions, stairs, tanks, seismic method and diaphragm).
+- STAAD/ETABS exports carry walls, rigid links, diaphragms and joint moments.
+
+### Fixed
+- Results tables showed blank cells for some numbers (e.g. modal periods), and the "BOQ & cost"
+  tab title lost its "&".
+- Part-load descriptions were replaced with "W" when a beam was edited in the Properties panel.
+
 ## [1.0.1] – 2026-10-08
 Bug-fix release. Every fix has a regression test that fails on 1.0.0.
 

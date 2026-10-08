@@ -11,7 +11,7 @@ Licences
        "issued": "2027-01-01", "expires": "2028-01-01", "seats": 1, "sig": "<base64>"}
 
 * Optional machine binding: a licence may carry ``"machine": "XXXX-XXXX-XXXX"``
-  – the customer's :func:`machine_code` (shown in Tools ▸ Licence).  The field
+  – the customer's :func:`machine_code` (shown in Help ▸ Licence).  The field
   is covered by the signature *only when present*, so licences issued before
   machine binding existed verify exactly as before, and the field cannot be
   stripped from a bound licence without breaking the signature.  A bound
