@@ -29,11 +29,10 @@ QUICK_START = (
 class AppCommands:
     # ------------------------------------------------------------------ views
     def show_result_tab(self, name: str) -> bool:
-        for i in range(self.results.count()):
-            if self.results.tabText(i) == name:
-                self.results.setCurrentIndex(i)
-                return True
-        return False
+        if name not in self.results.tables:
+            return False
+        self.results.show_tab(name)
+        return True
 
     def show_plan_view(self):
         self.tabs.setCurrentIndex(0)

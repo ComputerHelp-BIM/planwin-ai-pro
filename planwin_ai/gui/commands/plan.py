@@ -189,6 +189,8 @@ class PlanCommands:
         dlg = dialogs.CopyFloorsDialog(self, self.project, self.current_plan_name)
         if dlg.exec():
             self.mutate("Copy floor", dlg.apply)
+            if getattr(dlg, "new_plan", None) and self.project.plan(dlg.new_plan):
+                self.set_current_plan(dlg.new_plan)
 
     def show_levels(self):
         self.project_dock.show()

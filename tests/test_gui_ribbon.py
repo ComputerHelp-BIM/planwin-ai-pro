@@ -151,3 +151,27 @@ def test_calc_sheets_for_selection(win, monkeypatch, tmp_path):
 def test_export_default_names_follow_the_registry(win):
     assert win.export_default_name("staad").endswith(".std")
     assert win.current_plan_name.replace(" ", "_") in win.export_default_name("dxf")
+
+
+def test_new_dialogs_are_wired_to_the_ribbon(win, monkeypatch):
+    """Each wizard / editor opens from its ribbon command and applies as one undo step."""
+    from planwin_ai.gui import dialogs
+
+    for name in ("GridsDialog", "CopyFloorsDialog", "StairDialog", "TankDialog", "SettingsDialog"):
+        monkeypatch.setattr(getattr(dialogs, name), "exec", lambda self: True)
+    n_plans, n_undo = len(win.project.plans), len(win.undo_stack)
+    win.cmd["grids"].trigger()
+    win.cmd["copy_floor"].trigger()
+    # with no support beams / columns picked the wizards are refused and rolled back (no undo step);
+    # valid input is covered by tests/test_gui_panels_v110.py
+    win.cmd["stairs"].trigger()
+    win.cmd["tank"].trigger()
+    assert not any(str(j.get("source", "")).startswith("Tank") for j in win.project.joint_loads)
+    win.cmd["settings"].trigger()
+    assert len(win.undo_stack) == n_undo + 3
+    assert len(win.project.plans) >= n_plans
+    monkeypatch.setattr(dialogs.RevisionsDialog, "exec", lambda self: 0)
+    win.cmd["revisions"].trigger()  # opens and closes without changes
+    for _ in range(3):
+        win.undo()
+    assert len(win.project.plans) == n_plans
