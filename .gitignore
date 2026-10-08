@@ -10,3 +10,5 @@ venv/
 *.pem
 *.key
 *.lic
+# Claude Code agent worktrees
+.claude/worktrees/
