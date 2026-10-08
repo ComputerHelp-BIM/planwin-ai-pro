@@ -8,10 +8,11 @@ against a :class:`Session` so the GUI and the CLI behave identically.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Optional
 
-from ..core.generator import OCCUPANCY, GridSpec, grid_building
+from ..core.generator import OCCUPANCY, SPEC_IS_INPUT, GridSpec, auto_slab_thickness, grid_building
 from ..core.model import Project
 from ..io.cities import lookup_city
 from .templates import TEMPLATES, build_template
@@ -69,12 +70,35 @@ class ActionResult:
     errors: list[str] = field(default_factory=list)
 
 
+def _to_bool(v: Any) -> bool:
+    """Interpret JSON/LLM booleans: ``"false"``, ``"no"``, ``"0"`` and ``0`` are False."""
+    if isinstance(v, str):
+        return v.strip().lower() in ("true", "yes", "y", "1", "on")
+    return bool(v)
+
+
+def safe_filename(name: str, default: str = "project") -> str:
+    """File-system-safe base name (Windows forbids <>:"/\\|?* and trailing dots/spaces)."""
+    out = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", str(name or "")).replace(" ", "_").strip("._ ")[:120]
+    if re.fullmatch(r"(?i)(con|prn|aux|nul|com\d|lpt\d)(\..*)?", out):  # reserved device names on Windows
+        out = "_" + out
+    return out or default
+
+
 def _spec_from(project: Project) -> GridSpec:
     d = dict(project.meta.get("grid_spec") or {})
+    valid = set(asdict(GridSpec()))
+    d = {k: v for k, v in d.items() if k in valid}  # tolerate specs written by other versions
     for k in ("column", "beam_int", "beam_ext"):
         if k in d and isinstance(d[k], list):
             d[k] = tuple(d[k])
-    return GridSpec(**d) if d else GridSpec()
+    spec = GridSpec(**d) if d else GridSpec()
+    if not project.meta.get(SPEC_IS_INPUT):
+        # files from 1.0.0 stored the auto-sized spec; an automatic slab thickness must be
+        # recomputed when the bays change, so turn it back into "automatic"
+        if spec.slab_thickness and abs(spec.slab_thickness - auto_slab_thickness(spec.bays_x, spec.bays_y)) < 1e-9:
+            spec.slab_thickness = 0.0
+    return spec
 
 
 def _clean_spec(params: dict, base: Optional[GridSpec] = None) -> GridSpec:
@@ -98,7 +122,7 @@ def _clean_spec(params: dict, base: Optional[GridSpec] = None) -> GridSpec:
         elif k == "occupancy" and v not in OCCUPANCY:
             v = "residential"
         elif k == "mumty":
-            v = bool(v)
+            v = _to_bool(v)
         setattr(spec, k, v)
     return spec
 
@@ -142,6 +166,8 @@ def _modify(s: Session, p: dict, r: ActionResult):
     spec = _clean_spec(p, _spec_from(keep))
     s.project = grid_building(spec)
     s.project.seismic, s.project.wind, s.project.design = keep.seismic, keep.wind, keep.design
+    if "occupancy" in p:  # importance factor follows the occupancy (IS 1893-1 Table 8)
+        s.project.seismic.importance = OCCUPANCY[spec.occupancy]["importance"]
     if "city" in p:
         _set_location(s, {"city": p["city"]}, r)
     s.last.clear()
@@ -206,12 +232,16 @@ def _set_seismic(s: Session, p: dict, r: ActionResult):
             raise ValueError("zone must be II, III, IV or V")
         sm.zone = z
     if "soil" in p:
-        sm.soil = str(p["soil"]).lower()
+        soil = str(p["soil"]).lower().replace("soil", "").strip()
+        soil = {"rock": "hard", "i": "hard", "ii": "medium", "iii": "soft"}.get(soil, soil)
+        if soil not in ("hard", "medium", "soft"):
+            raise ValueError("soil must be hard, medium or soft")
+        sm.soil = soil
     for k in ("importance", "response_reduction"):
         if k in p:
             setattr(sm, k, float(p[k]))
     if "enabled" in p:
-        sm.enabled = bool(p["enabled"])
+        sm.enabled = _to_bool(p["enabled"])
     s.last.clear()
     r.changed = True
     r.messages.append(f"Seismic: zone {sm.zone}, {sm.soil} soil, I={sm.importance}, R={sm.response_reduction}"
@@ -225,7 +255,7 @@ def _set_wind(s: Session, p: dict, r: ActionResult):
     if "terrain" in p:
         w.terrain = min(max(int(p["terrain"]), 1), 4)
     if "enabled" in p:
-        w.enabled = bool(p["enabled"])
+        w.enabled = _to_bool(p["enabled"])
     s.last.clear()
     r.changed = True
     r.messages.append(f"Wind: Vb {w.basic_speed} m/s, terrain category {w.terrain}" + ("" if w.enabled else " (disabled)"))
@@ -259,7 +289,7 @@ def _set_sbc(s: Session, p: dict, r: ActionResult):
 def _autosize(s: Session, p: dict, r: ActionResult):
     from ..design.runner import autosize_columns
 
-    out = autosize_columns(s.project, steel_pct=float(p.get("steel_pct", 1.0)), same_size=bool(p.get("same_size", True)))
+    out = autosize_columns(s.project, steel_pct=float(p.get("steel_pct", 1.0)), same_size=_to_bool(p.get("same_size", True)))
     s.last.clear()
     r.changed = True
     big = sorted(out.items(), key=lambda kv: -max(kv[1]))[:3]
@@ -319,7 +349,7 @@ def _export(s: Session, p: dict, r: ActionResult):
     if not s.exports_allowed:
         raise ValueError("exports are disabled – the trial has expired. Please activate a licence")
     fmt = str(p.get("format", "")).lower()
-    base = os.path.join(s.out_dir, (s.project.name or "project").replace(" ", "_"))
+    base = os.path.join(s.out_dir, safe_filename(s.project.name))
     path = p.get("path")
     from ..io import dxf_io, project_io, reports, staad, etabs
 
@@ -341,7 +371,7 @@ def _export(s: Session, p: dict, r: ActionResult):
             raise ValueError("no plan to export")
         from ..core.plan_engine import PlanEngine
 
-        out = dxf_io.export_plan_dxf(plan, path or f"{base}_{plan.name}_2DPLAN.dxf", PlanEngine(plan).run(),
+        out = dxf_io.export_plan_dxf(plan, path or f"{base}_{safe_filename(plan.name, 'plan')}_2DPLAN.dxf", PlanEngine(plan).run(),
                                      watermark=s.watermark)
     elif fmt == "dxf3d":
         out = dxf_io.export_frame_dxf(need_fm(), path or base + "_3d.dxf")

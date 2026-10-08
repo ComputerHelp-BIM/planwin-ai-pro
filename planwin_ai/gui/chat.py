@@ -27,15 +27,16 @@ EXAMPLES = ["G+4 residential in Pune, 3x2 bays of 4.5 m with mumty and 1.2 m bal
 class _Worker(QObject):
     done = Signal(str, object)
 
-    def __init__(self, assistant, text):
+    def __init__(self, assistant, text, context):
         super().__init__()
         self.assistant = assistant
         self.text = text
+        self.context = context  # model summary captured on the GUI thread
 
     def run(self):
         """Runs in a worker thread: only interprets the prompt (LLM call), never touches the model."""
         try:
-            reply, actions = self.assistant.plan(self.text)
+            reply, actions = self.assistant.plan(self.text, self.context)
         except Exception as exc:
             reply, actions = f"✖ Assistant error: {exc}", []
         self.done.emit(reply, actions)
@@ -144,7 +145,7 @@ class ChatDock(QDockWidget):
         self._busy = True
         self._add("assistant", "thinking…")
         self._thread = QThread(self)
-        self._worker = _Worker(self.main.assistant, text)
+        self._worker = _Worker(self.main.assistant, text, self.main.assistant.context())
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.done.connect(self._done)

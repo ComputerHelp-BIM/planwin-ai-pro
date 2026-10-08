@@ -281,14 +281,12 @@ def design_column(demands: list[tuple[str, float, float, float]], b_m: float, D_
     slender_x, slender_y = lex / D > 12, lex / b > 12
     if slender_x or slender_y:
         notes.append(f"slender (lex/D={lex / D:.1f}, lex/b={lex / b:.1f}) – additional moments added (cl 39.7)")
+    # Each demand keeps its own moments: one combination appears twice (top and bottom
+    # of the column), so the moments must not be looked up by combination name.
     prepared = []
-    Mx_dem = {n: mx * 1e6 for n, _, mx, _ in demands}
-    My_dem = {n: my * 1e6 for n, _, _, my in demands}
     for name, Pu_kN, Mx_kNm, My_kNm in demands:
         Pu = max(Pu_kN, 0.0) * 1e3
-        Mux = max(abs(Mx_kNm) * 1e6, Pu * ex_min_x)
-        Muy = max(abs(My_kNm) * 1e6, Pu * ex_min_y)
-        prepared.append((name, Pu_kN, Pu, Mux, Muy))
+        prepared.append((name, Pu_kN, Pu, abs(Mx_kNm) * 1e6, abs(My_kNm) * 1e6))
     # additional moments for slender columns (cl 39.7.1), reduced by k (cl 39.7.1.1)
     Max0 = (D / 2000 * (lex / D) ** 2) if slender_x else 0.0  # multiply by Pu
     May0 = (b / 2000 * (lex / b) ** 2) if slender_y else 0.0
@@ -300,17 +298,21 @@ def design_column(demands: list[tuple[str, float, float, float]], b_m: float, D_
         Pbx = float(curves[0][0][int(np.argmax(curves[0][1]))])  # balanced load ~ P at peak moment
         Pby = float(curves[1][0][int(np.argmax(curves[1][1]))])
         maxr, gov = 0.0, ""
-        for name, Pu_kN, Pu, Mux, Muy in prepared:
+        for name, Pu_kN, Pu, Mx, My in prepared:
             if Pu_kN < 0:  # net tension: P-M interaction on the tension branch (alpha_n = 1)
                 Pt = Pu_kN * 1e3
                 mx1 = float(np.interp(Pt, *curves[0]))
                 my1 = float(np.interp(Pt, *curves[1]))
-                r = 9.99 if (mx1 <= 0 or my1 <= 0) else abs(Mx_dem[name]) / mx1 + abs(My_dem[name]) / my1
+                r = 9.99 if (mx1 <= 0 or my1 <= 0) else Mx / mx1 + My / my1
                 r = max(r, abs(Pt) / (0.87 * fy * As))
             else:
                 kx = min(max((Puz - Pu) / max(Puz - Pbx, 1e-9), 0.0), 1.0)
                 ky = min(max((Puz - Pu) / max(Puz - Pby, 1e-9), 0.0), 1.0)
-                r = biaxial_ratio(Pu, Mux + kx * Max0 * Pu, Muy + ky * May0 * Pu, b, D, As, fck, fy, cover, curves)
+                ax, ay = kx * Max0 * Pu, ky * May0 * Pu
+                # cl 25.4: for biaxial bending the minimum eccentricity need only be
+                # satisfied about one axis at a time – check both and keep the worse
+                r = max(biaxial_ratio(Pu, max(Mx, Pu * ex_min_x) + ax, My + ay, b, D, As, fck, fy, cover, curves),
+                        biaxial_ratio(Pu, Mx + ax, max(My, Pu * ex_min_y) + ay, b, D, As, fck, fy, cover, curves))
             if r > maxr:
                 maxr, gov = r, name
         return As, maxr, gov
@@ -389,15 +391,19 @@ class FootingResult:
 
 def design_footing(P_service: float, cb: float, cd: float, sbc: float, fck: float, fy: float, cover: float = 0.05,
                    self_wt_pct: float = 10.0, lateral: list[tuple[float, float, float]] | None = None,
-                   equal_overhang: bool = True) -> FootingResult:
+                   equal_overhang: bool = True,
+                   ultimate: list[tuple[float, float, float]] | None = None) -> FootingResult:
     """Isolated pad footing (L along column depth ``cd``).
 
     * Plan size: gross pressure <= SBC for DL+LL, and <= 1.25 SBC for service
       cases with lateral loads (P, Mx, My); Mx varies pressure along L.
       Full contact is required (q_min >= 0, i.e. e <= L/6), otherwise the
       footing is enlarged.
-    * Structural design uses the governing *factored net* pressure
-      (1.5 × DL+LL, 1.2 × lateral cases) including moments.
+    * Structural design uses the governing *factored net* pressure including
+      moments.  ``ultimate`` – factored reactions (Pu, Mux, Muy) of every
+      ultimate combination (IS 875-5: 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL),
+      0.9DL±1.5EL).  Without it the service cases are scaled (1.5 gravity,
+      1.2 lateral) as a fallback.
     * Depth from punching (cl 31.6.3) and one-way shear (cl 31.6.2) with
       tau_c taken at the steel actually provided; flexure at the column face.
     """
@@ -438,8 +444,8 @@ def design_footing(P_service: float, cb: float, cd: float, sbc: float, fck: floa
         notes.append("net uplift in a lateral case – provide anchorage / check tension in column")
     q_service = P_service * sw / (L * B)
     # governing factored net upward pressure (self weight of footing excluded)
-    qu = max(f * (max(P, 0.0) / (L * B) + 6 * abs(Mx) / (B * L * L) + 6 * abs(My) / (L * B * B))
-             for P, Mx, My, _a, f in cases)
+    fact = ultimate if ultimate else [(f * P, f * Mx, f * My) for P, Mx, My, _a, f in cases]
+    qu = max(max(P, 0.0) / (L * B) + 6 * abs(Mx) / (B * L * L) + 6 * abs(My) / (L * B * B) for P, Mx, My in fact)
     ast_min_per_m = lambda D_: 0.0012 * 1000 * D_ * 1000  # noqa: E731
     D = 0.3
     ok = True

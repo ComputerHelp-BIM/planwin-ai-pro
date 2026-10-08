@@ -188,8 +188,14 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
             r = fa.reaction(nid, c.factors)
             mx, my = abs(float(r[3])), abs(float(r[4]))
             lat.append((float(r[2]), my if swap else mx, mx if swap else my))
+        ult = []
+        for c in fa.ultimate:
+            r = fa.reaction(nid, c.factors)
+            mx, my = abs(float(r[3])), abs(float(r[4]))
+            ult.append((float(r[2]), my if swap else mx, mx if swap else my))
         fck = grade_fck(mem.grade)
-        fr = is456.design_footing(P, mem.b, mem.d, ds.sbc, fck, fy, ds.footing_cover, ds.footing_self_weight_pct, lat)
+        fr = is456.design_footing(P, mem.b, mem.d, ds.sbc, fck, fy, ds.footing_cover, ds.footing_self_weight_pct, lat,
+                                  ultimate=ult)
         nd = m.nodes[nid]
         rects.append((mem.mark, nd.x, nd.y, fr.B if not swap else fr.L, fr.L if not swap else fr.B))
         rep.footings.append(FootingDesign(mem.mark, P, fr.L, fr.B, fr.D, fr.bars_L, fr.bars_B, fr.q_max, fr.ok,
@@ -278,11 +284,13 @@ def quantities(fa: FrameAnalysis, project: Project, rep: DesignReport) -> dict:
 
     cd = {c.member_id: c for c in rep.columns}
     bd = {b.member_id: b for b in rep.beams}
+    slab_t = _beam_slab_thickness(m)
+    col_at = {mem.n2: mem for mem in m.members.values() if mem.kind == "column"}  # column below each node
     for mid, mem in m.members.items():
         a, b = m.nodes[mem.n1], m.nodes[mem.n2]
         L = math.dist((a.x, a.y, a.z), (b.x, b.y, b.z))
-        add_c(mem.grade, mem.b * mem.d * L)
         if mem.kind == "column":
+            add_c(mem.grade, mem.b * mem.d * L)
             form += 2 * (mem.b + mem.d) * L
             c = cd.get(mid)
             if c:
@@ -291,7 +299,12 @@ def quantities(fa: FrameAnalysis, project: Project, rep: DesignReport) -> dict:
                 tie_n = L / 0.15
                 steel["columns"] += tie_n * 2 * (mem.b + mem.d) * math.pi * 0.008 ** 2 / 4 * STEEL_DENSITY
         else:
-            form += (mem.b + 2 * mem.d) * L
+            # concrete below the slab only (the slab volume is counted with the slabs) and
+            # clear length between column faces (the joint is counted with the column)
+            t = min(slab_t.get(mem.group, 0.0), mem.d)
+            Lc = max(L - sum(_half_in_column(col_at.get(n), a, b) for n in (mem.n1, mem.n2)), 0.0)
+            add_c(mem.grade, mem.b * (mem.d - t) * Lc)
+            form += (mem.b + 2 * (mem.d - t)) * Lc
             d = bd.get(mid)
             if d:
                 area = d.ast_bot * L + (d.ast_top_l + d.ast_top_r) * L / 3 + 2 * 113 * L
@@ -312,7 +325,8 @@ def quantities(fa: FrameAnalysis, project: Project, rep: DesignReport) -> dict:
         add_c(g, f.L * f.B * f.D)
         add_c("PCC M10", (f.L + 0.3) * (f.B + 0.3) * 0.1)
         form += 2 * (f.L + f.B) * f.D
-        steel["footings"] += (f.ast_L * f.B + f.ast_B * f.L) / 1e6 * max(f.L, f.B) * STEEL_DENSITY
+        # ast_* are mm²/m: bars along L are spread over the width B and are L long (and vice versa)
+        steel["footings"] += (f.ast_L + f.ast_B) * f.L * f.B / 1e6 * STEEL_DENSITY
     total_c = sum(v for k, v in conc.items() if not k.startswith("PCC"))
     total_s = sum(steel.values())
     rates = project.design.rates
@@ -328,6 +342,37 @@ def quantities(fa: FrameAnalysis, project: Project, rep: DesignReport) -> dict:
     cost += form * rates.get("formwork_m2", 550.0)
     return {"concrete": conc, "steel": steel, "formwork": form, "total_concrete": total_c, "total_steel": total_s,
             "steel_per_m3": total_s / total_c if total_c else 0.0, "lines": lines, "cost": cost}
+
+
+def _beam_slab_thickness(m: FrameModel) -> dict[str, float]:
+    """Thickest suspended slab bearing on each plan beam (keyed by beam id)."""
+    out: dict[str, float] = {}
+    for lv in m.levels[1:]:
+        plan = m.p.plan(lv.plan)
+        if plan is None:
+            continue
+        for bm in plan.beams:
+            if bm.id in out:
+                continue
+            t = 0.0
+            for s in plan.slabs:
+                if s.distribution == "on_grade":
+                    continue
+                if any(G.collinear_overlap(bm.p1, bm.p2, e0, e1, tol=max(0.02, bm.b / 2 + 0.03)) for e0, e1 in s.edges()):
+                    t = max(t, s.thickness)
+            out[bm.id] = t
+    return out
+
+
+def _half_in_column(col, a, b) -> float:
+    """Length of beam a->b that lies inside column ``col`` (half its extent along the beam)."""
+    if col is None:
+        return 0.0
+    L = math.hypot(b.x - a.x, b.y - a.y) or 1.0
+    ux, uy = (b.x - a.x) / L, (b.y - a.y) / L
+    ang = math.radians(col.angle)
+    return (abs(ux * math.cos(ang) + uy * math.sin(ang)) * col.b / 2
+            + abs(-ux * math.sin(ang) + uy * math.cos(ang)) * col.d / 2)
 
 
 def _parse_bars(s: str) -> tuple[int, int]:

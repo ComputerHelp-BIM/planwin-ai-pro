@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as _dt
 from typing import Optional
+from xml.sax.saxutils import escape as _esc
 
 from .. import APP_NAME, COMPANY, __version__
 from ..core.beamcalc import eighth_points
@@ -174,10 +175,10 @@ def write_pdf(path: str, project: Project, plan_results: dict[str, PlanResult],
         t.setStyle(TableStyle(st))
         return t
 
-    story.append(Paragraph(f"<b>{project.name}</b>", styles["Title"]))
+    story.append(Paragraph(f"<b>{_esc(project.name)}</b>", styles["Title"]))
     story.append(Paragraph(f"Structural pre-processing, analysis &amp; design report – {APP_NAME} {__version__}", styles["Normal"]))
     if watermark:
-        story.append(Paragraph(f"<font color='red'><b>{watermark}</b></font>", styles["Normal"]))
+        story.append(Paragraph(f"<font color='red'><b>{_esc(watermark)}</b></font>", styles["Normal"]))
     story.append(Spacer(1, 6 * mm))
     meta = [["Client", project.client or "-", "Engineer", project.engineer or "-"],
             ["Location", project.location or "-", "Date", _dt.date.today().isoformat()],
@@ -231,7 +232,7 @@ def write_pdf(path: str, project: Project, plan_results: dict[str, PlanResult],
             story.append(Spacer(1, 4 * mm))
             story.append(Paragraph("Warnings", styles["Heading2"]))
             for w in rep.warnings:
-                story.append(Paragraph(f"• {w}", styles["Normal"]))
+                story.append(Paragraph(f"• {_esc(w)}", styles["Normal"]))
 
     def footer(canvas, _doc):
         canvas.saveState()

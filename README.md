@@ -1,4 +1,4 @@
-# PlanWin AI Pro 1.0.0
+# PlanWin AI Pro 1.0.1
 
 **AI-assisted structural pre-processor, 3-D analysis and IS-code design for RCC framed buildings.**
 This is the Python successor to Computer Help's PlanWin / FrameWin (VB6). It keeps the familiar PlanWin workflow:
@@ -18,9 +18,9 @@ Each build on GitHub Actions produces three files. Find them under **Actions →
 
 | File | Use |
 |---|---|
-| `PlanWinAIPro-1.0.0-win64-setup.exe` | Installer: Start-menu entry, desktop icon, `.pwai`/`.plw` file association, uninstaller |
-| `PlanWinAIPro-1.0.0-win64-portable.exe` | Single exe that runs from anywhere with no install. First start takes about 10 s while it unpacks |
-| `PlanWinAIPro-1.0.0-win64-folder.zip` | Unzip and run `PlanWinAIPro.exe`. Fastest start |
+| `PlanWinAIPro-1.0.1-win64-setup.exe` | Installer: Start-menu entry, desktop icon, `.pwai`/`.plw` file association, uninstaller |
+| `PlanWinAIPro-1.0.1-win64-portable.exe` | Single exe that runs from anywhere with no install. First start takes about 10 s while it unpacks |
+| `PlanWinAIPro-1.0.1-win64-folder.zip` | Unzip and run `PlanWinAIPro.exe`. Fastest start |
 
 The exe is not code-signed yet, so Windows SmartScreen may warn on first run (*More info → Run anyway*). See *Roadmap* for signing.
 
@@ -119,7 +119,7 @@ PlanWinAIPro.exe cli import-plw OLD.plw --out converted.pwai
 ```bash
 python -m venv .venv && .venv\Scripts\activate          # Python 3.12, 64-bit
 pip install -r requirements-dev.txt
-python -m pytest -q                                      # 84 tests
+python -m pytest -q                                      # 123 tests
 python -m planwin_ai                                     # run the app
 scripts\build_windows.bat                                # exe + portable + installer (needs Inno Setup 6)
 ```
@@ -144,7 +144,7 @@ planwin_ai/
   data/      cities.csv · legacy_samples/*.plw · templates/*.pwai
 tools/       keygen.py (issue licences – internal) · build_templates.py
 packaging/   PyInstaller spec · Inno Setup script · version info
-tests/       84 tests: closed-form solver checks, IS-code values, legacy import, exports, AI, licensing, GUI smoke
+tests/       123 tests: closed-form solver checks, IS-code values, legacy import, exports, AI, licensing, GUI smoke
 ```
 
 ## Licensing (Computer Help internal)

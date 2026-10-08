@@ -154,10 +154,9 @@ def slab_edge_profiles(slab: Slab, ratio_limit: float = 2.0) -> tuple[list[EdgeP
 
     Returns (profiles, method, notes).  Profiles integrate to the slab area.
     """
-    pts = G.ensure_ccw(slab.pts)
-    # keep edge indexing consistent with slab.points ordering
-    if pts != slab.pts:
-        pts = slab.pts
+    # edges are indexed in slab.points order (cant_edge refers to it); every formula
+    # below uses absolute areas, so clockwise slabs need no re-ordering
+    pts = slab.pts
     n = len(pts)
     edges = [(pts[i], pts[(i + 1) % n]) for i in range(n)]
     lens = [G.dist(a, b) for a, b in edges]
@@ -701,7 +700,7 @@ def _is_external(plan: Plan, p, q) -> bool:
     mx, my = (p[0] + q[0]) / 2, (p[1] + q[1]) / 2
     L = G.dist(p, q)
     nx, ny = -(q[1] - p[1]) / L * 0.05, (q[0] - p[0]) / L * 0.05
-    left = any(G.point_in_polygon((mx + nx, my + ny), s.pts) for s in plan.slabs if s.distribution != "on_grade" or True)
+    left = any(G.point_in_polygon((mx + nx, my + ny), s.pts) for s in plan.slabs)
     right = any(G.point_in_polygon((mx - nx, my - ny), s.pts) for s in plan.slabs)
     return not (left and right)
 

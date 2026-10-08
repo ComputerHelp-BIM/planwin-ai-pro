@@ -37,16 +37,25 @@ class Assistant:
         s["parametric"] = bool(p.meta.get("grid_spec"))
         return json.dumps(s, default=str)[:6000]
 
-    def plan(self, text: str) -> tuple[str, list[dict]]:
-        """Interpret a prompt into (reply, actions). Does not modify the model (thread-safe)."""
+    def context(self) -> tuple[str, bool]:
+        """(model summary, has_model) – call on the thread that owns the project."""
+        return self.summary(), bool(self.session.project.plans)
+
+    def plan(self, text: str, context: tuple[str, bool] | None = None) -> tuple[str, list[dict]]:
+        """Interpret a prompt into (reply, actions) without touching the model.
+
+        The GUI runs this on a worker thread while the user may keep editing, so it
+        passes ``context`` captured on the GUI thread; the project is then never read here.
+        """
+        summary, has_model = context if context is not None else self.context()
         self.history.append(Turn("user", text))
         if self.config.provider == "offline":
-            return offline.parse(text, bool(self.session.project.plans))
+            return offline.parse(text, has_model)
         try:
-            out = chat(self.config, [t.__dict__ for t in self.history], self.summary())
+            out = chat(self.config, [t.__dict__ for t in self.history], summary)
             return out["reply"], out["actions"]
         except ProviderError as exc:
-            reply, actions = offline.parse(text, bool(self.session.project.plans))
+            reply, actions = offline.parse(text, has_model)
             return f"({exc} – used offline assistant) " + reply, actions
 
     def apply(self, reply: str, actions: list[dict]) -> tuple[str, ActionResult]:

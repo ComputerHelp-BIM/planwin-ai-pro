@@ -120,7 +120,20 @@ def _span_depth(span: float, current: float, ratio: float = 12.0) -> float:
     return round(max(current, math.ceil(span / ratio / 0.025) * 0.025), 3)
 
 
+#: meta key marking that ``grid_spec`` holds the user's input (before auto-sizing)
+SPEC_IS_INPUT = "grid_spec_is_input"
+
+
 def grid_building(spec: GridSpec) -> Project:
+    """Generate the project.  ``spec`` is not modified: auto-sizing works on a copy and
+    the *input* spec is stored in ``project.meta`` so that later edits (e.g. larger bays)
+    re-size slabs and beams from scratch instead of starting from the old sizes."""
+    import copy
+    import json
+    from dataclasses import asdict
+
+    user_input = json.loads(json.dumps(asdict(spec)))  # JSON-normalised (tuples -> lists)
+    spec = copy.deepcopy(spec)
     occ = OCCUPANCY.get(spec.occupancy, OCCUPANCY["residential"])
     if spec.auto_size:
         from ..io.cities import lookup_city
@@ -162,11 +175,8 @@ def grid_building(spec: GridSpec) -> Project:
                 b.parapet = None
                 b.wall_height = 3.0 - b.d
                 b.include_wall = b.include_plaster = True
-    from dataclasses import asdict
-
-    import json
-
-    prj.meta["grid_spec"] = json.loads(json.dumps(asdict(spec)))  # JSON-normalised (tuples -> lists)
+    prj.meta["grid_spec"] = user_input
+    prj.meta[SPEC_IS_INPUT] = True
     if spec.auto_size:
         from ..design.runner import autosize_columns
 

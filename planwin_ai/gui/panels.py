@@ -319,6 +319,7 @@ class PropertiesPanel(QWidget):
         self.apply_btn.clicked.connect(self._apply)
         outer.addWidget(self.apply_btn)
         self.widgets: dict[str, tuple[Any, str]] = {}
+        self.initial: dict[str, Any] = {}  # value of each field when the selection was shown
         self.objs: list = []
         self.loads_tbl: Optional[QTableWidget] = None
         self.wedge_tbl: Optional[QTableWidget] = None
@@ -329,6 +330,7 @@ class PropertiesPanel(QWidget):
         while self.form.rowCount():
             self.form.removeRow(0)
         self.widgets.clear()
+        self.initial.clear()
         self.loads_tbl = self.wedge_tbl = None
         self.objs = [plan.find(i) for i in ids] if plan else []
         self.objs = [o for o in self.objs if o is not None]
@@ -347,7 +349,8 @@ class PropertiesPanel(QWidget):
         o = self.objs[0]
         spec = SLAB_FIELDS if isinstance(o, Slab) else COLUMN_FIELDS if isinstance(o, Column) else BEAM_FIELDS
         kind = type(o).__name__
-        self.title.setText(f"{kind} {o.mark}" if len(self.objs) == 1 else f"{len(self.objs)} {kind.lower()}s – set value")
+        self.title.setText(f"{kind} {o.mark}" if len(self.objs) == 1
+                           else f"{len(self.objs)} {kind.lower()}s – set value (only the fields you change are applied)")
         for name, label, typ in spec:
             if len(self.objs) > 1 and name in ("mark", "x", "y", "x1", "y1", "x2", "y2"):
                 continue
@@ -366,8 +369,12 @@ class PropertiesPanel(QWidget):
                 w = _spin(v, -1e5, 1e5, 3, 0.05)
             else:
                 w = QLineEdit(str(v))
+            if len(self.objs) > 1 and any(getattr(x, name) != v for x in self.objs[1:]):
+                label += " *"
+                w.setToolTip("Values differ in the selection (showing the first one). Change it to set all.")
             self.form.addRow(label, w)
             self.widgets[name] = (w, typ if not isinstance(typ, list) else "choice")
+            self.initial[name] = self._read(name)
         if isinstance(o, Beam) and len(self.objs) == 1:
             self.loads_tbl = self._table(["Dist (m)", "Dead (kN)", "Live (kN)", "Desc"],
                                          [[p.dist, p.dead, p.live, p.desc] for p in o.point_loads])
@@ -435,23 +442,30 @@ class PropertiesPanel(QWidget):
                     txt += f"\nLoad from this level: D {cl.dead:.1f} kN, L {cl.live:.1f} kN"
         self.info.setText(txt)
 
+    def _read(self, name: str):
+        """Current value of a field widget (raises ValueError for unparsable text)."""
+        w, typ = self.widgets[name]
+        if typ == "choice":
+            return w.currentText()
+        if typ == "bool":
+            return w.isChecked()
+        if typ == "float":
+            return float(w.value())
+        if typ in ("float_opt", "int_opt"):
+            t = w.text().strip()
+            return None if not t else (int(float(t)) if typ == "int_opt" else float(t))
+        return w.text().strip()
+
     def _apply(self):
         if not self.objs:
             return
         vals = {}
         try:
-            for name, (w, typ) in self.widgets.items():
-                if typ == "choice":
-                    vals[name] = w.currentText()
-                elif typ == "bool":
-                    vals[name] = w.isChecked()
-                elif typ == "float":
-                    vals[name] = float(w.value())
-                elif typ in ("float_opt", "int_opt"):
-                    t = w.text().strip()
-                    vals[name] = None if not t else (int(float(t)) if typ == "int_opt" else float(t))
-                else:
-                    vals[name] = w.text().strip()
+            for name in self.widgets:
+                v = self._read(name)
+                # multi-select "Set Value": untouched fields keep each object's own value
+                if len(self.objs) == 1 or v != self.initial.get(name):
+                    vals[name] = v
             loads = wedges = None
             if self.loads_tbl is not None:
                 loads = []
@@ -531,13 +545,25 @@ class ResultsPanel(QTabWidget):
         t.resizeColumnsToContents()
         t.setSortingEnabled(name != "Issues")  # issue rows map to objects by index
 
+    def _clear(self, *names: str):
+        for n in names:
+            t = self.tables[n]
+            t.setSortingEnabled(False)
+            t.clear()
+            t.setRowCount(0)
+            t.setColumnCount(0)
+
     def refresh(self):
+        """Rebuild every table. Tables whose results were invalidated by an edit are
+        emptied so that out-of-date design results are never shown next to a changed model."""
         m = self.main
         plan = m.current_plan()
         issues = []
         self._issues = []
+        res = m.plan_result(plan.name) if plan else None
+        if not res:
+            self._clear("Column loads", "Beam loads")
         if plan:
-            res = m.plan_result(plan.name)
             if res:
                 for i in res.issues:
                     issues.append([plan.name, i.level, i.kind, i.message])
@@ -553,6 +579,8 @@ class ResultsPanel(QTabWidget):
                                      " / ".join(f"{s.kind[0].upper()}@{s.x:.2f}" for s in br.supports)])
                 self._fill("Beam loads", ["Beam", "Span m", "Total D kN", "Total L kN", "Eq. UDL kN/m", "Supports"], rows)
         fm = m.frame_model()
+        if not fm:
+            self._clear("Lateral")
         if fm:
             for i in fm.issues:
                 issues.append(["Frame", i.level, i.kind, i.message])
@@ -562,6 +590,8 @@ class ResultsPanel(QTabWidget):
             self._fill("Lateral", ["Case", "Type", "T (s)", "Sa/g", "Ah", "W (kN)", "Base shear (kN)"], rows)
         self._fill("Issues", ["Where", "Level", "Type", "Message"], issues, bad_col=1)
         rep = m.design_report()
+        if not rep:
+            self._clear("Columns", "Beams", "Footings", "Slabs", "Drift", "BOQ & cost")
         if rep:
             self._fill("Columns", ["Level", "Col", "b", "D", "Pu kN", "Mux", "Muy", "p %", "Bars", "Ties", "Ratio", "OK", "Governing"],
                        [[c.level, c.mark, c.b, c.d, c.Pu, c.Mux, c.Muy, c.steel_pct, c.bars, c.ties, c.utilisation,

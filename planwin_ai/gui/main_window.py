@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         self.dirty = False
         self.undo_stack: list[str] = []
         self.redo_stack: list[str] = []
+        self._ai_snapshot: Optional[str] = None
         self._plan_cache: dict[str, PlanResult] = {}
         self.current_plan_name = self.project.plans[0].name if self.project.plans else ""
         self.defaults = {"slab_thickness": 0.125, "slab_live": 2.0, "slab_ff": 1.0, "slab_other": 0.5, "col_b": 0.3,
@@ -276,8 +277,8 @@ class MainWindow(QMainWindow):
     def snapshot(self) -> str:
         return project_io.project_to_json(self.project)
 
-    def push_undo(self):
-        self.undo_stack.append(self.snapshot())
+    def push_undo(self, snapshot: Optional[str] = None):
+        self.undo_stack.append(snapshot if snapshot is not None else self.snapshot())
         if len(self.undo_stack) > UNDO_LIMIT:
             self.undo_stack.pop(0)
         self.redo_stack.clear()
@@ -364,7 +365,9 @@ class MainWindow(QMainWindow):
             self.chat.input.setFocus()
 
     def before_ai_change(self):
-        self.push_undo()
+        """Remember the model before the assistant acts; it becomes an undo step only if
+        the actions really change the model (a plain answer must not touch undo/redo)."""
+        self._ai_snapshot = self.snapshot()
 
     def run_ai_actions(self, reply: str, actions: list):
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -374,9 +377,12 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
 
     def after_ai_change(self, res: Optional[ActionResult]):
+        snap, self._ai_snapshot = self._ai_snapshot, None
         if res is None:
             return
         if res.changed:
+            if snap is not None:
+                self.push_undo(snap)
             self.dirty = True
             self._plan_cache.clear()
             if not self.project.plan(self.current_plan_name):
@@ -384,8 +390,6 @@ class MainWindow(QMainWindow):
             self.canvas.selection = []
             self.refresh_all()
             self.canvas.zoom_extents()
-        elif self.undo_stack and not res.analysed:
-            self.undo_stack.pop()  # nothing changed – drop the snapshot
         if res.analysed:
             self.results.refresh()
             self.view3d.refresh()
@@ -460,6 +464,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Save", f"Could not save: {exc}")
             return False
         self.dirty = False
+        self._discard_autosave()  # the saved file is now the newest copy
         self._add_recent(self.path)
         self.refresh_all()
         self.statusBar().showMessage(f"Saved {self.path}", 4000)
@@ -827,8 +832,12 @@ class MainWindow(QMainWindow):
     def _last_dir(self) -> str:
         return self.settings.value("last_dir", os.path.expanduser("~"))
 
+    def _recent(self) -> list[str]:
+        rec = self.settings.value("recent", []) or []
+        return [rec] if isinstance(rec, str) else [str(r) for r in rec]  # one entry may come back as a str
+
     def _add_recent(self, fn: str):
-        rec = [r for r in (self.settings.value("recent", []) or []) if r != fn]
+        rec = [r for r in self._recent() if r != fn]
         rec.insert(0, fn)
         self.settings.setValue("recent", rec[:8])
         self.settings.setValue("last_dir", os.path.dirname(fn))
@@ -836,9 +845,7 @@ class MainWindow(QMainWindow):
 
     def _update_recent(self):
         self.recent_menu.clear()
-        rec = self.settings.value("recent", []) or []
-        if isinstance(rec, str):
-            rec = [rec]
+        rec = self._recent()
         for r in rec:
             self.recent_menu.addAction(r, lambda f=r: self.maybe_save() and self.open_path(f))
         self.recent_menu.setEnabled(bool(rec))
@@ -849,22 +856,36 @@ class MainWindow(QMainWindow):
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
+    @staticmethod
+    def _autosave_path() -> str:
+        return os.path.join(app_data_dir(), "autosave.pwai")
+
+    def _discard_autosave(self):
+        try:
+            os.remove(self._autosave_path())
+        except OSError:
+            pass
+
     def _do_autosave(self):
         if not self.dirty:
             return
         try:
-            project_io.save_project(self.project, os.path.join(app_data_dir(), "autosave.pwai"))
+            project_io.save_project(self.project, self._autosave_path())
         except OSError:
             log.exception("autosave failed")
 
     def _startup_checks(self):
-        auto = os.path.join(app_data_dir(), "autosave.pwai")
+        auto = self._autosave_path()
+        # The autosave is deleted on every save and clean exit, so one that still exists
+        # belongs to the session that crashed – never to an older, already-saved project.
         if os.path.exists(auto) and self.settings.value("clean_exit", "true") == "false":
             if QMessageBox.question(self, "Recover", "PlanWin AI Pro did not close normally. Recover the autosaved project?") == QMessageBox.Yes:
                 try:
                     self._load_project(project_io.load_project(auto))
                 except Exception as exc:
                     QMessageBox.warning(self, "Recover", f"Recovery failed: {exc}")
+            else:
+                self._discard_autosave()
         self.settings.setValue("clean_exit", "false")
         if self.license.mode == "expired":
             QMessageBox.warning(self, "Licence", "Your trial has expired. Modelling still works, but exports are disabled.\n"
@@ -876,6 +897,7 @@ class MainWindow(QMainWindow):
             return
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("clean_exit", "true")
+        self._discard_autosave()
         ev.accept()
 
 

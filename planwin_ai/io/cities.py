@@ -32,10 +32,15 @@ def lookup_city(name: str) -> Optional[dict]:
     if not name:
         return None
     data = load_cities()
-    key = name.strip().lower()
+    key = " ".join(name.strip().lower().split())
     if key in data:
         return data[key]
-    for k, v in data.items():  # prefix / fuzzy-ish match
-        if k.startswith(key) or key.startswith(k):
-            return v
-    return None
+    if len(key) < 3:  # "a" must not silently become "Agra"
+        return None
+    # "Thane West" -> Thane: the longest table name that starts the query (whole words only)
+    longer = [k for k in data if key.startswith(k + " ")]
+    if longer:
+        return data[max(longer, key=len)]
+    # "pun" -> Pune: a unique (or shortest) table name that the query is the start of
+    shorter = sorted((k for k in data if k.startswith(key)), key=lambda k: (len(k), k))
+    return data[shorter[0]] if shorter else None

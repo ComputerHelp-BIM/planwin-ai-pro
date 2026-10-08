@@ -346,11 +346,23 @@ class FrameModel:
     def _lateral(self):
         p = self.p
         elev = p.elevations()
+        # building dimensions come only from plans that are actually used by a level;
+        # spare/scratch plans in the project must not change T or the torsion lever arm
+        used = [p.plan(lv.plan) for lv in p.levels]
         pts: list = []
-        for pl in p.plans:
+        for pl in {id(x): x for x in used if x is not None}.values():
             pts.extend(pl.all_points())
         x0, y0, x1, y1 = G.bbox(pts)
         dx, dy = max(x1 - x0, 1.0), max(y1 - y0, 1.0)
+
+        def level_dims(i: int) -> tuple[float, float]:
+            """Plan dimensions of level i (cl 7.8.2 uses the floor plan dimension at that level)."""
+            pl = used[i - 1] if 1 <= i <= len(used) else None
+            if pl is None or not pl.all_points():
+                return dx, dy
+            a0, b0, a1, b1 = G.bbox(pl.all_points())
+            return max(a1 - a0, 1.0), max(b1 - b0, 1.0)
+
         weights = self._level_weights()
         s = p.seismic
         if s.enabled:
@@ -361,7 +373,8 @@ class FrameModel:
                 for i, f in enumerate(r.forces):
                     self._distribute(dname, i, f, axis)
                     if s.accidental_torsion:
-                        self._torsion("ET" + dname[-1], i, f, axis, dy if axis == 0 else dx)
+                        lx, ly = level_dims(i)
+                        self._torsion("ET" + dname[-1], i, f, axis, ly if axis == 0 else lx)
         w = p.wind
         if w.enabled:
             for dname, axis, width in (("WLX", 0, dy), ("WLY", 1, dx)):

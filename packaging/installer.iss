@@ -1,7 +1,7 @@
 ; Inno Setup script – builds PlanWinAIPro-<ver>-win64-setup.exe from dist\PlanWinAIPro
 #define AppName "PlanWin AI Pro"
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #define AppPublisher "Computer Help"
 #define AppURL "https://www.buildingsoftware.in"

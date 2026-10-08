@@ -39,7 +39,15 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("plw")
     i.add_argument("--out", required=True)
     args = ap.parse_args(argv)
+    try:
+        return _run(args)
+    except (OSError, ValueError, KeyError) as exc:  # missing file, bad project, unknown template …
+        msg = exc.args[0] if isinstance(exc, KeyError) and exc.args else exc
+        print(f"error: {msg}", file=sys.stderr)
+        return 2
 
+
+def _run(args: argparse.Namespace) -> int:
     from .ai.actions import Session, execute
     from .ai.assistant import Assistant
     from .ai.templates import TEMPLATES, build_template
