@@ -1,0 +1,4987 @@
+{
+ "name": "Office G+5",
+ "client": "",
+ "engineer": "",
+ "location": "Bengaluru",
+ "plans": [
+  {
+   "name": "Ground",
+   "floor_type": "ground",
+   "floor_height_above": 4.2,
+   "slabs": [
+    {
+     "id": "2dcdba8e32",
+     "mark": "S9",
+     "points": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       6.0,
+       0.0
+      ],
+      [
+       6.0,
+       6.0
+      ],
+      [
+       0.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "44d0b335cd",
+     "mark": "S10",
+     "points": [
+      [
+       6.0,
+       0.0
+      ],
+      [
+       12.0,
+       0.0
+      ],
+      [
+       12.0,
+       6.0
+      ],
+      [
+       6.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "99273e75bc",
+     "mark": "S11",
+     "points": [
+      [
+       12.0,
+       0.0
+      ],
+      [
+       18.0,
+       0.0
+      ],
+      [
+       18.0,
+       6.0
+      ],
+      [
+       12.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "7ffc104159",
+     "mark": "S12",
+     "points": [
+      [
+       18.0,
+       0.0
+      ],
+      [
+       24.0,
+       0.0
+      ],
+      [
+       24.0,
+       6.0
+      ],
+      [
+       18.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "21642274f5",
+     "mark": "S5",
+     "points": [
+      [
+       0.0,
+       6.0
+      ],
+      [
+       6.0,
+       6.0
+      ],
+      [
+       6.0,
+       12.0
+      ],
+      [
+       0.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "76e6dc4de4",
+     "mark": "S6",
+     "points": [
+      [
+       6.0,
+       6.0
+      ],
+      [
+       12.0,
+       6.0
+      ],
+      [
+       12.0,
+       12.0
+      ],
+      [
+       6.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "8825cd2384",
+     "mark": "S7",
+     "points": [
+      [
+       12.0,
+       6.0
+      ],
+      [
+       18.0,
+       6.0
+      ],
+      [
+       18.0,
+       12.0
+      ],
+      [
+       12.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "39c59c918f",
+     "mark": "S8",
+     "points": [
+      [
+       18.0,
+       6.0
+      ],
+      [
+       24.0,
+       6.0
+      ],
+      [
+       24.0,
+       12.0
+      ],
+      [
+       18.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "548439d514",
+     "mark": "S1",
+     "points": [
+      [
+       0.0,
+       12.0
+      ],
+      [
+       6.0,
+       12.0
+      ],
+      [
+       6.0,
+       18.0
+      ],
+      [
+       0.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "0ff1b9f49a",
+     "mark": "S2",
+     "points": [
+      [
+       6.0,
+       12.0
+      ],
+      [
+       12.0,
+       12.0
+      ],
+      [
+       12.0,
+       18.0
+      ],
+      [
+       6.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "d82f5e2a29",
+     "mark": "S3",
+     "points": [
+      [
+       12.0,
+       12.0
+      ],
+      [
+       18.0,
+       12.0
+      ],
+      [
+       18.0,
+       18.0
+      ],
+      [
+       12.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "8f77d0b06d",
+     "mark": "S4",
+     "points": [
+      [
+       18.0,
+       12.0
+      ],
+      [
+       24.0,
+       12.0
+      ],
+      [
+       24.0,
+       18.0
+      ],
+      [
+       18.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 2.0,
+     "floor_finish": 1.0,
+     "other": 0.0,
+     "distribution": "on_grade",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    }
+   ],
+   "columns": [
+    {
+     "id": "a169feed1c",
+     "mark": "C1",
+     "x": 0.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "f3f26dc90b",
+     "mark": "C2",
+     "x": 6.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "771d7d96fb",
+     "mark": "C3",
+     "x": 12.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "0b16ebde78",
+     "mark": "C4",
+     "x": 18.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "ab2bacc5c7",
+     "mark": "C5",
+     "x": 24.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "fdf60de3ff",
+     "mark": "C6",
+     "x": 0.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "dcc341d1a9",
+     "mark": "C7",
+     "x": 6.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "96c6a5ff23",
+     "mark": "C8",
+     "x": 12.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "76fc65a034",
+     "mark": "C9",
+     "x": 18.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "3d98a4ef24",
+     "mark": "C10",
+     "x": 24.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "d0350fddda",
+     "mark": "C11",
+     "x": 0.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "ee269d115b",
+     "mark": "C12",
+     "x": 6.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "dbcd68d4b4",
+     "mark": "C13",
+     "x": 12.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "984b37fcad",
+     "mark": "C14",
+     "x": 18.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "adaa0a4297",
+     "mark": "C15",
+     "x": 24.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "6847d0bfa3",
+     "mark": "C16",
+     "x": 0.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "b7f9eee978",
+     "mark": "C17",
+     "x": 6.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "98e6faa57b",
+     "mark": "C18",
+     "x": 12.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "13483377da",
+     "mark": "C19",
+     "x": 18.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "ba69ab8e7a",
+     "mark": "C20",
+     "x": 24.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    }
+   ],
+   "beams": [
+    {
+     "id": "09f4b3807d",
+     "mark": "B28",
+     "x1": 0.0,
+     "y1": 0.0,
+     "x2": 6.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "c9772356d3",
+     "mark": "B29",
+     "x1": 6.0,
+     "y1": 0.0,
+     "x2": 12.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "5d7afaf9c2",
+     "mark": "B30",
+     "x1": 12.0,
+     "y1": 0.0,
+     "x2": 18.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "6a26b2f990",
+     "mark": "B31",
+     "x1": 18.0,
+     "y1": 0.0,
+     "x2": 24.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "246c0d2226",
+     "mark": "B24",
+     "x1": 6.0,
+     "y1": 0.0,
+     "x2": 6.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "354dc7ff54",
+     "mark": "B15",
+     "x1": 6.0,
+     "y1": 6.0,
+     "x2": 6.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "ce4c4145a0",
+     "mark": "B6",
+     "x1": 6.0,
+     "y1": 12.0,
+     "x2": 6.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "703bc4621f",
+     "mark": "B22",
+     "x1": 24.0,
+     "y1": 6.0,
+     "x2": 18.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "71749e53e3",
+     "mark": "B21",
+     "x1": 18.0,
+     "y1": 6.0,
+     "x2": 12.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "0a6446ed57",
+     "mark": "B20",
+     "x1": 12.0,
+     "y1": 6.0,
+     "x2": 6.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "6d58587587",
+     "mark": "B19",
+     "x1": 6.0,
+     "y1": 6.0,
+     "x2": 0.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "9f949151f4",
+     "mark": "B5",
+     "x1": 0.0,
+     "y1": 18.0,
+     "x2": 0.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "2e19b40e69",
+     "mark": "B14",
+     "x1": 0.0,
+     "y1": 12.0,
+     "x2": 0.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "7787fa30df",
+     "mark": "B23",
+     "x1": 0.0,
+     "y1": 6.0,
+     "x2": 0.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "0c9aeafac1",
+     "mark": "B25",
+     "x1": 12.0,
+     "y1": 0.0,
+     "x2": 12.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "509515217b",
+     "mark": "B16",
+     "x1": 12.0,
+     "y1": 6.0,
+     "x2": 12.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "202489799e",
+     "mark": "B7",
+     "x1": 12.0,
+     "y1": 12.0,
+     "x2": 12.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "2c1f77fac3",
+     "mark": "B26",
+     "x1": 18.0,
+     "y1": 0.0,
+     "x2": 18.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "292f26ff15",
+     "mark": "B17",
+     "x1": 18.0,
+     "y1": 6.0,
+     "x2": 18.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "6ebfbeea79",
+     "mark": "B8",
+     "x1": 18.0,
+     "y1": 12.0,
+     "x2": 18.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "456bf2b70e",
+     "mark": "B27",
+     "x1": 24.0,
+     "y1": 0.0,
+     "x2": 24.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "3138d0d773",
+     "mark": "B18",
+     "x1": 24.0,
+     "y1": 6.0,
+     "x2": 24.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "fc83003ce5",
+     "mark": "B9",
+     "x1": 24.0,
+     "y1": 12.0,
+     "x2": 24.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "613c6ae160",
+     "mark": "B13",
+     "x1": 24.0,
+     "y1": 12.0,
+     "x2": 18.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "ed184d3633",
+     "mark": "B12",
+     "x1": 18.0,
+     "y1": 12.0,
+     "x2": 12.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "4dfef87824",
+     "mark": "B11",
+     "x1": 12.0,
+     "y1": 12.0,
+     "x2": 6.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "9a6011b04a",
+     "mark": "B10",
+     "x1": 6.0,
+     "y1": 12.0,
+     "x2": 0.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "b4dbc2b9f4",
+     "mark": "B4",
+     "x1": 24.0,
+     "y1": 18.0,
+     "x2": 18.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "433b931408",
+     "mark": "B3",
+     "x1": 18.0,
+     "y1": 18.0,
+     "x2": 12.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "9e7d12f4fd",
+     "mark": "B2",
+     "x1": 12.0,
+     "y1": 18.0,
+     "x2": 6.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "1a3a9833ea",
+     "mark": "B1",
+     "x1": 6.0,
+     "y1": 18.0,
+     "x2": 0.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    }
+   ],
+   "notes": ""
+  },
+  {
+   "name": "Typical",
+   "floor_type": "typical",
+   "floor_height_above": 3.6,
+   "slabs": [
+    {
+     "id": "cff428ce8b",
+     "mark": "S9",
+     "points": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       6.0,
+       0.0
+      ],
+      [
+       6.0,
+       6.0
+      ],
+      [
+       0.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "83e3b4ee96",
+     "mark": "S10",
+     "points": [
+      [
+       6.0,
+       0.0
+      ],
+      [
+       12.0,
+       0.0
+      ],
+      [
+       12.0,
+       6.0
+      ],
+      [
+       6.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "eb7a2538e9",
+     "mark": "S11",
+     "points": [
+      [
+       12.0,
+       0.0
+      ],
+      [
+       18.0,
+       0.0
+      ],
+      [
+       18.0,
+       6.0
+      ],
+      [
+       12.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "a39d01aea4",
+     "mark": "S12",
+     "points": [
+      [
+       18.0,
+       0.0
+      ],
+      [
+       24.0,
+       0.0
+      ],
+      [
+       24.0,
+       6.0
+      ],
+      [
+       18.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "0d25652c9c",
+     "mark": "S5",
+     "points": [
+      [
+       0.0,
+       6.0
+      ],
+      [
+       6.0,
+       6.0
+      ],
+      [
+       6.0,
+       12.0
+      ],
+      [
+       0.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "cf085981a5",
+     "mark": "S6",
+     "points": [
+      [
+       6.0,
+       6.0
+      ],
+      [
+       12.0,
+       6.0
+      ],
+      [
+       12.0,
+       12.0
+      ],
+      [
+       6.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "15f967741b",
+     "mark": "S7",
+     "points": [
+      [
+       12.0,
+       6.0
+      ],
+      [
+       18.0,
+       6.0
+      ],
+      [
+       18.0,
+       12.0
+      ],
+      [
+       12.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "fe6b712364",
+     "mark": "S8",
+     "points": [
+      [
+       18.0,
+       6.0
+      ],
+      [
+       24.0,
+       6.0
+      ],
+      [
+       24.0,
+       12.0
+      ],
+      [
+       18.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "6e895b5d38",
+     "mark": "S1",
+     "points": [
+      [
+       0.0,
+       12.0
+      ],
+      [
+       6.0,
+       12.0
+      ],
+      [
+       6.0,
+       18.0
+      ],
+      [
+       0.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "78584ecfd3",
+     "mark": "S2",
+     "points": [
+      [
+       6.0,
+       12.0
+      ],
+      [
+       12.0,
+       12.0
+      ],
+      [
+       12.0,
+       18.0
+      ],
+      [
+       6.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "a5f59b7dc9",
+     "mark": "S3",
+     "points": [
+      [
+       12.0,
+       12.0
+      ],
+      [
+       18.0,
+       12.0
+      ],
+      [
+       18.0,
+       18.0
+      ],
+      [
+       12.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "3ea182f553",
+     "mark": "S4",
+     "points": [
+      [
+       18.0,
+       12.0
+      ],
+      [
+       24.0,
+       12.0
+      ],
+      [
+       24.0,
+       18.0
+      ],
+      [
+       18.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 3.0,
+     "floor_finish": 1.0,
+     "other": 1.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    }
+   ],
+   "columns": [
+    {
+     "id": "862cde043d",
+     "mark": "C1",
+     "x": 0.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "705a005161",
+     "mark": "C2",
+     "x": 6.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "914dc3e438",
+     "mark": "C3",
+     "x": 12.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "c60a5750b2",
+     "mark": "C4",
+     "x": 18.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "a976e48ad6",
+     "mark": "C5",
+     "x": 24.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "a4558a5919",
+     "mark": "C6",
+     "x": 0.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "f241c07676",
+     "mark": "C7",
+     "x": 6.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "0999cdc08c",
+     "mark": "C8",
+     "x": 12.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "f0dae8ca96",
+     "mark": "C9",
+     "x": 18.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "8e22c24bb0",
+     "mark": "C10",
+     "x": 24.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "29058449e6",
+     "mark": "C11",
+     "x": 0.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "c4808b3234",
+     "mark": "C12",
+     "x": 6.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "de8eb2bcca",
+     "mark": "C13",
+     "x": 12.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "63625e3231",
+     "mark": "C14",
+     "x": 18.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "6d94f9bb7d",
+     "mark": "C15",
+     "x": 24.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "458cb89bba",
+     "mark": "C16",
+     "x": 0.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "031ef21c80",
+     "mark": "C17",
+     "x": 6.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "03d6ec0bca",
+     "mark": "C18",
+     "x": 12.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "c2307a8562",
+     "mark": "C19",
+     "x": 18.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "077ff530f4",
+     "mark": "C20",
+     "x": 24.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    }
+   ],
+   "beams": [
+    {
+     "id": "ed5d3beb51",
+     "mark": "B28",
+     "x1": 0.0,
+     "y1": 0.0,
+     "x2": 6.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "a91ce436e5",
+     "mark": "B29",
+     "x1": 6.0,
+     "y1": 0.0,
+     "x2": 12.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "88298ed506",
+     "mark": "B30",
+     "x1": 12.0,
+     "y1": 0.0,
+     "x2": 18.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "6274be1225",
+     "mark": "B31",
+     "x1": 18.0,
+     "y1": 0.0,
+     "x2": 24.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "1603f7523f",
+     "mark": "B24",
+     "x1": 6.0,
+     "y1": 0.0,
+     "x2": 6.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "7f713281d2",
+     "mark": "B15",
+     "x1": 6.0,
+     "y1": 6.0,
+     "x2": 6.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "c8db49d3ae",
+     "mark": "B6",
+     "x1": 6.0,
+     "y1": 12.0,
+     "x2": 6.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "6ae0b0a8a4",
+     "mark": "B22",
+     "x1": 24.0,
+     "y1": 6.0,
+     "x2": 18.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "7e7553aa46",
+     "mark": "B21",
+     "x1": 18.0,
+     "y1": 6.0,
+     "x2": 12.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "00353bb2a1",
+     "mark": "B20",
+     "x1": 12.0,
+     "y1": 6.0,
+     "x2": 6.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "f9c7c8a238",
+     "mark": "B19",
+     "x1": 6.0,
+     "y1": 6.0,
+     "x2": 0.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "7ce130e01d",
+     "mark": "B5",
+     "x1": 0.0,
+     "y1": 18.0,
+     "x2": 0.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "1de6416dce",
+     "mark": "B14",
+     "x1": 0.0,
+     "y1": 12.0,
+     "x2": 0.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "bccaa3866d",
+     "mark": "B23",
+     "x1": 0.0,
+     "y1": 6.0,
+     "x2": 0.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "3f562c0ace",
+     "mark": "B25",
+     "x1": 12.0,
+     "y1": 0.0,
+     "x2": 12.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "9e32756d4f",
+     "mark": "B16",
+     "x1": 12.0,
+     "y1": 6.0,
+     "x2": 12.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "8d23c1864e",
+     "mark": "B7",
+     "x1": 12.0,
+     "y1": 12.0,
+     "x2": 12.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "224addd459",
+     "mark": "B26",
+     "x1": 18.0,
+     "y1": 0.0,
+     "x2": 18.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "894a18b83b",
+     "mark": "B17",
+     "x1": 18.0,
+     "y1": 6.0,
+     "x2": 18.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "c833706590",
+     "mark": "B8",
+     "x1": 18.0,
+     "y1": 12.0,
+     "x2": 18.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "690434e985",
+     "mark": "B27",
+     "x1": 24.0,
+     "y1": 0.0,
+     "x2": 24.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "189ae66949",
+     "mark": "B18",
+     "x1": 24.0,
+     "y1": 6.0,
+     "x2": 24.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "89f91c36de",
+     "mark": "B9",
+     "x1": 24.0,
+     "y1": 12.0,
+     "x2": 24.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "588e1c7a5b",
+     "mark": "B13",
+     "x1": 24.0,
+     "y1": 12.0,
+     "x2": 18.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "49da61b11f",
+     "mark": "B12",
+     "x1": 18.0,
+     "y1": 12.0,
+     "x2": 12.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "b04fbf9d1e",
+     "mark": "B11",
+     "x1": 12.0,
+     "y1": 12.0,
+     "x2": 6.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "587b187c84",
+     "mark": "B10",
+     "x1": 6.0,
+     "y1": 12.0,
+     "x2": 0.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "94534aa4ff",
+     "mark": "B4",
+     "x1": 24.0,
+     "y1": 18.0,
+     "x2": 18.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "deb6fbdbc3",
+     "mark": "B3",
+     "x1": 18.0,
+     "y1": 18.0,
+     "x2": 12.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "69b8a5468d",
+     "mark": "B2",
+     "x1": 12.0,
+     "y1": 18.0,
+     "x2": 6.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "ab162bc889",
+     "mark": "B1",
+     "x1": 6.0,
+     "y1": 18.0,
+     "x2": 0.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    }
+   ],
+   "notes": ""
+  },
+  {
+   "name": "Roof",
+   "floor_type": "roof",
+   "floor_height_above": 3.6,
+   "slabs": [
+    {
+     "id": "7ccacbca42",
+     "mark": "S9",
+     "points": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       6.0,
+       0.0
+      ],
+      [
+       6.0,
+       6.0
+      ],
+      [
+       0.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "3b4c6edf99",
+     "mark": "S10",
+     "points": [
+      [
+       6.0,
+       0.0
+      ],
+      [
+       12.0,
+       0.0
+      ],
+      [
+       12.0,
+       6.0
+      ],
+      [
+       6.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "ce75dcd449",
+     "mark": "S11",
+     "points": [
+      [
+       12.0,
+       0.0
+      ],
+      [
+       18.0,
+       0.0
+      ],
+      [
+       18.0,
+       6.0
+      ],
+      [
+       12.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "e92b13dfc3",
+     "mark": "S12",
+     "points": [
+      [
+       18.0,
+       0.0
+      ],
+      [
+       24.0,
+       0.0
+      ],
+      [
+       24.0,
+       6.0
+      ],
+      [
+       18.0,
+       6.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "c1a55bc58d",
+     "mark": "S5",
+     "points": [
+      [
+       0.0,
+       6.0
+      ],
+      [
+       6.0,
+       6.0
+      ],
+      [
+       6.0,
+       12.0
+      ],
+      [
+       0.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "2e15733e42",
+     "mark": "S6",
+     "points": [
+      [
+       6.0,
+       6.0
+      ],
+      [
+       12.0,
+       6.0
+      ],
+      [
+       12.0,
+       12.0
+      ],
+      [
+       6.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "5755084877",
+     "mark": "S7",
+     "points": [
+      [
+       12.0,
+       6.0
+      ],
+      [
+       18.0,
+       6.0
+      ],
+      [
+       18.0,
+       12.0
+      ],
+      [
+       12.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "781835b1bd",
+     "mark": "S8",
+     "points": [
+      [
+       18.0,
+       6.0
+      ],
+      [
+       24.0,
+       6.0
+      ],
+      [
+       24.0,
+       12.0
+      ],
+      [
+       18.0,
+       12.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "6fde1ac1e3",
+     "mark": "S1",
+     "points": [
+      [
+       0.0,
+       12.0
+      ],
+      [
+       6.0,
+       12.0
+      ],
+      [
+       6.0,
+       18.0
+      ],
+      [
+       0.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "a0357c40f6",
+     "mark": "S2",
+     "points": [
+      [
+       6.0,
+       12.0
+      ],
+      [
+       12.0,
+       12.0
+      ],
+      [
+       12.0,
+       18.0
+      ],
+      [
+       6.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "f3a7a0cf07",
+     "mark": "S3",
+     "points": [
+      [
+       12.0,
+       12.0
+      ],
+      [
+       18.0,
+       12.0
+      ],
+      [
+       18.0,
+       18.0
+      ],
+      [
+       12.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    },
+    {
+     "id": "5888b877c7",
+     "mark": "S4",
+     "points": [
+      [
+       18.0,
+       12.0
+      ],
+      [
+       24.0,
+       12.0
+      ],
+      [
+       24.0,
+       18.0
+      ],
+      [
+       18.0,
+       18.0
+      ]
+     ],
+     "thickness": 0.225,
+     "density": 25.0,
+     "live": 1.5,
+     "floor_finish": 2.0,
+     "other": 0.0,
+     "distribution": "auto",
+     "cant_edge": null,
+     "grade": "M30",
+     "room": ""
+    }
+   ],
+   "columns": [
+    {
+     "id": "d3f3cc4484",
+     "mark": "C1",
+     "x": 0.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "c294e68374",
+     "mark": "C2",
+     "x": 6.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "bc134e4e9b",
+     "mark": "C3",
+     "x": 12.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "a7c2824f7a",
+     "mark": "C4",
+     "x": 18.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "71c734253f",
+     "mark": "C5",
+     "x": 24.0,
+     "y": 18.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "2e022ddff4",
+     "mark": "C6",
+     "x": 0.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "81f8293983",
+     "mark": "C7",
+     "x": 6.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "856c522f49",
+     "mark": "C8",
+     "x": 12.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "5add85ca3d",
+     "mark": "C9",
+     "x": 18.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "85a6d89f33",
+     "mark": "C10",
+     "x": 24.0,
+     "y": 12.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "6e52e70f13",
+     "mark": "C11",
+     "x": 0.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "b942c786e6",
+     "mark": "C12",
+     "x": 6.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "0d938bd894",
+     "mark": "C13",
+     "x": 12.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "d263c2b5ae",
+     "mark": "C14",
+     "x": 18.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "818152657f",
+     "mark": "C15",
+     "x": 24.0,
+     "y": 6.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "cf2d31957b",
+     "mark": "C16",
+     "x": 0.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "02af0e308b",
+     "mark": "C17",
+     "x": 6.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "a78464aa01",
+     "mark": "C18",
+     "x": 12.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "9a424e27f9",
+     "mark": "C19",
+     "x": 18.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    },
+    {
+     "id": "65ab85c25b",
+     "mark": "C20",
+     "x": 24.0,
+     "y": 0.0,
+     "b": 0.4,
+     "d": 0.6,
+     "angle": 0.0,
+     "grade": "M30"
+    }
+   ],
+   "beams": [
+    {
+     "id": "ff9baf1124",
+     "mark": "B28",
+     "x1": 0.0,
+     "y1": 0.0,
+     "x2": 6.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "a2cef9743f",
+     "mark": "B29",
+     "x1": 6.0,
+     "y1": 0.0,
+     "x2": 12.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "a7e8e5efb1",
+     "mark": "B30",
+     "x1": 12.0,
+     "y1": 0.0,
+     "x2": 18.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "0ada4ef7ee",
+     "mark": "B31",
+     "x1": 18.0,
+     "y1": 0.0,
+     "x2": 24.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "0f699f3d9a",
+     "mark": "B24",
+     "x1": 6.0,
+     "y1": 0.0,
+     "x2": 6.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "2ce66072d9",
+     "mark": "B15",
+     "x1": 6.0,
+     "y1": 6.0,
+     "x2": 6.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "fbfcf4a1ae",
+     "mark": "B6",
+     "x1": 6.0,
+     "y1": 12.0,
+     "x2": 6.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "f7a342a3eb",
+     "mark": "B22",
+     "x1": 24.0,
+     "y1": 6.0,
+     "x2": 18.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "1d6d268dae",
+     "mark": "B21",
+     "x1": 18.0,
+     "y1": 6.0,
+     "x2": 12.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "0e42047624",
+     "mark": "B20",
+     "x1": 12.0,
+     "y1": 6.0,
+     "x2": 6.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "d85983cac1",
+     "mark": "B19",
+     "x1": 6.0,
+     "y1": 6.0,
+     "x2": 0.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "a0413197d9",
+     "mark": "B5",
+     "x1": 0.0,
+     "y1": 18.0,
+     "x2": 0.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "c5a183c7bf",
+     "mark": "B14",
+     "x1": 0.0,
+     "y1": 12.0,
+     "x2": 0.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "94cd878368",
+     "mark": "B23",
+     "x1": 0.0,
+     "y1": 6.0,
+     "x2": 0.0,
+     "y2": 0.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "c59648c1c3",
+     "mark": "B25",
+     "x1": 12.0,
+     "y1": 0.0,
+     "x2": 12.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "34d6c0fe90",
+     "mark": "B16",
+     "x1": 12.0,
+     "y1": 6.0,
+     "x2": 12.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "aad76ad489",
+     "mark": "B7",
+     "x1": 12.0,
+     "y1": 12.0,
+     "x2": 12.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "c20262d5ca",
+     "mark": "B26",
+     "x1": 18.0,
+     "y1": 0.0,
+     "x2": 18.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "5bed74fa18",
+     "mark": "B17",
+     "x1": 18.0,
+     "y1": 6.0,
+     "x2": 18.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "40e7291963",
+     "mark": "B8",
+     "x1": 18.0,
+     "y1": 12.0,
+     "x2": 18.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "a12cf349a1",
+     "mark": "B27",
+     "x1": 24.0,
+     "y1": 0.0,
+     "x2": 24.0,
+     "y2": 6.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "72240d7c77",
+     "mark": "B18",
+     "x1": 24.0,
+     "y1": 6.0,
+     "x2": 24.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "3533a6d747",
+     "mark": "B9",
+     "x1": 24.0,
+     "y1": 12.0,
+     "x2": 24.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "7ab08197c9",
+     "mark": "B13",
+     "x1": 24.0,
+     "y1": 12.0,
+     "x2": 18.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "d5db4f7144",
+     "mark": "B12",
+     "x1": 18.0,
+     "y1": 12.0,
+     "x2": 12.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "07df27ef3c",
+     "mark": "B11",
+     "x1": 12.0,
+     "y1": 12.0,
+     "x2": 6.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "3f8219b706",
+     "mark": "B10",
+     "x1": 6.0,
+     "y1": 12.0,
+     "x2": 0.0,
+     "y2": 12.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": false,
+     "wall_thk": 0.115,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": false,
+     "include_plaster": false,
+     "parapet": null,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "cc65a6c722",
+     "mark": "B4",
+     "x1": 24.0,
+     "y1": 18.0,
+     "x2": 18.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "7e10c99072",
+     "mark": "B3",
+     "x1": 18.0,
+     "y1": 18.0,
+     "x2": 12.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "9bc7630878",
+     "mark": "B2",
+     "x1": 12.0,
+     "y1": 18.0,
+     "x2": 6.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    },
+    {
+     "id": "439215e08c",
+     "mark": "B1",
+     "x1": 6.0,
+     "y1": 18.0,
+     "x2": 0.0,
+     "y2": 18.0,
+     "b": 0.3,
+     "d": 0.6,
+     "grade": "M30",
+     "role": "auto",
+     "cantilever": false,
+     "external": true,
+     "wall_thk": 0.23,
+     "wall_height": null,
+     "wall_density": 20.0,
+     "plaster_thk": 0.03,
+     "plaster_density": 20.0,
+     "include_self": true,
+     "include_wall": true,
+     "include_plaster": true,
+     "parapet": 1.0,
+     "point_loads": [],
+     "part_loads": []
+    }
+   ],
+   "notes": ""
+  }
+ ],
+ "levels": [
+  {
+   "name": "Plinth",
+   "plan": "Ground",
+   "height": 2.0,
+   "grade": "M30",
+   "live_reduction": 0.0
+  },
+  {
+   "name": "Floor 1",
+   "plan": "Typical",
+   "height": 4.2,
+   "grade": "M30",
+   "live_reduction": 0.0
+  },
+  {
+   "name": "Floor 2",
+   "plan": "Typical",
+   "height": 3.6,
+   "grade": "M30",
+   "live_reduction": 0.0
+  },
+  {
+   "name": "Floor 3",
+   "plan": "Typical",
+   "height": 3.6,
+   "grade": "M30",
+   "live_reduction": 0.0
+  },
+  {
+   "name": "Floor 4",
+   "plan": "Typical",
+   "height": 3.6,
+   "grade": "M30",
+   "live_reduction": 0.0
+  },
+  {
+   "name": "Floor 5",
+   "plan": "Typical",
+   "height": 3.6,
+   "grade": "M30",
+   "live_reduction": 0.0
+  },
+  {
+   "name": "Roof",
+   "plan": "Roof",
+   "height": 3.6,
+   "grade": "M30",
+   "live_reduction": 0.0
+  }
+ ],
+ "seismic": {
+  "enabled": true,
+  "zone": "II",
+  "importance": 1.2,
+  "response_reduction": 5.0,
+  "soil": "medium",
+  "damping": 0.05,
+  "infill": true,
+  "base_level": 1,
+  "accidental_torsion": true
+ },
+ "wind": {
+  "enabled": true,
+  "city": "Bengaluru",
+  "basic_speed": 33.0,
+  "terrain": 3,
+  "k1": 1.0,
+  "k3": 1.0,
+  "k4": 1.0,
+  "kd": 0.9,
+  "ka": 1.0,
+  "kc": 0.9,
+  "force_coeff": 1.2,
+  "parapet": 1.0,
+  "below_ground": 2.0
+ },
+ "design": {
+  "code": "IS456:2000",
+  "fy_main": 500.0,
+  "fy_shear": 500.0,
+  "beam_cover": 0.025,
+  "column_cover": 0.04,
+  "slab_cover": 0.02,
+  "footing_cover": 0.05,
+  "sbc": 200.0,
+  "footing_self_weight_pct": 10.0,
+  "min_column_steel_pct": 0.8,
+  "max_column_steel_pct": 4.0,
+  "two_way_ratio_limit": 2.0,
+  "continuity_in_load_transfer": false,
+  "torsion_release": true,
+  "effective_length_factor": 1.2,
+  "crack_beam": 0.35,
+  "crack_column": 0.7,
+  "rates": {
+   "concrete_m20": 6500.0,
+   "concrete_m25": 7000.0,
+   "concrete_m30": 7600.0,
+   "concrete_m35": 8200.0,
+   "concrete_m40": 8800.0,
+   "steel_kg": 75.0,
+   "formwork_m2": 550.0
+  }
+ },
+ "column_sizes": {
+  "C1": {
+   "7": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "6": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "5": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "4": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "3": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "2": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "1": [
+    0.4,
+    0.65,
+    0.0
+   ]
+  },
+  "C2": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C3": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C4": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C5": {
+   "7": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "6": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "5": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "4": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "3": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "2": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "1": [
+    0.4,
+    0.65,
+    0.0
+   ]
+  },
+  "C6": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C7": {
+   "7": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "6": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "5": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "4": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "3": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "2": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "1": [
+    0.5,
+    0.95,
+    0.0
+   ]
+  },
+  "C8": {
+   "7": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "6": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "5": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "4": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "3": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "2": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "1": [
+    0.5,
+    0.95,
+    0.0
+   ]
+  },
+  "C9": {
+   "7": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "6": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "5": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "4": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "3": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "2": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "1": [
+    0.5,
+    0.95,
+    0.0
+   ]
+  },
+  "C10": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C11": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C12": {
+   "7": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "6": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "5": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "4": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "3": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "2": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "1": [
+    0.5,
+    0.95,
+    0.0
+   ]
+  },
+  "C13": {
+   "7": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "6": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "5": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "4": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "3": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "2": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "1": [
+    0.5,
+    0.95,
+    0.0
+   ]
+  },
+  "C14": {
+   "7": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "6": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "5": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "4": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "3": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "2": [
+    0.5,
+    0.95,
+    0.0
+   ],
+   "1": [
+    0.5,
+    0.95,
+    0.0
+   ]
+  },
+  "C15": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C16": {
+   "7": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "6": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "5": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "4": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "3": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "2": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "1": [
+    0.4,
+    0.65,
+    0.0
+   ]
+  },
+  "C17": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C18": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C19": {
+   "7": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "6": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "5": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "4": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "3": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "2": [
+    0.45,
+    0.8,
+    0.0
+   ],
+   "1": [
+    0.45,
+    0.8,
+    0.0
+   ]
+  },
+  "C20": {
+   "7": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "6": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "5": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "4": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "3": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "2": [
+    0.4,
+    0.65,
+    0.0
+   ],
+   "1": [
+    0.4,
+    0.65,
+    0.0
+   ]
+  }
+ },
+ "joint_loads": [],
+ "supports": {},
+ "meta": {
+  "grid_spec": {
+   "name": "Office G+5",
+   "bays_x": [
+    6.0,
+    6.0,
+    6.0,
+    6.0
+   ],
+   "bays_y": [
+    6.0,
+    6.0,
+    6.0
+   ],
+   "upper_floors": 5,
+   "ground_height": 4.2,
+   "floor_height": 3.6,
+   "foundation_depth": 2.0,
+   "occupancy": "office",
+   "slab_thickness": 0.225,
+   "roof_live": 1.5,
+   "roof_finish": 2.0,
+   "parapet": 1.0,
+   "column": [
+    0.4,
+    0.6
+   ],
+   "beam_int": [
+    0.3,
+    0.6
+   ],
+   "beam_ext": [
+    0.3,
+    0.6
+   ],
+   "grade": "M30",
+   "balcony": null,
+   "mumty": false,
+   "city": "Bengaluru",
+   "auto_size": true
+  },
+  "template": {
+   "key": "office_g5",
+   "failures": 0,
+   "log": [
+    "Iteration 1: all members and storey drifts pass"
+   ]
+  }
+ },
+ "schema": 1,
+ "app": "PlanWin AI Pro",
+ "saved_with": "1.0.0",
+ "saved_at": "2026-10-08T05:13:14"
+}

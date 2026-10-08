@@ -1,0 +1,102 @@
+city,basic_wind_speed_mps,seismic_zone,source
+Agra,47,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Ahmadabad,39,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Ahmedabad,39,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Ajmer,47.0,II,PlanWin legacy table
+Allahabad,47,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Almora,47.0,IV,PlanWin legacy table
+Ambala,,IV,PlanWin legacy table
+Amritsar,47.0,IV,PlanWin legacy table
+Asansol,47.0,III,PlanWin legacy table
+Aurangabad,39,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Bahraich,47.0,IV,PlanWin legacy table
+Bangalore,33,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Barauni,47.0,IV,PlanWin legacy table
+Bareilly,47.0,III,PlanWin legacy table
+Bengaluru,33,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Bhatinda,47.0,III,PlanWin legacy table
+Bhilai,39.0,II,PlanWin legacy table
+Bhopal,39,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Bhubaneshwar,50.0,III,PlanWin legacy table
+Bhubaneswar,50,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Bhuj,50,V,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Bikaner,47.0,III,PlanWin legacy table
+Bokaro,47.0,III,PlanWin legacy table
+Burdwan,,III,PlanWin legacy table
+Calcutta,50,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Calicut,39.0,III,PlanWin legacy table
+Chandigarh,47,IV,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Chennai,50,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Chitrgaurad,,II,PlanWin legacy table
+Coimbatore,39,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Cuttack,50.0,III,PlanWin legacy table
+Darbhanga,55.0,V,PlanWin legacy table
+Darjeeling,47.0,IV,PlanWin legacy table
+Dehradun,47,IV,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Delhi,47,IV,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Durgapur,47.0,III,PlanWin legacy table
+Gangtok,47.0,IV,PlanWin legacy table
+Gauhati,50.0,V,PlanWin legacy table
+Gaya,39.0,III,PlanWin legacy table
+Gorakhpur,47.0,IV,PlanWin legacy table
+Guwahati,50,V,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Hyderabad,44,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Imphal,47.0,V,PlanWin legacy table
+Indore,39,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Jabalpur,47.0,III,PlanWin legacy table
+Jaipur,47,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Jamshedpur,47.0,II,PlanWin legacy table
+Jhansi,47.0,II,PlanWin legacy table
+Jodhpur,47.0,II,PlanWin legacy table
+Jorhat,,V,PlanWin legacy table
+Kanpur,47,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Kathmandu,,V,PlanWin legacy table
+Kochi,39,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Kohima,44.0,V,PlanWin legacy table
+Kolkata,50,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Kurnool,39.0,II,PlanWin legacy table
+Lucknow,47,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Ludhiana,47.0,IV,PlanWin legacy table
+Madras,50,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Madurai,39.0,II,PlanWin legacy table
+Mandi,39.0,V,PlanWin legacy table
+Mangalore,39.0,III,PlanWin legacy table
+Monghyr,,IV,PlanWin legacy table
+Moradabad,47.0,IV,PlanWin legacy table
+Mumbai,44,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Mysore,33.0,II,PlanWin legacy table
+Nagpur,44,II,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Nainital,47.0,IV,PlanWin legacy table
+Nashik,39,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Nasik,39.0,III,PlanWin legacy table
+Navi Mumbai,44,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Nellore,50.0,II,PlanWin legacy table
+New Delhi,47,IV,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Panjim,39.0,III,PlanWin legacy table
+Patiala,47.0,III,PlanWin legacy table
+Patna,47,IV,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Pilibhit,,IV,PlanWin legacy table
+Pondicherry,50.0,II,PlanWin legacy table
+Pune,39,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Raipur,39.0,II,PlanWin legacy table
+Rajkot,39.0,III,PlanWin legacy table
+Ranchi,39.0,II,PlanWin legacy table
+Roorkee,39.0,IV,PlanWin legacy table
+Rourkela,39.0,II,PlanWin legacy table
+Sadiya,,V,PlanWin legacy table
+Shillong,50,V,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Simla,39.0,IV,PlanWin legacy table
+Sironj,,II,PlanWin legacy table
+Srinagar,39,V,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Surat,44,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Tezpur,,V,PlanWin legacy table
+Thane,44,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Thanjavur,,II,PlanWin legacy table
+Thiruvananthapuram,39,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Tiruchirapalli,47.0,II,PlanWin legacy table
+Trivandrum,39.0,III,PlanWin legacy table
+Udaipur,47.0,II,PlanWin legacy table
+Vadodara,44.0,III,PlanWin legacy table
+Varanasi,47,III,IS 875-3:2015 / IS 1893-1:2016 (verify)
+Vijayawada,50.0,III,PlanWin legacy table
+Visakhapatnam,50,II,IS 875-3:2015 / IS 1893-1:2016 (verify)

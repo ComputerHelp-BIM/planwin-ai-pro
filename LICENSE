@@ -1,0 +1,13 @@
+PlanWin AI Pro
+Copyright (c) 2026 Computer Help / Building Software. All rights reserved.
+
+This software and its documentation are proprietary and confidential. Use, copying, modification,
+distribution, reverse engineering or disclosure, in whole or in part, is prohibited except under a
+valid licence agreement with Computer Help.
+
+THE SOFTWARE IS A DESIGN AID PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. ALL RESULTS MUST BE
+VERIFIED BY A QUALIFIED STRUCTURAL ENGINEER. IN NO EVENT SHALL COMPUTER HELP BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+Third-party components (PySide6/Qt – LGPLv3, NumPy, SciPy, ezdxf, openpyxl, ReportLab, requests,
+cryptography, keyring) are used under their respective open-source licences.

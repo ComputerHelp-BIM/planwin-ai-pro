@@ -1,0 +1,95 @@
+name: build-windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Read version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'import planwin_ai; print(planwin_ai.__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build folder app (PyInstaller)
+        run: pyinstaller packaging/planwin_ai.spec --noconfirm --clean
+
+      - name: Self-test the frozen exe
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist/PlanWinAIPro/PlanWinAIPro.exe" -ArgumentList "--selftest" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw "selftest failed with exit code $($p.ExitCode)" }
+
+      - name: Build single-file portable exe
+        shell: pwsh
+        run: |
+          $env:PLANWIN_ONEFILE = "1"
+          pyinstaller packaging/planwin_ai.spec --noconfirm
+          Remove-Item Env:PLANWIN_ONEFILE
+
+      - name: Self-test the portable exe
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist/PlanWinAIPro.exe" -ArgumentList "--selftest" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw "portable selftest failed with exit code $($p.ExitCode)" }
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc "/DAppVersion=${{ steps.ver.outputs.version }}" packaging/installer.iss
+
+      - name: Package artifacts
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          Compress-Archive -Path dist/PlanWinAIPro/* -DestinationPath "dist/PlanWinAIPro-$v-win64-folder.zip"
+          Move-Item dist/PlanWinAIPro.exe "dist/PlanWinAIPro-$v-win64-portable.exe"
+          Get-ChildItem dist -File | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlanWinAIPro-${{ steps.ver.outputs.version }}-windows
+          path: |
+            dist/*-setup.exe
+            dist/*-portable.exe
+            dist/*-folder.zip
+          retention-days: 30
+
+      - name: Publish GitHub release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*-setup.exe
+            dist/*-portable.exe
+            dist/*-folder.zip
+          generate_release_notes: true
