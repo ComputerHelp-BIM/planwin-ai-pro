@@ -22,7 +22,18 @@ from .beamcalc import LinLoad, PtLoad
 from .lateral import SeismicResult, WindResult, seismic_static, wind_storey_forces
 from .model import Project, concrete_E, grade_fck
 from .plan_engine import Issue, PlanEngine, PlanResult, column_on_beam
-from .solver import FMember, FNode, FrameResults, FrameSolveError, FrameSolver, MLoad, MPoint, section_forces
+from .solver import (
+    Diaphragm,
+    FMember,
+    FNode,
+    FrameResults,
+    FrameSolveError,
+    FrameSolver,
+    MLoad,
+    MPoint,
+    MTorque,
+    section_forces,
+)
 
 NODE_TOL = 0.02
 
@@ -83,6 +94,8 @@ class LevelInfo:
     weight: float = 0.0
     nodes: list[int] = field(default_factory=list)
     column_nodes: dict[str, int] = field(default_factory=dict)  # mark -> node id
+    wall_nodes: dict[str, int] = field(default_factory=dict)  # wall mark -> centre node id
+    master: int | None = None  # rigid-diaphragm master node (at the centre of mass)
 
 
 class FrameModel:
@@ -98,6 +111,7 @@ class FrameModel:
         self._reg: dict[int, list[tuple[float, float, int]]] = {}
         self._nid = 0
         self._mid = 0
+        self.solver: FrameSolver | None = None
 
     # ------------------------------------------------------------ nodes
     def _node(self, lvl: int, x: float, y: float, z: float, create: bool = True, tag: str = "") -> int | None:
@@ -169,6 +183,19 @@ class FrameModel:
                         self._err(
                             f"Column {c.mark} at level {self.levels[i + 1].name} has no column or beam below", c.pos
                         )
+            # shear walls: centre joint (wide column) + joints at the ends and where beams cross the wall
+            for w in plan.walls:
+                if w.length < 1e-6:
+                    continue
+                cx, cy = w.centre
+                self.levels[i].wall_nodes[w.mark] = self._node(i, cx, cy, z, tag=f"wall {w.mark}")
+                for x, y in (w.p1, w.p2):
+                    self._node(i, x, y, z)
+                for b in plan.beams:
+                    hit = G.segment_intersection(b.p1, b.p2, w.p1, w.p2, tol=w.thickness / 2 + 0.03)
+                    if hit and 1e-6 < hit[1] < 1 - 1e-6:
+                        q = G.lerp(b.p1, b.p2, hit[1])
+                        self._node(i, q[0], q[1], z)
 
         # ---- pass 2: members
         for i in range(1, len(self.levels)):
@@ -215,6 +242,7 @@ class FrameModel:
                     x0, x1 = t0 * L, t1 * L
                     self._mid += 1
                     m = FMember(self._mid, n0, n1, "beam", b.b, b.d, E, 0.0, i, b.mark, b.id, lv.grade, tf, cb_f)
+                    ux, uy = (b.x2 - b.x1) / L, (b.y2 - b.y1) / L
                     for case, cname in (("D", "DL"), ("L", "LL")):
                         lst = []
                         for ld in loads:
@@ -224,6 +252,10 @@ class FrameModel:
                                 a, bb = max(ld.a, x0), min(ld.b, x1)
                                 if bb - a > 1e-9:
                                     lst.append(MLoad(a - x0, bb - x0, (0, 0, -ld.w_at(a)), (0, 0, -ld.w_at(bb))))
+                                    if ld.ecc is not None:
+                                        # load at r off the axis: torque per metre t = (r × F)·x̂ = w (rx uy − ry ux)
+                                        k = ld.ecc[0] * uy - ld.ecc[1] * ux
+                                        lst.append(MTorque(a - x0, bb - x0, ld.w_at(a) * k, ld.w_at(bb) * k))
                             elif x0 - 1e-9 <= ld.x < x1 - 1e-9 or (abs(ld.x - x1) < 1e-9 and t1 >= 1 - 1e-9):
                                 lst.append(MPoint(ld.x - x0, (0, 0, -ld.P)))
                         m.loads[cname] = lst
@@ -274,11 +306,149 @@ class FrameModel:
                 ]
                 m.loads["LL"] = []
                 self.members[m.id] = m
+            self._walls(i, plan, res, E, tf, cc_f, lv.grade)
         for nid, nd in self.nodes.items():
             self.levels[nd.level].nodes.append(nid)
         self._joint_loads()
+        self._diaphragms()
         self._lateral()
         return self
+
+    # ------------------------------------------------------------ shear walls
+    def _walls(self, i: int, plan, res, E: float, tf: float, crack: float, grade: str):
+        """Wide-column model: a wall member at the wall centre between levels, rigid links
+        from the centre to every joint inside the wall at this level (ends, beam joints)."""
+        z = self.levels[i].z
+        for w in plan.walls:
+            top = self.levels[i].wall_nodes.get(w.mark)
+            if top is None:
+                continue
+            cx, cy = w.centre
+            for px, py, nid in list(self._reg[i]):
+                if nid != top and w.contains((px, py), 0.05) and math.hypot(px - cx, py - cy) > 1e-3:
+                    self._mid += 1
+                    link = FMember(
+                        self._mid,
+                        top,
+                        nid,
+                        "link",
+                        1.0,
+                        1.0,
+                        E * 100.0,
+                        0.0,
+                        i,
+                        f"{w.mark}-link",
+                        w.mark,
+                        grade,
+                        1.0,
+                        1.0,
+                    )
+                    link.loads = {"DL": [], "LL": []}
+                    self.members[link.id] = link
+            if i == 1:
+                bot = self._node(0, cx, cy, 0.0, tag=f"wall {w.mark}")
+                self.nodes[bot].support = self.p.supports.get(w.mark, "fixed")
+                self.levels[0].wall_nodes[w.mark] = bot
+            else:
+                bot = self.levels[i - 1].wall_nodes.get(w.mark)
+                if bot is None:
+                    self._err(
+                        f"Wall {w.mark} at level {self.levels[i].name} has no wall below it (walls must be "
+                        "continuous to the foundation)",
+                        w.centre,
+                    )
+                    continue
+            H = z - self.nodes[bot].z
+            self._mid += 1
+            # b = thickness along local y (perpendicular to the wall), d = length along local z (the wall)
+            m = FMember(
+                self._mid,
+                bot,
+                top,
+                "wall",
+                w.thickness,
+                w.length,
+                E,
+                w.angle - 90.0,
+                i,
+                w.mark,
+                w.mark,
+                grade,
+                tf,
+                crack,
+            )
+            m.loads["DL"] = [
+                MLoad(0, H, (0, 0, -w.thickness * w.length * 25.0), (0, 0, -w.thickness * w.length * 25.0))
+            ]
+            m.loads["LL"] = []
+            self.members[m.id] = m
+            # slab edges bearing directly on the wall: resultant at the centre joint plus its moment
+            wl = res.walls.get(w.id) if res else None
+            if wl:
+                ux, uy = (w.x2 - w.x1) / w.length, (w.y2 - w.y1) / w.length
+                for case, cname in (("D", "DL"), ("L", "LL")):
+                    lds = [ld for ld in wl.slab_loads if ld.case == case]
+                    F = sum(ld.resultant()[0] for ld in lds)
+                    if F <= 1e-9:
+                        continue
+                    xbar = sum(ld.resultant()[0] * ld.resultant()[1] for ld in lds) / F
+                    e = xbar - w.length / 2
+                    vec = self.nodal.setdefault(cname, {}).setdefault(top, np.zeros(6))
+                    vec[2] -= F
+                    vec[3] += -F * e * uy  # r × F with r = e·û, F = (0, 0, −F)
+                    vec[4] += F * e * ux
+
+    # ------------------------------------------------------------ rigid diaphragms
+    def _diaphragm_levels(self) -> list[int]:
+        if not self.p.seismic.rigid_diaphragm:
+            return []
+        out = []
+        for i in range(1, len(self.levels)):
+            plan = self.p.plan(self.levels[i].plan)
+            if plan and plan.floor_type != "ground" and any(s.distribution != "on_grade" for s in plan.slabs):
+                out.append(i)
+        return out
+
+    def _gravity_points(self, i: int) -> list[tuple[float, float, float]]:
+        """(x, y, weight) of the floor's gravity load at its columns and walls (dead + 25 % live)."""
+        lv = self.levels[i]
+        res = lv.result
+        plan = self.p.plan(lv.plan)
+        pts = []
+        if res and plan:
+            for c in plan.columns:
+                cl = res.columns.get(c.id)
+                if cl:
+                    pts.append((c.x, c.y, max(cl.dead + 0.25 * cl.live, 0.0)))
+            for w in plan.walls:
+                wl = res.walls.get(w.id)
+                if wl:
+                    pts.append((*w.centre, max(wl.dead + 0.25 * wl.live, 0.0)))
+        return pts
+
+    def _diaphragms(self):
+        for i in self._diaphragm_levels():
+            lv = self.levels[i]
+            pts = self._gravity_points(i)
+            W = sum(w for _, _, w in pts)
+            if W > 1e-9:
+                xm = sum(x * w for x, _, w in pts) / W
+                ym = sum(y * w for _, y, w in pts) / W
+            else:
+                plan = self.p.plan(lv.plan)
+                x0, y0, x1, y1 = plan.extents()
+                xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+            self._nid += 1
+            self.nodes[self._nid] = FNode(self._nid, xm, ym, lv.z, i, tag=f"CM {lv.name}")
+            lv.master = self._nid
+            lv.nodes.append(self._nid)
+
+    def diaphragm_list(self) -> list[Diaphragm]:
+        out = []
+        for lv in self.levels:
+            if lv.master is not None:
+                out.append(Diaphragm(lv.master, [n for n in lv.nodes if n != lv.master]))
+        return out
 
     # ------------------------------------------------------------ loads
     def _joint_loads(self):
@@ -297,7 +467,7 @@ class FrameModel:
         weights = [0.0] * len(self.levels)
         col_w = {}
         for m in self.members.values():
-            if m.kind == "column":
+            if m.kind in ("column", "wall"):
                 h = abs(self.nodes[m.n2].z - self.nodes[m.n1].z)
                 w = m.b * m.d * 25.0 * h
                 col_w.setdefault(m.level, 0.0)
@@ -330,12 +500,18 @@ class FrameModel:
         return bd.get("beam_wall", 0.0) + bd.get("beam_plaster", 0.0)
 
     def _torsion(self, case: str, level: int, force: float, axis: int, width: float):
-        """Accidental torsion Mt = F·0.05·b as a force couple on the column nodes (cl 7.8.2)."""
+        """Accidental torsion Mt = F·0.05·b (cl 7.8.2): a moment at the diaphragm master, or a
+        force couple on the column nodes when the floor is not a rigid diaphragm."""
         lv = self.levels[level]
-        nids = list(lv.column_nodes.values())
-        if len(nids) < 2 or abs(force) < 1e-12:
+        if abs(force) < 1e-12:
             return
         mt = force * 0.05 * width
+        if lv.master is not None:
+            self.nodal.setdefault(case, {}).setdefault(lv.master, np.zeros(6))[5] += mt
+            return
+        nids = list(lv.column_nodes.values())
+        if len(nids) < 2:
+            return
         other = 1 if axis == 0 else 0  # lever-arm coordinate
         cs = [(self.nodes[n].y if other == 1 else self.nodes[n].x) for n in nids]
         cm = sum(cs) / len(cs)
@@ -346,10 +522,21 @@ class FrameModel:
             vec = self.nodal.setdefault(case, {}).setdefault(n, np.zeros(6))
             vec[axis] += mt * (c - cm) / den
 
-    def _distribute(self, case: str, level: int, force: float, axis: int):
+    def _distribute(self, case: str, level: int, force: float, axis: int, at: tuple[float, float] | None = None):
+        """Storey force: at the diaphragm master (moved from ``at`` with its moment), else shared by
+        the column joints in proportion to their gravity load."""
         lv = self.levels[level]
+        if abs(force) < 1e-12:
+            return
+        if lv.master is not None:
+            vec = self.nodal.setdefault(case, {}).setdefault(lv.master, np.zeros(6))
+            vec[axis] += force
+            if at is not None:  # force acting at `at`, not at the centre of mass
+                m = self.nodes[lv.master]
+                vec[5] += (at[0] - m.x) * force if axis == 1 else -(at[1] - m.y) * force
+            return
         cols = list(lv.column_nodes.items())
-        if not cols or abs(force) < 1e-12:
+        if not cols:
             return
         res = lv.result
         wts = []
@@ -428,6 +615,12 @@ class FrameModel:
                 self.wind[dname] = r
                 for i, f in enumerate(r.forces):
                     lv_w = self.levels[i]
+                    if lv_w.master is not None:
+                        # resultant at the centre of the exposed facade (plan centre of the floor)
+                        pl = used[i - 1] if 1 <= i <= len(used) else None
+                        a0, b0, a1, b1 = G.bbox(pl.all_points()) if pl and pl.all_points() else (x0, y0, x1, y1)
+                        self._distribute(dname, i, f, axis, at=((a0 + a1) / 2, (b0 + b1) / 2))
+                        continue
                     cols = list(lv_w.column_nodes.values())
                     for nid in cols:
                         vec = self.nodal.setdefault(dname, {}).setdefault(nid, np.zeros(6))
@@ -447,7 +640,8 @@ class FrameModel:
     def analyze(self) -> FrameAnalysis:
         if not self.members:
             raise FrameSolveError("Frame has no members – build plans and levels first")
-        res = FrameSolver(self.nodes, self.members, self.nodal).solve(self.cases())
+        self.solver = FrameSolver(self.nodes, self.members, self.nodal, self.diaphragm_list())
+        res = self.solver.solve(self.cases())
         return FrameAnalysis(
             self,
             res,
@@ -512,11 +706,7 @@ class FrameAnalysis:
             if case not in self.res.end_forces or a == 0:
                 continue
             f += a * self.res.end_forces[case][mid]
-            for ld in m.loads.get(case, []):
-                if isinstance(ld, MLoad):
-                    loads.append(MLoad(ld.a, ld.b, tuple(a * v for v in ld.w1), tuple(a * v for v in ld.w2)))
-                else:
-                    loads.append(MPoint(ld.x, tuple(a * v for v in ld.P)))
+            loads.extend(ld.scaled(a) for ld in m.loads.get(case, []))
         xs = np.linspace(0.0, L, n)
         sf = section_forces(m, self.model.nodes, f, loads, xs)
         return MemberForces(sf["x"], sf["N"], sf["Vy"], sf["Vz"], sf["T"], sf["My"], sf["Mz"])

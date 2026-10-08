@@ -30,6 +30,9 @@ class LinLoad:
     w2: float
     case: str = "D"
     src: str = ""
+    #: plan vector (m) from the beam axis to the line of action – set for cantilever slab
+    #: loads, whose eccentricity twists the supporting beam (equilibrium torsion)
+    ecc: tuple[float, float] | None = None
 
     def resultant(self, lo: float = -1e18, hi: float = 1e18) -> tuple[float, float]:
         """Force and centroid of the part of the load inside [lo, hi]."""

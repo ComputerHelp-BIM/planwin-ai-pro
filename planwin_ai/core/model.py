@@ -25,7 +25,8 @@ from typing import Any
 
 from . import geometry as G
 
-SCHEMA_VERSION = 1
+#: 2 (1.1.0): shear walls, grid lines, staircases, water tanks, rigid diaphragm and seismic method
+SCHEMA_VERSION = 2
 
 
 _id_seed: str | None = None
@@ -198,6 +199,58 @@ class Beam:
 
 
 @dataclass
+class Wall:
+    """RC shear wall (structural wall) from (x1, y1) to (x2, y2), centred on that line.
+
+    Walls are stacked between levels by ``mark`` exactly like columns.  In the 3-D
+    model a wall is a wide column at its centre joined to its ends (and to any beam
+    framing into it) by rigid links – the classic "wide column frame" idealisation.
+    """
+
+    id: str = field(default_factory=new_id)
+    mark: str = "W1"
+    x1: float = 0.0
+    y1: float = 0.0
+    x2: float = 3.0
+    y2: float = 0.0
+    thickness: float = 0.2
+    grade: str = "M25"
+
+    @property
+    def p1(self) -> G.Point:
+        return (self.x1, self.y1)
+
+    @property
+    def p2(self) -> G.Point:
+        return (self.x2, self.y2)
+
+    @property
+    def length(self) -> float:
+        return G.dist(self.p1, self.p2)
+
+    @property
+    def centre(self) -> G.Point:
+        return ((self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2)
+
+    @property
+    def angle(self) -> float:
+        """Direction of the wall in plan (degrees from global X)."""
+        return math.degrees(math.atan2(self.y2 - self.y1, self.x2 - self.x1))
+
+    def corners(self) -> list[G.Point]:
+        cx, cy = self.centre
+        return G.rect_corners(cx, cy, self.length, self.thickness, self.angle)
+
+    def contains(self, p: G.Point, tol: float = 0.02) -> bool:
+        """True when ``p`` lies inside the wall footprint grown by ``tol``."""
+        L = self.length
+        if L < 1e-9:
+            return G.dist(p, self.p1) <= self.thickness / 2 + tol
+        t = G.project_param(p, self.p1, self.p2)
+        return -tol / L <= t <= 1 + tol / L and G.point_line_distance(p, self.p1, self.p2) <= self.thickness / 2 + tol
+
+
+@dataclass
 class Plan:
     """A PlanWin floor plan."""
 
@@ -208,11 +261,12 @@ class Plan:
     slabs: list[Slab] = field(default_factory=list)
     columns: list[Column] = field(default_factory=list)
     beams: list[Beam] = field(default_factory=list)
+    walls: list[Wall] = field(default_factory=list)
     notes: str = ""
 
     # ------------------------------------------------------------ lookups
     def find(self, obj_id: str):
-        for coll in (self.slabs, self.columns, self.beams):
+        for coll in (self.slabs, self.columns, self.beams, self.walls):
             for o in coll:
                 if o.id == obj_id:
                     return o
@@ -220,11 +274,15 @@ class Plan:
 
     def remove(self, obj_ids) -> int:
         ids = set(obj_ids)
-        n0 = len(self.slabs) + len(self.columns) + len(self.beams)
+        n0 = len(self.slabs) + len(self.columns) + len(self.beams) + len(self.walls)
         self.slabs = [s for s in self.slabs if s.id not in ids]
         self.columns = [c for c in self.columns if c.id not in ids]
         self.beams = [b for b in self.beams if b.id not in ids]
-        return n0 - (len(self.slabs) + len(self.columns) + len(self.beams))
+        self.walls = [w for w in self.walls if w.id not in ids]
+        return n0 - (len(self.slabs) + len(self.columns) + len(self.beams) + len(self.walls))
+
+    def wall_at(self, p: G.Point, tol: float = 0.02) -> Wall | None:
+        return next((w for w in self.walls if w.contains(p, tol)), None)
 
     def column_at(self, p: G.Point, tol: float = 0.05) -> Column | None:
         best, bd = None, tol
@@ -241,6 +299,8 @@ class Plan:
         pts.extend(c.pos for c in self.columns)
         for b in self.beams:
             pts.extend((b.p1, b.p2))
+        for w in self.walls:
+            pts.extend((w.p1, w.p2))
         return pts
 
     def extents(self):
@@ -248,7 +308,7 @@ class Plan:
 
     # ------------------------------------------------------------ numbering
     def next_mark(self, prefix: str) -> str:
-        coll = {"S": self.slabs, "C": self.columns, "B": self.beams}[prefix]
+        coll = {"S": self.slabs, "C": self.columns, "B": self.beams, "W": self.walls}[prefix]
         used = {o.mark for o in coll}
         for i in itertools.count(1):
             m = f"{prefix}{i}"
@@ -303,6 +363,12 @@ class SeismicParams:
     infill: bool = True  # Ta = 0.09h/sqrt(d) when True
     base_level: int = 1  # level index from which height is measured (plinth)
     accidental_torsion: bool = True  # IS 1893-1:2016 cl 7.8.2 (±0.05 b)
+    #: "auto" – response spectrum where IS 1893-1:2016 cl 7.7.1 requires it, else equivalent static;
+    #: "static" – equivalent static only; "response_spectrum" – always (scaled to the static base shear)
+    method: str = "auto"
+    #: floors act as rigid diaphragms (cl 7.6.4): lateral forces at the centre of mass,
+    #: one translation pair + rotation per floor
+    rigid_diaphragm: bool = True
 
 
 @dataclass
@@ -371,6 +437,12 @@ class Project:
     joint_loads: list[dict[str, Any]] = field(default_factory=list)
     #: support conditions per column mark: "fixed" | "pinned"
     supports: dict[str, str] = field(default_factory=dict)
+    #: grid lines shown on every plan: [{"name": "A", "axis": "x", "pos": 0.0}, …] (axis "x" = line x = pos)
+    grids: list[dict[str, Any]] = field(default_factory=list)
+    #: staircase definitions from the stair wizard (recomputed loads are applied to beams)
+    stairs: list[dict[str, Any]] = field(default_factory=list)
+    #: overhead water tanks from the tank wizard (applied as joint loads)
+    water_tanks: list[dict[str, Any]] = field(default_factory=list)
     #: free-form metadata, e.g. {"grid_spec": {...}} for AI regeneration
     meta: dict[str, Any] = field(default_factory=dict)
     schema: int = SCHEMA_VERSION
@@ -440,6 +512,7 @@ _NESTED = {
     ("Plan", "slabs"): "Slab",
     ("Plan", "columns"): "Column",
     ("Plan", "beams"): "Beam",
+    ("Plan", "walls"): "Wall",
     ("Beam", "point_loads"): "PointLoad",
     ("Beam", "part_loads"): "PartLoad",
 }

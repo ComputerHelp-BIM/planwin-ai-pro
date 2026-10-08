@@ -52,7 +52,12 @@ def migrate(data: dict) -> dict:
     schema = int(data.get("schema", 1))
     if schema > SCHEMA_VERSION:
         raise ProjectFormatError(f"Project was saved by a newer PlanWin AI Pro (schema {schema}); please update")
-    # future migrations: if schema < 2: ...
+    if schema < 2:
+        # 1.0.x projects were analysed with distributed storey forces and the equivalent
+        # static method only; keep their results unchanged until the user opts in
+        seismic = data.setdefault("seismic", {})
+        seismic.setdefault("method", "static")
+        seismic.setdefault("rigid_diaphragm", False)
     data["schema"] = SCHEMA_VERSION
     return data
 
