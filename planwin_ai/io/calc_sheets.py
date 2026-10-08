@@ -25,9 +25,9 @@ import numpy as np
 from .. import APP_NAME, COMPANY, __version__
 from ..core import geometry as G
 from ..core.model import grade_fck
-from ..design import is456
+from ..design import is456, is13920
 from ..design.is456 import slab as _slab
-from ..design.runner import _deflection_span
+from ..design.runner import _deflection_span, _end_support, _side_face
 from .report_common import DISCLAIMER
 
 if TYPE_CHECKING:
@@ -165,7 +165,8 @@ def _missing(kind: str, ref: str, level: str, msg: str) -> Sheet:
 
 # ============================================================================= beams
 def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
-    """Calculation sheet for one beam, recomputed exactly as ``design_all`` does."""
+    """Calculation sheet for one beam, recomputed exactly as ``runner._design_beam`` does (IS 456
+    flexure / shear / cl 41 torsion / deflection and, where it applies, IS 13920 ductile detailing)."""
     m = fa.model
     mid = bd.member_id
     ref = f"{bd.mark} (member {mid})"
@@ -175,11 +176,13 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
     ds = project.design
     fy = ds.fy_main
     fck = grade_fck(mem.grade)
+    ductile = is13920.required(project) and project.seismic.enabled
     # ------------------------------------------------ forces (same stations and combinations as the runner)
     n = 9
     sag, hog = np.zeros(n), np.zeros(n)
     sag_c, hog_c = [""] * n, [""] * n
     vmax, v_c, v_x = 0.0, "", 0.0
+    tmax, t_c, t_x = 0.0, "", 0.0
     f = None
     for c in fa.ultimate:
         f = fa.forces(mid, c.factors, n)
@@ -193,6 +196,10 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         k = int(np.argmax(av))
         if float(av[k]) > vmax:
             vmax, v_c, v_x = float(av[k]), c.name, float(f.x[k])
+        at = np.abs(f.T)
+        k = int(np.argmax(at))
+        if float(at[k]) > tmax:
+            tmax, t_c, t_x = float(at[k]), c.name, float(f.x[k])
     if f is None:
         return _missing("Beam", ref, bd.level, "no ultimate load combinations in the analysis")
     xs = f.x
@@ -216,7 +223,7 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
             ("Concrete", f"{mem.grade} (fck = {fck:g} MPa)"),
             ("Steel", f"fy = {fy:g} MPa (main), {ds.fy_shear:g} MPa (links)"),
             ("Clear cover", f"{cover:.0f} mm"),
-            ("Engineer", project.engineer or "-"),
+            ("Detailing", "IS 456 + IS 13920 (ductile)" if ductile else "IS 456"),
             ("Date", _today()),
         ],
     )
@@ -255,7 +262,7 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
     )
     B.compare("Mu− (right)", M_r, -bd.M_hog_r, " kN·m")
     B.step(
-        "Design shear force Vu",
+        "Analysis shear force Vu",
         "Vu = max over combinations and stations of |V(x)|",
         f"at x = {v_x:.2f} m, combination {v_c or '-'}",
         f"{vmax:.2f} kN",
@@ -263,7 +270,17 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         "Vu",
         vmax,
     )
-    B.compare("Vu", vmax, bd.V_max, " kN")
+    B.step(
+        "Design torsion Tu",
+        "Tu = max over combinations and stations of |T(x)|",
+        f"at x = {t_x:.2f} m, combination {t_c or '-'}"
+        + ("" if tmax > 1.0 else "; Tu ≤ 1 kN·m – torsion design not required"),
+        f"{tmax:.2f} kN·m",
+        "cl 41.1; " + comb_clause,
+        "Tu",
+        tmax,
+    )
+    B.compare("Tu", tmax, bd.T_max, " kN·m")
     # ------------------------------------------------ 2 section
     B.group("Section properties and limits")
     B.step(
@@ -297,7 +314,7 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
     )
     util = max(float(sag.max()), float(-hog.min())) / (ml / 1e6) if ml else 0.0
     B.step(
-        "Flexural utilisation",
+        "Flexural utilisation (analysis moments)",
         "U = max(Mu+, Mu−) / Mu,lim",
         f"{max(float(sag.max()), float(-hog.min())):.2f} / {ml / 1e6:.2f}",
         f"{util:.3f}",
@@ -313,6 +330,28 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         f"0.85 × {b:.0f} × {d:.0f} / {fy:g}",
         _mm2(ast_min),
         "cl 26.5.1.1(a)",
+        "ast_min_is456",
+        ast_min,
+    )
+    if ductile:
+        rho = is13920.rho_min(fck, fy)
+        a_d = rho * b * d
+        B.step(
+            "Minimum steel – ductile (both faces)",
+            "ρmin = 0.24 √fck / fy;  As,min = ρmin b d",
+            f"0.24 × √{fck:g} / {fy:g} = {rho:.5f};  × {b:.0f} × {d:.0f}",
+            _mm2(a_d),
+            "IS 13920 cl 6.2.1",
+            "ast_min_13920",
+            a_d,
+        )
+        ast_min = max(ast_min, a_d)
+    B.step(
+        "Minimum steel adopted",
+        "Ast,min = max(0.85 b d/fy, ρmin b d)" if ductile else "Ast,min = 0.85 b d / fy",
+        f"max({0.85 * b * d / fy:.0f}, {rho * b * d:.0f})" if ductile else "",
+        _mm2(ast_min),
+        "cl 26.5.1.1(a)" + ("; IS 13920 cl 6.2.1" if ductile else ""),
         "ast_min",
         ast_min,
     )
@@ -326,44 +365,104 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         "ast_max",
         ast_max,
     )
+    # ------------------------------------------------ torsion: equivalent moments (cl 41.4.2)
+    m_sag, m_hl, m_hr = M_pos, M_l, M_r
+    torsion = tmax > 1.0
+    if torsion:
+        B.group("Torsion – equivalent moments (IS 456 cl 41.4.2)")
+        pt0 = 100 * 0.85 * b * d / fy / (b * d)
+        t0 = is456.torsion_design(tmax, vmax, m_sag, max(m_hl, m_hr), b, D, cover, fck, fy, ds.fy_shear, pt0)
+        Mt = tmax * (1 + D / b) / 1.7
+        st = B.step(
+            "Equivalent moment from torsion",
+            "Mt = Tu (1 + D/b) / 1.7",
+            f"{tmax:.2f} × (1 + {D:.0f}/{b:.0f}) / 1.7",
+            f"{Mt:.2f} kN·m",
+            "cl 41.4.2",
+            "Mt",
+            Mt,
+        )
+        B.compare("Mt (design routine)", Mt, t0.Mt, " kN·m", 2, st)
+        mh = max(m_hl, m_hr)
+        new_sag = max(t0.Me1_sag, t0.Me2_hog)
+        B.step(
+            "Design moment – bottom steel",
+            "Me1 = Mu+ + Mt;  Me2 = Mt − Mu− (reversed, if Mt > Mu−) – larger governs",
+            f"max({m_sag:.2f} + {Mt:.2f}, max({Mt:.2f} − {mh:.2f}, 0))",
+            f"{new_sag:.2f} kN·m",
+            "cl 41.4.2; 41.4.2.1",
+            "Me_pos",
+            new_sag,
+        )
+        new_l = max(m_hl + t0.Mt, t0.Me2_sag)
+        new_r = max(m_hr + t0.Mt, t0.Me2_sag)
+        B.step(
+            "Design moments – top steel at supports",
+            "Me1 = Mu− + Mt;  Me2 = Mt − Mu+ (if Mt > Mu+) – larger governs",
+            f"L: max({m_hl:.2f} + {Mt:.2f}, {t0.Me2_sag:.2f});  R: max({m_hr:.2f} + {Mt:.2f}, {t0.Me2_sag:.2f})",
+            f"{new_l:.2f}; {new_r:.2f} kN·m",
+            "cl 41.4.2; 41.4.2.1",
+            "Me_neg",
+            max(new_l, new_r),
+        )
+        m_sag, m_hl, m_hr = new_sag, new_l, new_r
     # ------------------------------------------------ 3 flexure
     res = {}
     for label, key, Mu in (
-        ("Mid-span (sagging)", "pos", M_pos),
-        ("Left support (hogging)", "neg_l", M_l),
-        ("Right support (hogging)", "neg_r", M_r),
+        ("Mid-span (sagging)", "pos", m_sag),
+        ("Left support (hogging)", "neg_l", m_hl),
+        ("Right support (hogging)", "neg_r", m_hr),
     ):
-        B.group(f"Flexure – {label}")
+        B.group(f"Flexure – {label}" + (" – moment incl. torsion" if torsion else ""))
         fr = is456.flexure(Mu, fck, fy, b, D, cover)
         res[key] = fr
-        _beam_flexure_steps(B, key, Mu, fr, fck, fy, b, d, cover, ml, ast_min)
+        _beam_flexure_steps(B, key, Mu, fr, fck, fy, b, d, cover, ml, 0.85 * b * d / fy)  # is456.flexure minimum
     fs, fl, fr_ = res["pos"], res["neg_l"], res["neg_r"]
-    # ------------------------------------------------ 4 bars provided
+    # ------------------------------------------------ 4 bars provided (top first: bottom ≥ ½ top when ductile)
     B.group("Reinforcement provided")
     bars = {}
     for label, key, req_terms, rep_area, rep_str in (
-        ("Bottom bars (span)", "bot", (fs.ast, fl.asc, fr_.asc), bd.ast_bot, bd.bottom),
         ("Top bars at left support", "top_l", (fl.ast, fs.asc), bd.ast_top_l, bd.top_l),
         ("Top bars at right support", "top_r", (fr_.ast, fs.asc), bd.ast_top_r, bd.top_r),
     ):
         req = max(*req_terms, ast_min)
-        nb, dia, prov = is456.select_bars(req, b, cover)
-        bars[key] = (nb, dia, prov)
-        names = (
-            "max(Ast+, Asc,L−, Asc,R−, Ast,min)" if key == "bot" else "max(Ast−, Asc+, Ast,min)"
-        )  # bottom bars double as compression steel for hogging and vice versa
+        nb, dia_, prov = is456.select_bars(req, b, cover)
+        bars[key] = (nb, dia_, prov)
         st = B.step(
             label,
-            f"As,req = {names}; bars with the least excess in one layer, clear spacing ≥ max(φ, 25 mm)",
+            "As,req = max(Ast−, Asc+, Ast,min); bars with the least excess in one layer, clear spacing ≥ max(φ, 25 mm)",
             "max(" + ", ".join(f"{v:.0f}" for v in (*req_terms, ast_min)) + f") = {req:.0f} mm²  →  "
-            f"{nb} × π × {dia}² / 4",
-            f"{nb}-T{dia} = {prov:.0f} mm²",
+            f"{nb} × π × {dia_}² / 4",
+            f"{nb}-T{dia_} = {prov:.0f} mm²",
             "cl 26.5.1.1; 26.3.2",
             f"ast_{key}",
             prov,
         )
         B.compare(f"{label.lower()} area", prov, rep_area, " mm²", 0, st)
-        B.compare_text(f"{label.lower()}", f"{nb}-T{dia}", rep_str, st)
+        B.compare_text(label.lower(), f"{nb}-T{dia_}", rep_str, st)
+    nl, dl, prov_l = bars["top_l"]
+    nr, dr, prov_r = bars["top_r"]
+    terms = (fs.ast, fl.asc, fr_.asc, ast_min)
+    bot_req = max(terms)
+    subst = "max(" + ", ".join(f"{v:.0f}" for v in terms) + ")"
+    if ductile:
+        bot_req = max(bot_req, 0.5 * max(prov_l, prov_r))
+        subst = f"max({subst}, ½ × {max(prov_l, prov_r):.0f})"
+    nbot, dbot, prov_b = is456.select_bars(bot_req, b, cover)
+    bars["bot"] = (nbot, dbot, prov_b)
+    st = B.step(
+        "Bottom bars (span)",
+        "As,req = max(Ast+, Asc,L−, Asc,R−, Ast,min)"
+        + ("; ≥ ½ the top steel at the joint faces" if ductile else "")
+        + "; least excess in one layer",
+        f"{subst} = {bot_req:.0f} mm²  →  {nbot} × π × {dbot}² / 4",
+        f"{nbot}-T{dbot} = {prov_b:.0f} mm²",
+        "cl 26.5.1.1; 26.3.2" + ("; IS 13920 cl 6.2.3" if ductile else ""),
+        "ast_bot",
+        prov_b,
+    )
+    B.compare("bottom bars area", prov_b, bd.ast_bot, " mm²", 0, st)
+    B.compare_text("bottom bars", f"{nbot}-T{dbot}", bd.bottom, st)
     flex_ok = fs.ok and fl.ok and fr_.ok
     B.step(
         "Maximum steel check",
@@ -373,10 +472,101 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         "OK" if flex_ok else "NOT OK – increase section",
         "cl 26.5.1.1(b); 26.5.1.2",
     )
-    # ------------------------------------------------ 5 shear
-    B.group("Shear (vertical links)")
+    if ductile:
+        pmax_ = 100 * max(prov_b, prov_l, prov_r) / (b * d)
+        B.step(
+            "Maximum steel ratio – ductile",
+            "p = 100 As / (b d) ≤ 2.5 % on either face",
+            f"100 × {max(prov_b, prov_l, prov_r):.0f} / ({b:.0f} × {d:.0f}) = {pmax_:.2f} %",
+            "OK" if pmax_ <= 2.5 else "NOT OK – increase section",
+            "IS 13920 cl 6.2.2",
+            "p_max_ductile",
+            pmax_,
+        )
+    # ------------------------------------------------ 5 design shear
     prov_b, prov_l, prov_r = bars["bot"][2], bars["top_l"][2], bars["top_r"][2]
     pt = 100 * max(prov_l, prov_r) / (b * d)
+    v_design = vmax
+    col_below = {x.n2: x for x in m.members.values() if x.kind in ("column", "wall")}
+    col_above = {x.n1: x for x in m.members.values() if x.kind in ("column", "wall")}
+    framed = all(nd in col_below or nd in col_above for nd in (mem.n1, mem.n2))
+    if ductile and framed:
+        B.group("Capacity design shear (IS 13920 cl 6.3.3)")
+        a_nd, b_nd = m.nodes[mem.n1], m.nodes[mem.n2]
+        ha = _end_support(mem, a_nd, b_nd, col_below, col_above, mem.n1)
+        hb = _end_support(mem, a_nd, b_nd, col_below, col_above, mem.n2)
+        lc = max(L - ha - hb, 0.3 * L)
+        B.step(
+            "Clear span between column faces",
+            "lc = L − ½ column width at A − ½ column width at B  (≥ 0.3 L)",
+            f"{L:.3f} − {ha:.3f} − {hb:.3f}",
+            f"{lc:.3f} m",
+            "IS 13920 cl 6.3.3",
+            "lc",
+            lc,
+        )
+        g = fa.forces(mid, dict(is13920.GRAVITY), 3)
+        vga, vgb = abs(float(g.Vz[0])), abs(float(g.Vz[-1]))
+        B.step(
+            "Gravity shear",
+            "Vg = support shears for 1.2 (DL + LL)",
+            "1.2 DL + 1.2 LL",
+            f"Vg,A = {vga:.2f}, Vg,B = {vgb:.2f} kN",
+            "IS 13920 cl 6.3.3",
+            "Vg",
+            max(vga, vgb),
+        )
+        ms = is13920.beam_moment_capacity(prov_b, b, d, fck, fy) / 1e6
+        mha = is13920.beam_moment_capacity(prov_l, b, d, fck, fy) / 1e6
+        mhb = is13920.beam_moment_capacity(prov_r, b, d, fck, fy) / 1e6
+        B.step(
+            "Moment capacities of the bars provided",
+            "Mu = 0.87 fy Ast d (1 − Ast fy / (b d fck)) ≤ Mu,lim",
+            f"Ms: Ast = {prov_b:.0f};  Mh,A: Ast = {prov_l:.0f};  Mh,B: Ast = {prov_r:.0f} mm²",
+            f"Ms = {ms:.2f}, Mh,A = {mha:.2f}, Mh,B = {mhb:.2f} kN·m",
+            "Annex G-1.1(b); IS 13920 cl 6.3.3",
+            "Ms",
+            ms,
+        )
+        sr = is13920.OVERSTRENGTH * (ms + mhb) / lc
+        sl = is13920.OVERSTRENGTH * (mha + ms) / lc
+        v_cap = is13920.beam_capacity_shear(vga, vgb, ms, mha, ms, mhb, lc)
+        B.step(
+            "Capacity (sway) shear",
+            "sway right: Vu = Vg ± 1.4 (Ms,A + Mh,B)/lc;  sway left: Vu = Vg ± 1.4 (Mh,A + Ms,B)/lc",
+            f"1.4 × ({ms:.2f} + {mhb:.2f}) / {lc:.3f} = {sr:.2f};  1.4 × ({mha:.2f} + {ms:.2f}) / {lc:.3f} = "
+            f"{sl:.2f};  A: |{vga:.2f} − {sr:.2f}| = {abs(vga - sr):.2f}, {vga:.2f} + {sl:.2f} = {vga + sl:.2f};  "
+            f"B: {vgb:.2f} + {sr:.2f} = {vgb + sr:.2f}, |{vgb:.2f} − {sl:.2f}| = {abs(vgb - sl):.2f}",
+            f"{v_cap:.2f} kN",
+            "IS 13920 cl 6.3.3",
+            "V_cap",
+            v_cap,
+        )
+        v_design = max(vmax, v_cap)
+        st = B.step(
+            "Design shear",
+            "Vu = max(analysis shear, capacity shear)",
+            f"max({vmax:.2f}, {v_cap:.2f})",
+            f"{v_design:.2f} kN",
+            "IS 13920 cl 6.3.3",
+            "V_design",
+            v_design,
+        )
+    else:
+        B.group("Design shear")
+        st = B.step(
+            "Design shear",
+            "Vu = analysis shear"
+            + (" (beam not framed into columns at both ends – no capacity shear)" if ductile else ""),
+            f"{vmax:.2f} kN",
+            f"{v_design:.2f} kN",
+            "cl 40.1" + ("; IS 13920 cl 6.3.3" if ductile else ""),
+            "V_design",
+            v_design,
+        )
+    B.compare("design shear", v_design, bd.V_max, " kN", 2, st)
+    # ------------------------------------------------ 6 shear links (cl 40)
+    B.group("Shear (vertical links)")
     B.step(
         "Tension steel at support",
         "pt = 100 As / (b d)",
@@ -386,11 +576,11 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         "pt_support",
         pt,
     )
-    sh = is456.shear(vmax, fck, ds.fy_shear, b, d, pt)
-    tv = vmax * 1e3 / (b * d)
+    sh = is456.shear(v_design, fck, ds.fy_shear, b, d, pt)
+    tv = v_design * 1e3 / (b * d)
     tc = is456.tau_c(pt, fck)
     tcm = is456.tau_c_max(fck)
-    B.step("Nominal shear stress", "τv = Vu / (b d)", f"{vmax:.2f} × 10³ / ({b:.0f} × {d:.0f})", f"{tv:.3f} MPa",
+    B.step("Nominal shear stress", "τv = Vu / (b d)", f"{v_design:.2f} × 10³ / ({b:.0f} × {d:.0f})", f"{tv:.3f} MPa",
            "cl 40.1", "tau_v", tv)  # fmt: skip
     B.step(
         "Design shear strength of concrete",
@@ -420,12 +610,12 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         "fyv",
         fyv,
     )
-    vus = vmax * 1e3 - tc * b * d
+    vus = v_design * 1e3 - tc * b * d
     if tv > tc:
         B.step(
             "Shear to be carried by links",
             "Vus = Vu − τc b d",
-            f"{vmax:.2f} − {tc:.3f} × {b:.0f} × {d:.0f} / 10³",
+            f"{v_design:.2f} − {tc:.3f} × {b:.0f} × {d:.0f} / 10³",
             f"{vus / 1e3:.2f} kN",
             "cl 40.4",
             "Vus",
@@ -494,22 +684,212 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         )
         s_prov = math.floor(s / 25) * 25
         st = B.step(
-            "Links provided",
+            "Shear links",
             "sv = least of the above, rounded down to 25 mm (≥ 75 mm)",
             f"min({s_st:.0f}, {s_mr:.0f}, {s_max:.0f}) = {s:.0f} mm" if math.isfinite(s_st)
             else f"min({s_mr:.0f}, {s_max:.0f}) = {s:.0f} mm",
             f"{legs_}L-T{dia_} @ {s_prov} c/c",
             "cl 26.5.1.5; 40.4",
-            "sv",
+            "sv_shear",
             s_prov,
         )  # fmt: skip
-        B.compare("link spacing", s_prov, sh.spacing, " mm", 0, st)
+        B.compare("shear link spacing (design routine)", s_prov, sh.spacing, " mm", 0, st)
     else:
         why = "τv > τc,max" if tv > tcm else "spacing < 75 mm with 4L-T12 (" + "; ".join(tried) + ")"
-        st = B.step("Links provided", "–", why, "FAIL – increase section", "cl 40.2.3; 40.4", "sv", None)
-    links_str = f"{sh.legs}L-T{sh.dia} @ {int(sh.spacing)} c/c" if sh.ok else "FAIL"
-    B.compare_text("links", links_str, bd.stirrups, st)
-    # ------------------------------------------------ 6 deflection
+        B.step("Shear links", "–", why, "FAIL – increase section", "cl 40.2.3; 40.4", "sv_shear", None)
+    # ------------------------------------------------ 7 torsion links (cl 41.3 / 41.4.3)
+    tors = None
+    if torsion:
+        B.group("Torsion – closed stirrups (IS 456 cl 41)")
+        ld = max(dl, dr)
+        tors = is456.torsion_design(tmax, v_design, m_sag, max(m_hl, m_hr), b, D, cover, fck, fy, ds.fy_shear, pt, ld)
+        dt = D - cover - 8 - ld / 2
+        Ve = v_design + 1.6 * tmax * 1e3 / b
+        st = B.step(
+            "Equivalent shear",
+            "Ve = Vu + 1.6 Tu / b",
+            f"{v_design:.2f} + 1.6 × {tmax:.2f}×10³ / {b:.0f}",
+            f"{Ve:.2f} kN",
+            "cl 41.3.1",
+            "Ve",
+            Ve,
+        )
+        B.compare("Ve (design routine)", Ve, tors.Ve, " kN", 2, st)
+        tve = Ve * 1e3 / (b * dt)
+        B.step(
+            "Equivalent shear stress",
+            "τve = Ve / (b d) ≤ τc,max  (d = D − c − 8 − φ/2)",
+            f"{Ve:.2f}×10³ / ({b:.0f} × {dt:.0f})",
+            f"{tve:.3f} {'≤' if tve <= tcm else '>'} {tcm:.2f} MPa",
+            "cl 41.3.1; Table 20",
+            "tau_ve",
+            tve,
+        )
+        if tve <= tcm:
+            x1, y1 = b - 2 * cover, D - 2 * cover
+            b1, d1 = x1 - 8 - ld, y1 - 8 - ld
+            B.step(
+                "Closed stirrup dimensions",
+                "x1 = b − 2c, y1 = D − 2c;  b1 = x1 − 8 − φ, d1 = y1 − 8 − φ (corner bar centres)",
+                f"x1 = {x1:.0f}, y1 = {y1:.0f}; φ = {ld} mm",
+                f"b1 = {b1:.0f}, d1 = {d1:.0f} mm",
+                "cl 41.4.3",
+            )
+            tc_t = is456.tau_c(pt, fck)
+            t1 = tmax * 1e6 / (b1 * d1 * 0.87 * fyv)
+            t2 = v_design * 1e3 / (2.5 * d1 * 0.87 * fyv)
+            t3 = (tve - tc_t) * b / (0.87 * fyv)
+            t4 = 0.4 * b / (0.87 * fyv)
+            per_mm = max(t1 + t2, t3, t4)
+            B.step(
+                "Stirrup area per unit length",
+                "Asv/sv = Tu/(b1 d1 0.87 fyv) + Vu/(2.5 d1 0.87 fyv) ≥ (τve − τc) b/(0.87 fyv), ≥ 0.4 b/(0.87 fyv)",
+                f"{t1:.4f} + {t2:.4f} = {t1 + t2:.4f};  ({tve:.3f} − {tc_t:.3f}) × {b:.0f}/(0.87 × {fyv:g}) = "
+                f"{t3:.4f};  {t4:.4f}",
+                f"{per_mm:.4f} mm²/mm",
+                "cl 41.4.3; 26.5.1.6",
+                "asv_per_mm",
+                per_mm,
+            )
+            s_max_t = min(x1, (x1 + y1) / 4, 300.0)
+            B.step(
+                "Maximum spacing of closed stirrups",
+                "sv ≤ min(x1, (x1 + y1)/4, 300 mm)",
+                f"min({x1:.0f}, ({x1:.0f} + {y1:.0f})/4, 300)",
+                f"{s_max_t:.0f} mm",
+                "cl 26.5.1.7",
+                "sv_max_torsion",
+                s_max_t,
+            )
+            t_tried, t_pick = [], None
+            for tdia in (8, 10, 12):
+                asv_t = 2 * math.pi * tdia * tdia / 4
+                s_t = min(asv_t / per_mm, s_max_t)
+                if s_t >= 75:
+                    t_pick = (tdia, asv_t, s_t)
+                    break
+                t_tried.append(f"T{tdia} gives {s_t:.0f} mm < 75 mm")
+            if t_pick:
+                tdia, asv_t, s_t = t_pick
+                sp = math.floor(s_t / 25) * 25
+                st = B.step(
+                    "Closed stirrups for torsion",
+                    "sv = 2 π φ²/4 ÷ (Asv/sv) ≤ s,max; rounded down to 25 mm (≥ 75 mm)",
+                    (("; ".join(t_tried) + "; ") if t_tried else "")
+                    + f"min({asv_t:.0f} / {per_mm:.4f}, {s_max_t:.0f}) = {s_t:.0f} mm",
+                    f"2L-T{tdia} @ {sp} c/c (closed)",
+                    "cl 41.4.3; 26.5.1.7",
+                    "sv_torsion",
+                    sp,
+                )
+                B.compare("torsion stirrup spacing (design routine)", sp, tors.spacing, " mm", 0, st)
+            else:
+                B.step("Closed stirrups for torsion", "–", "; ".join(t_tried), "FAIL – increase section",
+                       "cl 41.4.3", "sv_torsion", None)  # fmt: skip
+        sh0 = sh
+        if tors.ok and (not sh.ok or tors.spacing * sh.dia**2 <= sh.spacing * tors.dia**2):
+            sh = is456.ShearResult(v_design, tors.tau_ve, sh.tau_c, 2, tors.dia, tors.spacing, True)
+            gov = "torsion stirrups govern"
+        elif not tors.ok:
+            sh = is456.ShearResult(v_design, tors.tau_ve, sh.tau_c, 2, 12, 0.0, False, tors.note)
+            gov = "FAIL – " + (tors.note or "torsion")
+        else:
+            gov = "shear links govern"
+        B.step(
+            "Governing links",
+            "torsion stirrups replace the shear links when Asv/sv (torsion) ≥ Asv/sv (shear)",
+            f"torsion T{tors.dia} @ {tors.spacing:.0f}"
+            + (f" vs shear {sh0.legs}L-T{sh0.dia} @ {sh0.spacing:.0f}" if sh0.ok else " (shear links fail)"),
+            gov,
+            "cl 41.4.3",
+        )
+    # ------------------------------------------------ 8 side-face steel
+    B.group("Side-face reinforcement")
+    side = tors.side_face if tors else _side_face(b, D, cover)
+    if tors is not None and D > 450:
+        a_side = 0.001 * b * (D - 2 * cover) / 2
+        nside = max(2, math.ceil((D - 2 * cover - 100) / 300))
+        st = B.step(
+            "Side-face bars (torsion, D > 450 mm)",
+            "As = 0.1 % of web area per face; bars ≤ 300 mm apart",
+            f"0.001 × {b:.0f} × ({D:.0f} − 2 × {cover:.0f}) / 2 = {a_side:.0f} mm²;  "
+            f"n = max(2, ⌈({D:.0f} − {2 * cover:.0f} − 100)/300⌉) = {nside}",
+            side,
+            "cl 26.5.1.3; 26.5.1.7(b)",
+        )
+    elif tors is None and D > 750:
+        a_face = 0.001 * b * D / 2
+        nside = max(2, math.ceil((D - 2 * cover - 100) / 300))
+        st = B.step(
+            "Side-face bars (D > 750 mm)",
+            "As = 0.1 % of web area, half on each face; bars ≤ 300 mm apart",
+            f"0.001 × {b:.0f} × {D:.0f} / 2 = {a_face:.0f} mm² per face; n = {nside}",
+            side,
+            "cl 26.5.1.3",
+        )
+    else:
+        st = B.step(
+            "Side-face bars",
+            "required when D > 750 mm (D > 450 mm with torsion)",
+            f"D = {D:.0f} mm",
+            "not required",
+            "cl 26.5.1.3; 26.5.1.7(b)",
+        )
+    B.compare_text("side-face steel", side, bd.side_face, st)
+    # ------------------------------------------------ 9 links adopted
+    B.group("Links adopted" + (" (IS 13920 cl 6.3.5)" if ductile else ""))
+    links = links_end = None
+    if sh.ok:
+        if ductile:
+            s_half = math.floor(d / 2 / 25) * 25
+            s_mid = min(sh.spacing, s_half)
+            B.step(
+                "Spacing away from the joints",
+                "sv ≤ d/2 (rounded down to 25 mm)",
+                f"min({sh.spacing:.0f}, {s_half:.0f})",
+                f"{s_mid:.0f} mm",
+                "IS 13920 cl 6.3.5",
+            )
+        else:
+            s_mid = sh.spacing
+        links = is456.Links(sh.legs, sh.dia, float(s_mid))
+        st = B.step(
+            "Links in the span",
+            "governing links of the steps above",
+            f"{sh.legs} legs of T{sh.dia}",
+            str(links),
+            "cl 26.5.1.5; 40.4" + ("; IS 13920 cl 6.3.5" if ductile else ""),
+            "sv",
+            float(s_mid),
+        )
+        if bd.links is not None:
+            B.compare("link spacing", float(s_mid), bd.links.spacing, " mm", 0, st)
+        if ductile:
+            dbmin = min(dbot, dl, dr)
+            s_end = min(sh.spacing, d / 4, 8 * dbmin, 100.0)
+            s_end_p = float(max(math.floor(s_end / 5) * 5, 50))
+            links_end = is456.Links(sh.legs, max(sh.dia, 8), s_end_p)
+            st = B.step(
+                "Hoops within 2d of the column faces",
+                "sv ≤ min(d/4, 8 φmin, 100 mm), rounded down to 5 mm, ≥ 50 mm",
+                f"min({sh.spacing:.0f}, {d:.0f}/4, 8 × {dbmin}, 100) = {s_end:.1f} mm; zone 2d = {2 * d:.0f} mm",
+                str(links_end),
+                "IS 13920 cl 6.3.5",
+                "sv_end",
+                s_end_p,
+            )
+            if bd.links_end is not None:
+                B.compare("hoop spacing at the joints", s_end_p, bd.links_end.spacing, " mm", 0, st)
+    else:
+        st = B.step("Links", "–", sh.note or "no valid link arrangement", "FAIL – increase section", "cl 40.4", "sv")
+    if links is None:
+        stirrups = "FAIL"
+    elif links_end is not None:
+        stirrups = f"{links_end} (2d from faces) / {int(links.spacing)} c/c"
+    else:
+        stirrups = str(links)
+    B.compare_text("links", stirrups, bd.stirrups, st)
+    # ------------------------------------------------ 10 deflection
     B.group("Deflection (span / effective depth)")
     span, basic = _deflection_span(m, mem)
     cond = {7: "cantilever", 20: "simply supported", 26: "continuous"}.get(basic, "")
@@ -570,12 +950,19 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         B._warn("Recomputed deflection result differs from the design report", st)
     # ------------------------------------------------ checks
     lim_txt = "within" if flex_ok else "exceeds"
-    B.check("Flexure", flex_ok, f"Mu,max = {max(M_pos, M_l, M_r):.1f} kN·m; steel {lim_txt} 4 %")
+    B.check("Flexure", flex_ok, f"Mu,max = {max(m_sag, m_hl, m_hr):.1f} kN·m; steel {lim_txt} 4 %")
     B.check(
         "Shear",
         sh.ok,
-        f"τv = {tv:.2f} MPa (τc,max = {tcm:.2f}); links {links_str}" + (f" – {sh.note}" if sh.note else ""),
+        f"Vu = {v_design:.1f} kN, τv = {tv:.2f} MPa (τc,max = {tcm:.2f}); links {stirrups}"
+        + (f" – {sh.note}" if sh.note else ""),
     )
+    if tors is not None:
+        B.check(
+            "Torsion",
+            tors.ok,
+            f"Tu = {tmax:.2f} kN·m, τve = {tors.tau_ve:.2f} MPa" + (f" – {tors.note}" if tors.note else ""),
+        )
     B.check("Deflection", dok, f"L/d = {actual:.1f} (allowed {allowed:.1f})")
     if B.sheet.ok != bd.ok:
         B._warn(f"Overall result {'PASS' if B.sheet.ok else 'FAIL'} differs from the design report", None)
@@ -1060,7 +1447,89 @@ def column_sheet(project: Project, fa: FrameAnalysis, cd: ColumnDesign) -> Sheet
         "tie_spacing",
         tprov,
     )
-    B.compare_text("ties", f"T{tdia} @ {tprov} c/c", cd.ties, st)
+    ties_txt = f"T{tdia} @ {tprov} c/c"
+    B.compare_text("ties (design routine)", ties_txt, chk.ties, st)
+    tie_out, tie_dia_out = float(tprov), tdia
+    ductile = is13920.required(project) and project.seismic.enabled
+    if ductile and chk.main_bars is not None:
+        B.group("Ductile detailing – special confining hoops (IS 13920)")
+        main = chk.main_bars
+        fyh = min(ds.fy_shear, 415.0)
+        l0 = is13920.confining_length(max(b, D), Lu * 1000)
+        st = B.step(
+            "Confining length at each end",
+            "l0 = max(larger column dimension, clear height / 6, 450 mm)",
+            f"max({max(b, D):.0f}, {Lu * 1000:.0f}/6 = {Lu * 1000 / 6:.0f}, 450)",
+            f"{l0:.0f} mm",
+            "IS 13920 cl 8.1",
+            "l0",
+            l0,
+        )
+        B.compare("l0", l0 / 1000, cd.l0, " m", 3, st)
+        conf = is13920.column_confinement(b, D, cover, fck, fyh, main.dia, main.count, chk.tie.dia if chk.tie else 8)
+        Bk, Dk = b - 2 * cover, D - 2 * cover
+        Ag, Ak = b * D, max(Bk * Dk, 1.0)
+        B.step(
+            "Hoop arrangement",
+            "legs ≤ 300 mm apart, every cross-tie engaging a bar; h = larger panel between parallel legs",
+            f"core {Bk:.0f} × {Dk:.0f} mm; {conf.legs_b} legs across b, {conf.legs_d} legs across D",
+            f"T{conf.dia}, h = {conf.h:.0f} mm",
+            "IS 13920 cl 8.1",
+            "h",
+            conf.h,
+        )
+        per = conf.h * fck / fyh * max(0.18 * (Ag / Ak - 1.0), 0.05)
+        B.step(
+            "Spacing from the hoop area",
+            "Ash ≥ max(0.18 s h fck/fy (Ag/Ak − 1), 0.05 s h fck/fy)"
+            " → s ≤ Ash / [h fck/fy max(0.18 (Ag/Ak − 1), 0.05)]",
+            f"Ag/Ak = {Ag:.0f}/{Ak:.0f} = {Ag / Ak:.3f};  Ash = π × {conf.dia}²/4 = {conf.ash:.1f} mm²;  "
+            f"{conf.ash:.1f} / {per:.4f}",
+            f"{conf.s_ash:.0f} mm",
+            "IS 13920 cl 8.2",
+            "s_ash",
+            conf.s_ash,
+        )
+        B.step(
+            "Spacing limit within l0",
+            "s ≤ min(least dimension/4, 6 φmin, 100 mm)",
+            f"min({min(b, D):.0f}/4, 6 × {main.dia}, 100)",
+            f"{conf.s_limit:.0f} mm",
+            "IS 13920 cl 8.2",
+            "s_limit",
+            conf.s_limit,
+        )
+        st = B.step(
+            "Special confining hoops",
+            "s = min(s,Ash, s,limit) rounded down to 5 mm, ≥ 75 mm",
+            f"min({conf.s_ash:.0f}, {conf.s_limit:.0f}) → {conf.s:.0f} mm; Ash,req = {conf.ash_req:.1f} mm²",
+            f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(conf.s)}" + ("" if conf.ok else " – NOT OK"),
+            "IS 13920 cl 8.1; 8.2",
+            "s_confined",
+            conf.s,
+        )
+        if cd.tie_confined is not None:
+            B.compare("confining hoop spacing", conf.s, cd.tie_confined.spacing, " mm", 0, st)
+        if chk.tie is not None:
+            s_out = min(chk.tie.spacing, min(b, D) / 2, 300.0)
+            tie_out = float(math.floor(s_out / 25) * 25)
+            tie_dia_out = max(chk.tie.dia, conf.dia)
+            st = B.step(
+                "Ties outside l0",
+                "s ≤ min(IS 456 pitch, b/2, 300 mm), rounded down to 25 mm; φ ≥ hoop φ",
+                f"min({chk.tie.spacing:.0f}, {min(b, D):.0f}/2, 300) = {s_out:.0f} mm",
+                f"T{tie_dia_out} @ {int(tie_out)} c/c",
+                "IS 13920 cl 7.6.1",
+                "tie_spacing_out",
+                tie_out,
+            )
+            ties_txt = (
+                f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(conf.s)} over l0 = {l0:.0f} "
+                f"/ T{tie_dia_out} @ {int(tie_out)} c/c"
+            )
+    B.compare_text("ties", ties_txt, cd.ties, st)
+    if cd.tie is not None:
+        B.compare("tie spacing", tie_out, cd.tie.spacing, " mm", 0, st)
     # ------------------------------------------------ checks
     B.check("Biaxial interaction", g["r"] <= 1.0, f"ratio {g['r']:.3f} ({g['name']}, {g['end']})")
     B.check(
@@ -1082,7 +1551,9 @@ def _footing_inputs(fa: FrameAnalysis, fd: FootingDesign):
     """Base column and reactions exactly as ``design_all`` collects them."""
     m = fa.model
     cand = [
-        mem for mem in m.members.values() if mem.kind == "column" and m.nodes[mem.n1].support and mem.mark == fd.mark
+        mem
+        for mem in m.members.values()
+        if mem.kind in ("column", "wall") and m.nodes[mem.n1].support and mem.mark == fd.mark
     ]
     cand.sort(key=lambda mem: math.dist((m.nodes[mem.n1].x, m.nodes[mem.n1].y), (fd.x, fd.y)))
     if not cand:
