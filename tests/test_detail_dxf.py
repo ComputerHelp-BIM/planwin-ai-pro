@@ -6,13 +6,14 @@ import ezdxf
 import pytest
 
 from planwin_ai.ai.templates import build_template
-from planwin_ai.core.model import Beam, Column, Level, Plan, Project, Slab
+from planwin_ai.core.model import Beam, Column, Level, Plan, Project, Slab, Wall
 from planwin_ai.design.runner import run_full
 from planwin_ai.io.detail_dxf import (
     LAYERS,
     build_detail_doc,
     distribute_bars,
     physical_beams,
+    wall_schedule,
     write_detail_drawings,
 )
 
@@ -83,8 +84,31 @@ def test_column_schedule(bungalow):
     for r in rows:
         for c in r.cells:
             if c is not None:
-                assert re.fullmatch(r"\d+x\d+, \d+-T\d+, T\d+@\d+(/\d+)?", c.label)
-                assert any(c.label in t for t in texts)
+                assert re.fullmatch(r"\d+x\d+, \d+-T\d+", c.size_text)
+                assert any(c.size_text in t for t in texts)
+                assert any(c.tie_text in t for t in texts)
+
+
+def _norm_ties(text):
+    return re.sub(r"\s+", " ", text.replace("×", "x").replace("l0 = ", "l0=").replace(" c/c", "")).strip()
+
+
+def test_column_ties_follow_the_design(bungalow):
+    """The schedule draws the IS 13920 confining hoops and ties the design produced."""
+    prj, _, rep, _, info = bungalow
+    rows = info["column_rows"]
+    ranges = info["column_ranges"]
+    seen = 0
+    for c in rep.columns:
+        row = next(r for r in rows if c.mark in r.marks)
+        j = next(k for k, (a, b) in enumerate(ranges) if a <= c.level_index <= b)
+        cell = row.cells[j]
+        assert cell.tie_text == _norm_ties(c.ties)
+        if c.tie_confined is not None:
+            seen += 1
+            assert cell.tie_confined == c.tie_confined and cell.l0 == pytest.approx(c.l0, abs=5e-4)
+            assert f"over l0={c.l0 * 1000:.0f}" in cell.tie_text
+    assert seen == len(rep.columns)  # the bungalow is in a seismic zone: IS 13920 applies
 
 
 def test_footing_schedule(bungalow):
@@ -101,6 +125,19 @@ def test_footing_schedule(bungalow):
     # identical footings share a type
     keys = {(f.L, f.B, f.D, str(f.mesh_L), str(f.mesh_B)) for f in rep.footings}
     assert len(types) == len(keys)
+
+
+def test_beam_links_follow_the_design(bungalow):
+    _, _, rep, doc, info = bungalow
+    texts = _texts(doc, info["sheets"]["beams"])
+    ends = [b.links_end for b in rep.beams if b.links_end is not None]
+    assert ends  # IS 13920 hoops near column faces
+    for lk in {(b.links_end or b.links) for b in rep.beams if b.links}:
+        assert any(f"T{lk.dia}@{int(lk.spacing)}" in t for t in texts)
+    for b in rep.beams:
+        if b.links:
+            assert any(f"T{b.links.dia}@{int(b.links.spacing)}" in t for t in texts)
+    assert not any("WALL SCHEDULE" in t for t in _texts(doc))  # no walls in the bungalow
 
 
 def test_beam_details(bungalow):
@@ -164,13 +201,13 @@ def test_distribute_bars_small_and_odd_counts():
     assert len({(round(x, 9), round(y, 9)) for x, y in pts}) == 7
 
 
-def test_continuous_beam_with_junction_and_cantilever(tmp_path):
+def test_continuous_beam_with_junction_cantilever_and_wall(tmp_path):
     plan = Plan(name="P")
     xy = [(0, 0), (4, 0), (8, 0), (0, 5), (4, 5), (8, 5)]
     plan.columns = [Column(mark=f"C{i}", x=x, y=y, b=0.3, d=0.45) for i, (x, y) in enumerate(xy, 1)]
     plan.beams = [
         Beam(mark="B1", x1=0, y1=0, x2=9.5, y2=0, d=0.5),
-        Beam(mark="B2", x1=0, y1=5, x2=8, y2=5, d=0.5),
+        Beam(mark="B2", x1=0, y1=5, x2=11, y2=5, d=0.5),  # ends on wall W1
         Beam(mark="B3", x1=0, y1=0, x2=0, y2=5),
         Beam(mark="B4", x1=4, y1=0, x2=4, y2=5),
         Beam(mark="B5", x1=8, y1=0, x2=8, y2=5),
@@ -181,6 +218,7 @@ def test_continuous_beam_with_junction_and_cantilever(tmp_path):
         Slab(mark="S2", points=[[2, 0], [4, 0], [4, 5], [2, 5]]),
         Slab(mark="S3", points=[[4, 0], [8, 0], [8, 5], [4, 5]]),
     ]
+    plan.walls = [Wall(mark="W1", x1=11, y1=0, x2=11, y2=5, thickness=0.2)]
     prj = Project(name="Multi", plans=[plan], levels=[Level("L1", "P", 3.0), Level("L2", "P", 3.0)])
     fm, _, rep = run_full(prj)
     pbs = physical_beams(prj, fm, rep)
@@ -188,7 +226,18 @@ def test_continuous_beam_with_junction_and_cantilever(tmp_path):
     assert [round(s, 3) for s in b1.spans] == [2.0, 2.0, 4.0, 1.5]
     assert [s.kind for s in b1.supports] == ["column", "beam", "column", "column", "free"]
     assert b1.supports[0].width == pytest.approx(0.3)
+    b2 = next(p for p in pbs if p.mark == "B2" and p.level_index == 1)
+    assert [s.kind for s in b2.supports][-1] == "wall"
+    assert b2.supports[-1].mark == "W1" and b2.supports[-1].width == pytest.approx(0.2)
+    assert any(m.kind == "link" for m in fm.members.values())
+    assert {p.mark for p in pbs} == {f"B{i}" for i in range(1, 7)}  # rigid links are not beams
+    walls = wall_schedule(fm)
+    assert [(w.mark, w.thickness, w.length, w.levels) for w in walls] == [("W1", 0.2, 5.0, [1, 2])]
     path = str(tmp_path / "multi.dxf")
     write_detail_drawings(path, prj, fm, rep)
     doc = ezdxf.readfile(path)
     assert not doc.audit().has_errors
+    texts = _texts(doc)
+    assert any("WALL SCHEDULE" in t for t in texts)
+    assert any("200 x 5000" in t for t in texts)
+    assert any("W1 (wall)" in t for t in texts)

@@ -24,6 +24,12 @@ Grouping rules
   one physical beam.  Beams with the same b x D, number of spans, spans within
   50 mm and identical bars and links (in either direction) share one detail.
 * Slabs: panels with the same kind, thickness and meshes share a row.
+* Walls (frame members of kind "wall"): one row per mark and run of levels
+  with the same thickness x length; rigid "link" members are never drawn.
+
+Ties, stirrups and side-face bars are drawn exactly as designed: column
+confining hoops (``tie_confined`` over ``l0``) / ``tie`` elsewhere, beam
+``links_end`` within 2d of column / wall faces / ``links`` elsewhere.
 """
 
 from __future__ import annotations
@@ -353,12 +359,29 @@ class ColumnCell:
     b: float
     d: float
     bars: BarSet
-    tie: Links | None
-    tie_text: str
+    tie: Links | None  # ties outside the confining zones (or throughout)
+    tie_confined: Links | None = None  # IS 13920 special confining hoops within l0
+    l0: float = 0.0  # m
+    legs_b: int = 2  # confining hoop legs parallel to D, spaced across b
+    legs_d: int = 2  # confining hoop legs parallel to b, spaced across D
+
+    @property
+    def size_text(self) -> str:
+        return f"{self.b * 1000:.0f}x{self.d * 1000:.0f}, {self.bars}"
+
+    @property
+    def tie_text(self) -> str:
+        t, c = self.tie, self.tie_confined
+        if t is None:
+            return "ties: revise"
+        out = f"T{t.dia} @ {int(t.spacing)}" if t.legs <= 2 else f"T{t.dia} ({t.legs} legs) @ {int(t.spacing)}"
+        if c is not None and self.l0 > 0:
+            out = f"T{c.dia} ({self.legs_b}x{self.legs_d} legs) @ {int(c.spacing)} over l0={self.l0 * 1000:.0f} / {out}"
+        return out
 
     @property
     def label(self) -> str:
-        return f"{self.b * 1000:.0f}x{self.d * 1000:.0f}, {self.bars}, {self.tie_text}"
+        return f"{self.size_text}, {self.tie_text}"
 
 
 @dataclass
@@ -368,16 +391,18 @@ class ColumnRow:
     levels: list[int] = field(default_factory=list)  # level indices where the column exists
 
 
-def _tie_text(tie: Links | None, b: float, d: float, bar_dia: int, seismic: bool) -> str:
-    if tie is None:
-        return "ties: revise"
-    s = int(tie.spacing)
-    if seismic:  # IS 13920 special confining hoops near joints
-        sc = min(min(b, d) * 1000 / 4, 6 * bar_dia, 100.0)
-        sc = int(max(75.0, sc // 5 * 5))
-        if sc < s:
-            return f"T{tie.dia}@{sc}/{s}"
-    return f"T{tie.dia}@{s}"
+def _column_cell(c) -> ColumnCell | None:
+    bars = c.main_bars or _parse_barset(c.bars)
+    if bars is None:
+        return None
+    conf = getattr(c, "tie_confined", None)
+    tie = c.tie or _parse_links((c.ties or "").split("/")[-1] if conf else c.ties)
+    l0 = float(getattr(c, "l0", 0.0) or 0.0)
+    lb = ld = conf.legs if conf else 2
+    m = re.search(r"\((\d+)\s*[x×]\s*(\d+) legs\)", c.ties or "")
+    if m:
+        lb, ld = int(m.group(1)), int(m.group(2))
+    return ColumnCell(round(c.b, 3), round(c.d, 3), bars, tie, conf, round(l0, 3), lb, ld)
 
 
 def column_schedule(project, rep) -> tuple[list[tuple[int, int]], list[ColumnRow]]:
@@ -385,17 +410,13 @@ def column_schedule(project, rep) -> tuple[list[tuple[int, int]], list[ColumnRow
 
     Returns (ranges, rows); ``ranges`` are (first, last) level indices and each
     row has one cell per range (None where the column does not exist)."""
-    seismic = bool(getattr(project.seismic, "enabled", False))
     by_mark: dict[str, dict[int, ColumnCell]] = {}
     for c in rep.columns:
-        bars = c.main_bars or _parse_barset(c.bars)
-        if bars is None:
+        cell = _column_cell(c)
+        if cell is None:
             continue
-        tie = c.tie or _parse_links(c.ties)
         li = c.level_index or next((i for i, lv in enumerate(project.levels, 1) if lv.name == c.level), 0)
-        by_mark.setdefault(c.mark, {})[li] = ColumnCell(
-            round(c.b, 3), round(c.d, 3), bars, tie, _tie_text(tie, c.b, c.d, bars.dia, seismic)
-        )
+        by_mark.setdefault(c.mark, {})[li] = cell
     if not by_mark:
         return [], []
     all_lv = sorted({i for v in by_mark.values() for i in v})
@@ -425,22 +446,66 @@ def column_schedule(project, rep) -> tuple[list[tuple[int, int]], list[ColumnRow
     return [(r[0], r[-1]) for r in ranges], rows
 
 
+@dataclass
+class WallRow:
+    mark: str
+    thickness: float
+    length: float
+    levels: list[int]
+
+
+def wall_schedule(fm) -> list[WallRow]:
+    """Shear walls (frame members of kind "wall"): one row per mark and run of identical size."""
+    per: dict[str, dict[int, tuple[float, float]]] = {}
+    for m in fm.members.values():
+        if m.kind == "wall":
+            per.setdefault(m.mark, {})[m.level] = (round(m.b, 3), round(m.d, 3))
+    rows: list[WallRow] = []
+    for mark in sorted(per, key=natural_key):
+        for li, size in sorted(per[mark].items()):
+            last = rows[-1] if rows else None
+            if last and last.mark == mark and (last.thickness, last.length) == size and li == last.levels[-1] + 1:
+                last.levels.append(li)
+            else:
+                rows.append(WallRow(mark, size[0], size[1], [li]))
+    return rows
+
+
+def _pick(values: list[float], n: int, lo: float, hi: float) -> list[float]:
+    """``n`` positions for cross-tie legs: evenly chosen from ``values`` (interior bar positions)
+    or, when there are too few bars, evenly spaced between ``lo`` and ``hi``."""
+    if n <= 0:
+        return []
+    if len(values) >= n:
+        return [values[round((k + 1) * (len(values) + 1) / (n + 1)) - 1] for k in range(n)]
+    return [lo + (hi - lo) * (k + 1) / (n + 1) for k in range(n)]
+
+
 def _draw_column_section(cv: Canvas, cx: float, cy: float, cell: ColumnCell, cover: float) -> int:
     b, d = cell.b, cell.d
     cv.rect(cx - b / 2, cy - d / 2, cx + b / 2, cy + d / 2, "DET_OUTLINE")
     cv.rect(cx - b / 2 + cover, cy - d / 2 + cover, cx + b / 2 - cover, cy + d / 2 - cover, "DET_OUTLINE", color=8)
-    tdia = (cell.tie.dia if cell.tie else 8) / 1000
+    hoop = cell.tie_confined or cell.tie
+    tdia = (hoop.dia if hoop else 8) / 1000
     off = cover + tdia / 2
     cv.rect(cx - b / 2 + off, cy - d / 2 + off, cx + b / 2 - off, cy + d / 2 - off, "DET_LINK")
     r = cell.bars.dia / 2000
-    hx, hy = b / 2 - cover - tdia - r, d / 2 - cover - tdia - r
-    pts = distribute_bars(cell.bars.count, max(hx, 0.0), max(hy, 0.0))
+    hx, hy = max(b / 2 - cover - tdia - r, 0.0), max(d / 2 - cover - tdia - r, 0.0)
+    pts = distribute_bars(cell.bars.count, hx, hy)
     for x, y in pts:
         cv.circle(cx + x, cy + y, r)
+    # cross ties of the confining hoops (legs beyond the two of the perimeter hoop)
+    legs_b, legs_d = (cell.legs_b, cell.legs_d) if cell.tie_confined else (2, 2)
+    xs = sorted({round(x, 9) for x, y in pts if abs(abs(y) - hy) < 1e-9 and abs(abs(x) - hx) > 1e-9})
+    ys = sorted({round(y, 9) for x, y in pts if abs(abs(x) - hx) < 1e-9 and abs(abs(y) - hy) > 1e-9})
+    for x in _pick(xs, legs_b - 2, -hx, hx):
+        cv.line((cx + x, cy - d / 2 + off), (cx + x, cy + d / 2 - off), "DET_LINK")
+    for y in _pick(ys, legs_d - 2, -hy, hy):
+        cv.line((cx - b / 2 + off, cy + y), (cx + b / 2 - off, cy + y), "DET_LINK")
     return len(pts)
 
 
-def _column_sheet(cv: Canvas, project, ranges, rows) -> None:
+def _column_sheet(cv: Canvas, project, ranges, rows, walls: list[WallRow]) -> None:
     th = cv.mm(2.5)
     pad = cv.mm(4.0)
     cover = project.design.column_cover
@@ -448,7 +513,23 @@ def _column_sheet(cv: Canvas, project, ranges, rows) -> None:
     top = -cv.mm(4.0)
     if not rows:
         cv.text("No column designs available.", 0, top - th, 2.5, "TL")
-        return
+        y_end = top - th * 2
+    else:
+        y_end = _column_table(cv, project, ranges, rows, top, th, pad, cover)
+    if walls:
+        y = y_end - cv.mm(12)
+        cv.text("WALL SCHEDULE", 0, y, 5.0, "BL")
+        body = []
+        for w in walls:
+            lv = f"{level_name(project, w.levels[0] - 1)} to {level_name(project, w.levels[-1])}"
+            body.append([w.mark, f"{w.thickness * 1000:.0f} x {w.length * 1000:.0f}", lv])
+        _, H = table(cv, 0, y - cv.mm(3), ["MARK", "THICKNESS x LENGTH (mm)", "LEVELS"], body)
+        note = "Shear walls: geometry only - reinforcement as per the wall design."
+        cv.text(note, 0, y - cv.mm(3) - H - pad, 2.5, "TL")
+
+
+def _column_table(cv: Canvas, project, ranges, rows, top, th, pad, cover) -> float:
+    """Draw the column schedule table with its notes; returns the lowest y used."""
     cells = [c for r in rows for c in r.cells if c]
     sk_w = max(c.b for c in cells)
     sk_h = max(c.d for c in cells)
@@ -456,13 +537,13 @@ def _column_sheet(cv: Canvas, project, ranges, rows) -> None:
     for a, b in ranges:
         lab = f"{level_name(project, a - 1)} to {level_name(project, b)}"
         headers.append([lab] if len(lab) <= 22 else [f"{level_name(project, a - 1)} to", level_name(project, b)])
-    txt_w = max(text_width(c.label, th) for c in cells)
+    txt_w = max(text_width(s, th) for c in cells for s in (c.size_text, c.tie_text))
     hdr_w = max(text_width(s, th) for h in headers for s in h)
     cw = max(sk_w + 2 * pad, txt_w + 2 * pad, hdr_w + 2 * pad)
     mark_lines = [wrap_list(r.marks, 18) for r in rows]
     mw = max(max(text_width(s, th) for s in ml) for ml in mark_lines + [["COLUMN MARKS"]]) + 2 * pad
     hh = pad + max(len(h) for h in headers) * th * 1.6
-    row_h = [max(pad + sk_h + pad + th * 2 + pad, len(ml) * th * 1.6 + 2 * pad) for ml in mark_lines]
+    row_h = [max(pad + sk_h + pad + th * 3.6 + pad, len(ml) * th * 1.6 + 2 * pad) for ml in mark_lines]
     W = mw + cw * len(ranges)
     H = hh + sum(row_h)
     y0 = top
@@ -484,18 +565,19 @@ def _column_sheet(cv: Canvas, project, ranges, rows) -> None:
                 cv.text("-", x + cw / 2, y - rh / 2, 2.5, "C")
                 continue
             _draw_column_section(cv, x + cw / 2, y - pad - sk_h / 2, cell, cover)
-            cv.text(cell.label, x + cw / 2, y - pad - sk_h - pad - th, 2.5, "C")
+            cv.text(cell.size_text, x + cw / 2, y - pad - sk_h - pad - th, 2.5, "C")
+            cv.text(cell.tie_text, x + cw / 2, y - pad - sk_h - pad - th * 2.6, 2.5, "C")
         y -= rh
         cv.line((0, y), (W, y), "DET_TABLE")
     notes = [
         f"Clear cover to ties {cover * 1000:.0f} mm. Bars are shown at true size and distributed evenly on the faces.",
-        "Tie text Tx@a/b: spacing a in the confining zones near beam-column joints / spacing elsewhere (IS 13920)."
-        if project.seismic.enabled
-        else "Ties at the spacing shown over the full height.",
+        "Ties: confining hoops (legs across b x across D) @ spacing over l0 at both ends of the clear height and"
+        " through the joint (IS 13920) / ties elsewhere. Cross ties are drawn at intermediate bars.",
         "Lap longitudinal bars in the middle half of the storey height; not more than 50 % bars at one section.",
     ]
     for k, s in enumerate(notes):
         cv.text(s, 0, y0 - H - pad - k * th * 1.8, 2.5, "TL")
+    return y0 - H - pad - len(notes) * th * 1.8
 
 
 # ================================================================= FOOTINGS
@@ -695,10 +777,15 @@ def _flow_pages(s, title, blocks, notes, head=None, empty="") -> list[Canvas]:
 # ================================================================= BEAMS
 @dataclass
 class Support:
-    kind: str  # "column" | "beam" | "free"
+    kind: str  # "column" | "wall" | "beam" | "free"
     width: float  # along the beam (m)
-    above: bool = False  # column continues above
+    above: bool = False  # column / wall continues above
     mark: str = ""
+
+    @property
+    def held(self) -> bool:
+        """Framed into a column or wall (vertical member) rather than another beam or free."""
+        return self.kind in ("column", "wall")
 
 
 @dataclass
@@ -711,7 +798,9 @@ class PhysBeam:
     supports: list[Support]
     bottom: list[BarSet]
     tops: list[BarSet | None]  # per support node
-    links: list[Links | None]
+    links: list[Links | None]  # per span, away from column faces
+    links_end: list[Links | None] = field(default_factory=list)  # per span, within 2d of column faces
+    side_face: list[str] = field(default_factory=list)  # per span, side-face bars ("" if none)
 
 
 @dataclass
@@ -743,8 +832,10 @@ def _bigger(a: BarSet | None, b: BarSet | None) -> BarSet | None:
 
 def physical_beams(project, fm, rep) -> list[PhysBeam]:
     """Aggregate frame segments into one record per plan beam and level."""
-    col_below = {m.n2: m for m in fm.members.values() if m.kind == "column"}
-    col_above = {m.n1: m for m in fm.members.values() if m.kind == "column"}
+    vert = ("column", "wall")  # rigid "link" members of the wall model are not drawn
+    col_below = {m.n2: m for m in fm.members.values() if m.kind in vert}
+    col_above = {m.n1: m for m in fm.members.values() if m.kind in vert}
+    wall_link = {m.n2: m for m in fm.members.values() if m.kind == "link"}  # joint in a wall -> link
     beam_nodes: dict[int, set[str]] = {}
     for m in fm.members.values():
         if m.kind == "beam":
@@ -775,10 +866,12 @@ def physical_beams(project, fm, rep) -> list[PhysBeam]:
             tl = bd.top_l_bars or _parse_barset(bd.top_l)
             tr = bd.top_r_bars or _parse_barset(bd.top_r)
             lk = bd.links or _parse_links(bd.stirrups)
+            le = getattr(bd, "links_end", None)
+            sf = getattr(bd, "side_face", "") or ""
             n1, n2 = m.n1, m.n2
             if t_of(n1) > t_of(n2):
                 n1, n2, tl, tr = n2, n1, tr, tl
-            ordered.append((t_of(n1), t_of(n2), n1, n2, bot, tl, tr, lk, bd, m))
+            ordered.append((t_of(n1), t_of(n2), n1, n2, bot, tl, tr, lk, bd, m, le, sf))
         ordered.sort(key=lambda r: r[0])
         node_seq = [ordered[0][2]] + [r[3] for r in ordered]
         spans = [max(r[1] - r[0], 0.0) for r in ordered]
@@ -790,7 +883,10 @@ def physical_beams(project, fm, rep) -> list[PhysBeam]:
                 ang = math.radians(c.angle)
                 half = abs(ux * math.cos(ang) + uy * math.sin(ang)) * c.b / 2
                 half += abs(-ux * math.sin(ang) + uy * math.cos(ang)) * c.d / 2
-                sups.append(Support("column", 2 * half, n in col_above, c.mark))
+                sups.append(Support(c.kind, 2 * half, n in col_above, c.mark))
+            elif n in wall_link and wall_link[n].n1 in col_below:
+                w = col_below[wall_link[n].n1]  # beam framing into a wall joint: shown as the wall thickness
+                sups.append(Support("wall", w.b, wall_link[n].n1 in col_above, w.mark))
             elif len(beam_nodes.get(n, ())) > 1:
                 sups.append(Support("beam", 0.0))
             else:
@@ -811,6 +907,8 @@ def physical_beams(project, fm, rep) -> list[PhysBeam]:
                 [r[4] for r in ordered],
                 tops,
                 [r[7] for r in ordered],
+                [r[10] for r in ordered],
+                [r[11] for r in ordered],
             )
         )
     out.sort(key=lambda p: (p.level_index, natural_key(p.mark)))
@@ -825,11 +923,15 @@ def _same_design(a: PhysBeam, b: PhysBeam, tol: float = 0.05) -> bool:
         bo = b.bottom[::-1] if rev else b.bottom
         tp = b.tops[::-1] if rev else b.tops
         lk = b.links[::-1] if rev else b.links
+        le = b.links_end[::-1] if rev else b.links_end
+        sf = b.side_face[::-1] if rev else b.side_face
         if (
             all(abs(x - y) <= tol + 1e-9 for x, y in zip(a.spans, sp))
             and a.bottom == bo
             and a.tops == tp
             and a.links == lk
+            and a.links_end == le
+            and a.side_face == sf
         ):
             return True
     return False
@@ -848,7 +950,14 @@ def beam_groups(project, fm, rep) -> list[BeamGroup]:
     return groups
 
 
-def _beam_section(cv: Canvas, cx: float, ybot: float, pb: PhysBeam, top: BarSet | None, bot: BarSet, link, k, cover):
+def _side_bars(text: str) -> BarSet | None:
+    """Side-face bars per face from the design text, e.g. "2-T12 each face (...)"."""
+    return _parse_barset(text) if text else None
+
+
+def _beam_section(
+    cv: Canvas, cx: float, ybot: float, pb: PhysBeam, top: BarSet | None, bot: BarSet, link, k, cover, side=None
+):
     """Cross-section magnified by ``k`` with its soffit centre at (cx, ybot)."""
     b, d = pb.b * k, pb.d * k
     c = cover * k
@@ -865,15 +974,13 @@ def _beam_section(cv: Canvas, cx: float, ybot: float, pb: PhysBeam, top: BarSet 
         for i in range(n):
             x = (x0 + x1) / 2 if n == 1 else x0 + (x1 - x0) * i / (n - 1)
             cv.circle(x, y, r)
-
-
-def _zone_spacing(pb: PhysBeam, link: Links | None, seismic: bool) -> int | None:
-    if link is None or not seismic:
-        return None
-    dmin = min([bs.dia for bs in pb.bottom] + [t.dia for t in pb.tops if t] or [12])
-    d_eff = pb.d * 1000 - 50
-    s = int(min(d_eff / 4, 6 * dmin, 100.0) // 5 * 5)
-    return s if s < link.spacing else None
+    if side:  # side-face bars, evenly between the top and bottom layers on both faces
+        r = side.dia / 2000 * k
+        ya, yb = ybot + c + ld + 3 * r, ybot + d - c - ld - 3 * r
+        for i in range(side.count):
+            y = ya + (yb - ya) * (i + 1) / (side.count + 1)
+            for x in (cx - b / 2 + c + ld + r, cx + b / 2 - c - ld - r):
+                cv.circle(x, y, r)
 
 
 def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project) -> tuple[float, float]:
@@ -881,10 +988,12 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
     pb = g.rep
     th = cv.mm(2.5)
     cover = project.design.beam_cover
-    seismic = bool(project.seismic.enabled)
     D = pb.d
     title = f"BM{n}: {g.label(project)}"
     sub = f"{pb.b * 1000:.0f} x {D * 1000:.0f}, span(s) " + " + ".join(f"{s * 1000:.0f}" for s in pb.spans)
+    side_txt = sorted({t for t in pb.side_face if t})
+    if side_txt:
+        sub += "; side face: " + " / ".join(t.split(" (")[0] for t in side_txt)
     cv.text(title, x0, y0, 3.5, "TL")
     cv.text(sub, x0, y0 - th * 1.9, 2.5, "TL")
     stub = max(0.4, D * 0.6)
@@ -903,7 +1012,7 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
     cv.line((ex0 + Ltot + wn, ys), (ex0 + Ltot + wn, ys + D))
     for x, sp in zip(xs, pb.supports):
         X = ex0 + x
-        if sp.kind == "column":
+        if sp.held:
             hw = sp.width / 2
             for xx in (X - hw, X + hw):
                 cv.line((xx, ys), (xx, ys - stub))
@@ -912,7 +1021,7 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
             cv.line((X - hw - 0.03, ys - stub), (X + hw + 0.03, ys - stub), color=8)
             if sp.above:
                 cv.line((X - hw - 0.03, ys + D + stub), (X + hw + 0.03, ys + D + stub), color=8)
-            cv.text(sp.mark, X, ys - stub - th, 2.5, "TC")
+            cv.text(sp.mark if sp.kind == "column" else f"{sp.mark} (wall)", X, ys - stub - th, 2.5, "TC")
         elif sp.kind == "beam":
             cv.line((X, ys - 0.1), (X, ys + D + 0.1), "DET_OUTLINE", color=8)
             cv.text("SB", X, ys - 0.1 - th, 2.0, "TC")
@@ -926,9 +1035,9 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
         xa = ex0 + xs[i] - (hw[i] - cover if i == 0 else hw[i])
         xb = ex0 + xs[i + 1] + (hw[i + 1] - cover if i == len(pb.spans) - 1 else hw[i + 1])
         pts = [(xa, yb), (xb, yb)]
-        if i == 0 and pb.supports[0].kind == "column":
+        if i == 0 and pb.supports[0].held:
             pts.insert(0, (xa, yb + hook))
-        if i == len(pb.spans) - 1 and pb.supports[-1].kind == "column":
+        if i == len(pb.spans) - 1 and pb.supports[-1].held:
             pts.append((xb, yb + hook))
         cv.poly(pts, "DET_BAR")
         cv.text(f"{bars} (bottom)", ex0 + xs[i] + 0.35 * (xs[i + 1] - xs[i]), ys - th * 1.4, 2.5, "TC")
@@ -949,9 +1058,9 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
         else:
             xb = ex0 + xs[j] + hw[j] + 0.3 * right if right else ex0 + xs[j] + hw[j] - cover
         pts = [(xa, yt), (xb, yt)]
-        if (not left and pb.supports[j].kind == "column") or (left and free[j - 1]):
+        if (not left and pb.supports[j].held) or (left and free[j - 1]):
             pts.insert(0, (xa, yt - hook))
-        if (not right and pb.supports[j].kind == "column") or (right and free[j + 1]):
+        if (not right and pb.supports[j].held) or (right and free[j + 1]):
             pts.append((xb, yt - hook))
         cv.poly(pts, "DET_BAR")
         tx = ex0 + xs[j] + (hw[j] + 0.2 * right if right else -hw[j] - 0.2 * left)
@@ -965,7 +1074,17 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
         if xb - xa > 0.05:
             cv.line((xa, ytop - 0.006 - 0.012), (xb, ytop - 0.006 - 0.012), "DET_BAR")
             cv.text(f"{hanger} hanger", ex0 + (xs[i] + xs[i + 1]) / 2, ys + D + th * 2.9, 2.5, "BC")
-    # stirrups
+    # side-face bars (one face visible in elevation)
+    for i, txt in enumerate(pb.side_face):
+        sb = _side_bars(txt)
+        if not sb:
+            continue
+        ya, yb2 = yb + 0.03, ytop - 0.03
+        for q in range(sb.count):
+            yy = ya + (yb2 - ya) * (q + 1) / (sb.count + 1)
+            cv.line((ex0 + xs[i] + hw[i], yy), (ex0 + xs[i + 1] - hw[i + 1], yy), "DET_BAR", color=6)
+    # stirrups: links_end within 2d of column / wall faces (IS 13920 cl 6.3.5), links elsewhere
+    d_eff = D - cover - dl - max(bs.dia for bs in pb.bottom) / 2000
     yz = ys - stub - th * 3.2  # spacing annotation strip
     for i, lk in enumerate(pb.links):
         fa = ex0 + xs[i] + hw[i]
@@ -975,18 +1094,17 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
         if lk is None:
             cv.text("LINKS: REVISE SECTION", (fa + fb) / 2, yz, 2.5, "TC")
             continue
-        legs = "" if lk.legs == 2 else f"{lk.legs}L-"
-        sz = _zone_spacing(pb, lk, seismic)
-        # confining zones (2 x depth) only at column faces
-        za_on = bool(sz) and pb.supports[i].kind == "column"
-        zb_on = bool(sz) and pb.supports[i + 1].kind == "column"
-        zl = min(2 * D, (fb - fa) / (za_on + zb_on)) if za_on or zb_on else 0.0
+        le = pb.links_end[i] if i < len(pb.links_end) else None
+        za_on = le is not None and pb.supports[i].held
+        zb_on = le is not None and pb.supports[i + 1].held
+        zl = min(2 * d_eff, (fb - fa) / (za_on + zb_on)) if za_on or zb_on else 0.0
         z0 = fa + (zl if za_on else 0.0)
         z1 = fb - (zl if zb_on else 0.0)
-        zones = [(fa, z0, sz), (z0, z1, lk.spacing), (z1, fb, sz)]
-        for za, zb, sp in zones:
-            if zb - za <= 1e-6:
+        for za, zb, zl_ in ((fa, z0, le), (z0, z1, lk), (z1, fb, le)):
+            if zb - za <= 1e-6 or zl_ is None:
                 continue
+            legs = "" if zl_.legs == 2 else f"{zl_.legs}L-"
+            sp = zl_.spacing
             sp_m = sp / 1000
             k = 0
             x = za + 0.05
@@ -997,7 +1115,7 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
             cv.line((za, yz + th * 0.6), (zb, yz + th * 0.6), "DET_DIM")
             for xx in (za, zb):
                 cv.line((xx, yz + th * 0.2), (xx, yz + th * 1.0), "DET_DIM")
-            cv.text(f"{legs}T{lk.dia}@{int(sp)}", (za + zb) / 2, yz, 2.0, "TC")
+            cv.text(f"{legs}T{zl_.dia}@{int(sp)}", (za + zb) / 2, yz, 2.0, "TC")
     # section marks
     jsup = max(range(len(pb.tops)), key=lambda j: pb.tops[j].area if pb.tops[j] else 0.0)
     imid = max(range(len(pb.spans)), key=lambda i: (pb.bottom[i].area, pb.spans[i]))
@@ -1014,22 +1132,27 @@ def _beam_detail(cv: Canvas, x0: float, y0: float, n: int, g: BeamGroup, project
     sec_gap = cv.mm(18)
     sx = elev_right + sec_gap
     bw = pb.b * k
-    lk_sup = pb.links[min(jsup, len(pb.links) - 1)]
-    sz_sup = _zone_spacing(pb, lk_sup, seismic)
-    if lk_sup and sz_sup:  # the support section lies in the confining zone
-        lk_sup = Links(lk_sup.legs, lk_sup.dia, float(sz_sup))
+    isup = min(jsup, len(pb.links) - 1)
+    lk_sup = pb.links[isup]
+    le_sup = pb.links_end[isup] if isup < len(pb.links_end) else None
+    if le_sup is not None and pb.supports[jsup].held:  # the support section lies within 2d of the face
+        lk_sup = le_sup
     lk_mid = pb.links[imid]
+    side_sup = _side_bars(pb.side_face[isup]) if isup < len(pb.side_face) else None
+    side_mid = _side_bars(pb.side_face[imid]) if imid < len(pb.side_face) else None
     bot_sup = pb.bottom[min(jsup, len(pb.bottom) - 1)]
     sec_scale = f"1:{int(round(cv.s / k))}"
     labels = []
-    for idx, (top, bot, lk, name) in enumerate(
+    for idx, (top, bot, lk, side, name) in enumerate(
         (
-            (pb.tops[jsup], bot_sup, lk_sup, "SECTION 1-1 (support)"),
-            (hanger, pb.bottom[imid], lk_mid, "SECTION 2-2 (midspan)"),
+            (pb.tops[jsup], bot_sup, lk_sup, side_sup, "SECTION 1-1 (support)"),
+            (hanger, pb.bottom[imid], lk_mid, side_mid, "SECTION 2-2 (midspan)"),
         )
     ):
         cx = sx + bw / 2 + idx * (bw + cv.mm(45))
-        _beam_section(cv, cx, ys, pb, top, bot, lk, k, cover)
+        _beam_section(cv, cx, ys, pb, top, bot, lk, k, cover, side)
+        if side:
+            cv.text(f"{side} EF", cx + bw / 2 + cv.mm(2), ys + pb.d * k / 2 - cv.mm(4), 2.0, "L")
         cv.text(f"{top}", cx + bw / 2 + cv.mm(2), ys + pb.d * k - cv.mm(2), 2.0, "L")
         cv.text(f"{bot}", cx + bw / 2 + cv.mm(2), ys + cv.mm(2), 2.0, "L")
         cv.text(str(lk) if lk else "links: revise", cx + bw / 2 + cv.mm(2), ys + pb.d * k / 2, 2.0, "L")
@@ -1050,8 +1173,10 @@ def _beam_pages(s: float, project, groups: list[BeamGroup]) -> list[Canvas]:
         "SB = secondary beam / beam junction. Identical beams (size, spans within 50 mm, reinforcement)"
         " are detailed once.",
     ]
-    if project.seismic.enabled:
-        notes.append("Stirrup spacing near supports over 2 x depth per IS 13920 (ductile detailing).")
+    if any(le for g in groups for le in g.rep.links_end):
+        notes.append("Closer stirrup spacing applies within 2d of column / wall faces (IS 13920 cl 6.3.5).")
+    if any(t for g in groups for t in g.rep.side_face):
+        notes.append("Side-face bars (EF = each face) shown in magenta, lapped at supports.")
     blocks = [lambda cv, x, y, n=n, g=g: _beam_detail(cv, x, y, n, g, project) for n, g in enumerate(groups, 1)]
     return _flow_pages(s, "BEAM DETAILS", blocks, notes, None, "No beam designs available.")
 
@@ -1253,6 +1378,7 @@ def build_detail_doc(project, fm, rep, watermark: str = ""):
     doc = _doc()
     msp = doc.modelspace()
     ranges, col_rows = column_schedule(project, rep)
+    walls = wall_schedule(fm)
     ftypes = footing_types(rep)
     bgroups = beam_groups(project, fm, rep)
     sgroups = slab_groups(rep)
@@ -1265,8 +1391,9 @@ def build_detail_doc(project, fm, rep, watermark: str = ""):
 
         return build
 
+    col_title = "COLUMN AND WALL SCHEDULE" if walls else "COLUMN SCHEDULE"
     sheets = [
-        ("columns", "COLUMN SCHEDULE", single(_column_sheet, ranges, col_rows), SCALES),
+        ("columns", col_title, single(_column_sheet, ranges, col_rows, walls), SCALES),
         ("footings", "FOOTING SCHEDULE", lambda s: _footing_pages(s, project, ftypes), SCALES[: SCALES.index(50) + 1]),
         ("beams", "BEAM DETAILS", lambda s: _beam_pages(s, project, bgroups), SCALES[2 : SCALES.index(75) + 1]),
         ("slabs", "SLAB SCHEDULE", single(_slab_sheet, sgroups), SCALES),
@@ -1302,6 +1429,7 @@ def build_detail_doc(project, fm, rep, watermark: str = ""):
         info["circles"][key] = circles
     info["column_ranges"] = ranges
     info["column_rows"] = col_rows
+    info["wall_rows"] = walls
     info["footing_types"] = ftypes
     info["beam_groups"] = bgroups
     info["slab_groups"] = sgroups
