@@ -125,7 +125,8 @@ scripts\build_windows.bat                                # exe + portable + inst
 ```
 
 **Releases:** bump the version in `planwin_ai/__init__.py`, `pyproject.toml` and `packaging/version_info.txt`, update
-`CHANGELOG.md`, then push a tag `vX.Y.Z`. GitHub Actions tests, builds, self-tests and publishes the release.
+`CHANGELOG.md`, then either push a tag `vX.Y.Z` or run the *build-windows* workflow manually with **release** ticked.
+GitHub Actions tests, builds, self-tests and publishes the release (the manual run creates the tag itself).
 Versioning follows **Semantic Versioning** (MAJOR.MINOR.PATCH).
 
 After changing the generator or design code, rebuild the template library with `python tools/build_templates.py`.
