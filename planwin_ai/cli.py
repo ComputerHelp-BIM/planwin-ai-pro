@@ -6,6 +6,8 @@ Examples::
     planwin-ai cli new --template office_g5 --out office.pwai
     planwin-ai cli ask "G+4 residential in Pune, 3x2 bays of 4.5 m" --out model.pwai
     planwin-ai cli run model.pwai --design --export staad etabs excel pdf --out-dir results/
+    planwin-ai cli run model.pwai --method rsa --no-diaphragm --units MKS --export calc bbs details
+    planwin-ai cli boq model.pwai --by type
     planwin-ai cli import-plw old.plw --out converted.pwai
 """
 
@@ -17,8 +19,12 @@ import sys
 
 from . import APP_NAME, __version__
 
+_METHODS = {"auto": "auto", "static": "static", "rsa": "response_spectrum"}
+
 
 def main(argv: list[str] | None = None) -> int:
+    from .services import exports
+
     ap = argparse.ArgumentParser(prog="planwin-ai cli", description=f"{APP_NAME} {__version__} command line")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("templates", help="list templates")
@@ -33,8 +39,19 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("project")
     r.add_argument("--design", action="store_true")
     r.add_argument("--autosize", action="store_true")
-    r.add_argument("--export", nargs="*", default=[])
+    r.add_argument("--export", nargs="*", default=[], metavar="FORMAT", help="any of: " + ", ".join(exports.keys()))
     r.add_argument("--out-dir", default=".")
+    r.add_argument("--method", choices=sorted(_METHODS), help="seismic analysis method (IS 1893-1 cl 7.7)")
+    r.add_argument(
+        "--diaphragm",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="floors act as rigid diaphragms (IS 1893-1 cl 7.6.4)",
+    )
+    r.add_argument("--units", choices=["SI", "MKS"], type=str.upper, help="display units: SI (kN) or MKS (tonnes)")
+    b = sub.add_parser("boq", help="design a project and print its bill of quantities")
+    b.add_argument("project")
+    b.add_argument("--by", choices=["floor", "type"], default="floor")
     i = sub.add_parser("import-plw", help="convert a legacy PlanWin .plw plan")
     i.add_argument("plw")
     i.add_argument("--out", required=True)
@@ -87,7 +104,19 @@ def _run(args: argparse.Namespace) -> int:
         print(f"PlanWin {rep.version}: {rep.slabs} slabs, {rep.columns} columns, {rep.beams} beams")
         print(project_io.save_project(prj, args.out))
         return 0
+    if args.cmd == "boq":
+        s = Session(project_io.load_project(args.project))
+        res = execute(s, [{"action": "boq", "by": args.by}])
+        print("\n".join(m for m in res.messages if m.startswith("Bill of quantities")))
+        for e in res.errors:
+            print("ERROR:", e, file=sys.stderr)
+        return 1 if res.errors else 0
     if args.cmd == "run":
+        from . import units
+        from .services import exports
+
+        for f in args.export:
+            exports.get(f)  # unknown format → ValueError → usage error (2) before any work
         os.makedirs(args.out_dir, exist_ok=True)
         s = Session(
             project_io.load_project(args.project),
@@ -96,11 +125,24 @@ def _run(args: argparse.Namespace) -> int:
             exports_allowed=lic.exports_allowed,
         )
         acts = []
+        if args.units:
+            acts.append({"action": "set_units", "system": args.units})
+        seismic = {}
+        if args.method:
+            seismic["method"] = _METHODS[args.method]
+        if args.diaphragm is not None:
+            seismic["rigid_diaphragm"] = args.diaphragm
+        if seismic:
+            acts.append({"action": "set_seismic", **seismic})
         if args.autosize:
             acts.append({"action": "autosize_columns"})
         acts.append({"action": "design" if args.design else "analyze"})
         acts += [{"action": "export", "format": f} for f in args.export]
-        res = execute(s, acts)
+        shown = units.current
+        try:
+            res = execute(s, acts)
+        finally:
+            units.current = shown  # --units is a per-run display choice
         print("\n".join(res.messages))
         for e in res.errors:
             print("ERROR:", e, file=sys.stderr)

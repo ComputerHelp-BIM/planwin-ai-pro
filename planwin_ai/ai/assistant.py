@@ -42,6 +42,12 @@ class Assistant:
                 for k, v in last["fm"].seismic.items()
             }
         s["parametric"] = bool(p.meta.get("grid_spec"))
+        s["seismic"] = {"method": p.seismic.method, "rigid_diaphragm": p.seismic.rigid_diaphragm}
+        s["walls"] = {pl.name: [w.mark for w in pl.walls] for pl in p.plans if pl.walls}
+        s["stairs"] = [x.get("name") for x in p.stairs]
+        s["water_tanks"] = [x.get("name") for x in p.water_tanks]
+        s["grids"] = len(p.grids)
+        s["revisions"] = [x.get("label") for x in p.meta.get("revisions") or []]
         return json.dumps(s, default=str)[:6000]
 
     def context(self) -> tuple[str, bool]:
