@@ -154,8 +154,8 @@ def _pdf(ctx: ExportContext, path: str) -> str:
     from ..io.pdf_report import write_pdf
 
     rep = ctx.design()
-    fm, _ = ctx.frame()
-    return write_pdf(path, ctx.project, ctx.plan_results(), fm, rep, ctx.watermark)
+    fm, fa = ctx.frame()
+    return write_pdf(path, ctx.project, ctx.plan_results(), fm, rep, ctx.watermark, fa=fa)
 
 
 def _bbs(ctx: ExportContext, path: str) -> str:
