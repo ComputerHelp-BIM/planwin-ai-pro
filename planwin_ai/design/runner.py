@@ -102,6 +102,12 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
                 fs.ok and fl.ok and fr.ok and sh.ok and dok,
                 float(util),
                 notes,
+                bottom_bars=is456.BarSet(n, dia),
+                top_l_bars=is456.BarSet(nl, dl),
+                top_r_bars=is456.BarSet(nr, dr),
+                links=is456.Links(sh.legs, sh.dia, sh.spacing) if sh.ok else None,
+                group=mem.group,
+                level_index=mem.level,
             )
         )
     # ------------------------------------------------------------- columns
@@ -122,7 +128,8 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
         # unsupported length = clear height below the deepest beam framing in at the top (cl 25.1.3)
         top = mem.n2
         dmax = max((bm.d for bm in m.members.values() if bm.kind == "beam" and top in (bm.n1, bm.n2)), default=0.0)
-        L = max(abs(m.nodes[mem.n2].z - m.nodes[mem.n1].z) - dmax, 0.5)
+        H = abs(m.nodes[mem.n2].z - m.nodes[mem.n1].z)
+        L = max(H - dmax, 0.5)
         chk = is456.design_column(
             demands,
             mem.b,
@@ -153,6 +160,11 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
                 float(chk.ratio),
                 chk.As_req,
                 chk.notes,
+                main_bars=chk.main_bars,
+                tie=chk.tie,
+                level_index=mem.level,
+                height=H,
+                clear_height=L,
             )
         )
     # ------------------------------------------------------------- footings
@@ -184,7 +196,25 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
         rects.append((mem.mark, nd.x, nd.y, fr.B if not swap else fr.L, fr.L if not swap else fr.B))
         rep.footings.append(
             FootingDesign(
-                mem.mark, P, fr.L, fr.B, fr.D, fr.bars_L, fr.bars_B, fr.q_max, fr.ok, fr.ast_L, fr.ast_B, fr.notes
+                mem.mark,
+                P,
+                fr.L,
+                fr.B,
+                fr.D,
+                fr.bars_L,
+                fr.bars_B,
+                fr.q_max,
+                fr.ok,
+                fr.ast_L,
+                fr.ast_B,
+                fr.notes,
+                mesh_L=fr.mesh_L,
+                mesh_B=fr.mesh_B,
+                col_b=mem.b,
+                col_d=mem.d,
+                x=nd.x,
+                y=nd.y,
+                angle=mem.angle,
             )
         )
     for i in range(len(rects)):

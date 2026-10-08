@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import is456
+from .is456 import BarMesh, BarSet, Links
 
 
 @dataclass
@@ -30,6 +31,13 @@ class BeamDesign:
     ok: bool
     utilisation: float
     notes: list[str] = field(default_factory=list)
+    # structured detailing (for BBS, drawings and calculation sheets)
+    bottom_bars: BarSet | None = None
+    top_l_bars: BarSet | None = None
+    top_r_bars: BarSet | None = None
+    links: Links | None = None
+    group: str = ""  # id of the plan beam this member segment belongs to
+    level_index: int = 0
 
 
 @dataclass
@@ -50,6 +58,11 @@ class ColumnDesign:
     utilisation: float
     As: float
     notes: list[str] = field(default_factory=list)
+    main_bars: BarSet | None = None
+    tie: Links | None = None
+    level_index: int = 0
+    height: float = 0.0  # storey height (m), node to node
+    clear_height: float = 0.0  # unsupported length used for slenderness (m)
 
 
 @dataclass
@@ -66,6 +79,13 @@ class FootingDesign:
     ast_L: float
     ast_B: float
     notes: list[str] = field(default_factory=list)
+    mesh_L: BarMesh | None = None  # bars running along L
+    mesh_B: BarMesh | None = None
+    col_b: float = 0.0
+    col_d: float = 0.0
+    x: float = 0.0
+    y: float = 0.0
+    angle: float = 0.0  # column angle (deg); L is along the column depth d
 
 
 @dataclass

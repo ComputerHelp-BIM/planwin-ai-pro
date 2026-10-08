@@ -3,8 +3,67 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 import numpy as np
+
+
+# ---------------------------------------------------------------- detailing types
+@dataclass(frozen=True)
+class BarSet:
+    """``count`` bars of diameter ``dia`` (mm), e.g. 3-T16."""
+
+    count: int
+    dia: int
+
+    @property
+    def area(self) -> float:
+        return self.count * math.pi * self.dia**2 / 4
+
+    def __str__(self) -> str:
+        return f"{self.count}-T{self.dia}"
+
+
+@dataclass(frozen=True)
+class Links:
+    """Stirrups / ties: ``legs`` legs of diameter ``dia`` at ``spacing`` mm."""
+
+    legs: int
+    dia: int
+    spacing: float
+
+    def __str__(self) -> str:
+        legs = f"{self.legs}L-" if self.legs != 2 else "2L-"
+        return f"{legs}T{self.dia} @ {int(self.spacing)} c/c"
+
+
+@dataclass(frozen=True)
+class BarMesh:
+    """Bars of diameter ``dia`` at ``spacing`` mm centres (slabs, footings)."""
+
+    dia: int
+    spacing: float
+    check: bool = False  # minimum practical spacing reached – the section needs checking
+
+    @property
+    def area_per_m(self) -> float:
+        return 1000 * math.pi * self.dia**2 / 4 / self.spacing
+
+    def __str__(self) -> str:
+        return f"T{self.dia} @ {int(self.spacing)} c/c" + (" (check)" if self.check else "")
+
+
+def mesh_for(ast_per_m: float, dias: tuple[int, ...], s_max: float, s_min: float = 100.0) -> BarMesh | None:
+    """Smallest bar diameter whose spacing for ``ast_per_m`` (mm²/m) is at least ``s_min``;
+    spacing rounded down to 10 mm and capped at ``s_max``."""
+    if not math.isfinite(ast_per_m) or ast_per_m <= 0:
+        return None
+    for dia in dias:
+        s = 1000 * math.pi * dia * dia / 4 / ast_per_m
+        if s >= s_min:
+            return BarMesh(dia, float(int(min(s, s_max) // 10 * 10)))
+    return BarMesh(dias[-1], float(s_min), check=True)
+
 
 BAR_DIAS = [8, 10, 12, 16, 20, 25, 32]
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from .common import ast_singly, tau_c
+from .common import BarMesh, ast_singly, mesh_for, tau_c
 
 
 @dataclass
@@ -20,6 +20,8 @@ class FootingResult:
     q_max: float  # kN/m^2 service
     ok: bool
     notes: list[str] = field(default_factory=list)
+    mesh_L: BarMesh | None = None  # bars running along L
+    mesh_B: BarMesh | None = None
 
 
 def design_footing(
@@ -116,12 +118,11 @@ def design_footing(
             notes.append("depth > 2.5 m – consider raft/pile")
             break
 
-    def bar_str(ast):
-        for dia in (10, 12, 16, 20, 25):
-            s_ = 1000 * math.pi * dia * dia / 4 / ast
-            if s_ >= 100:
-                return f"T{dia} @ {int(min(s_, 300) // 10 * 10)} c/c"
-        return "T25 @ 100 c/c (check)"
+    mesh_L = mesh_for(astL, (10, 12, 16, 20, 25), 300.0)
+    mesh_B = mesh_for(astB, (10, 12, 16, 20, 25), 300.0)
+
+    def bar_str(mesh):
+        return str(mesh) if mesh else "-"
 
     return FootingResult(
         round(L, 3),
@@ -129,9 +130,11 @@ def design_footing(
         round(D, 3),
         astL,
         astB,
-        bar_str(astL),
-        bar_str(astB),
+        bar_str(mesh_L),
+        bar_str(mesh_B),
         round(q_service, 1),
         ok and not any("could not" in n for n in notes),
         notes,
+        mesh_L=mesh_L,
+        mesh_B=mesh_B,
     )

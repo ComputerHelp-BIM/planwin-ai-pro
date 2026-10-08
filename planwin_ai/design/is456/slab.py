@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .beam import deflection_mf
-from .common import ast_singly
+from .common import BarMesh, ast_singly, mesh_for
 
 # Table 27 (simply supported, corners not held down) – alpha_x, alpha_y
 _T27_R = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2.0]
@@ -35,6 +35,9 @@ class SlabResult:
     deflection_ok: bool
     ok: bool
     notes: list[str] = field(default_factory=list)
+    mesh_x: BarMesh | None = None  # bottom, short span
+    mesh_y: BarMesh | None = None  # bottom, long span (distribution steel for one-way slabs)
+    mesh_neg: BarMesh | None = None  # top, over continuous supports
 
 
 def design_slab(
@@ -96,14 +99,15 @@ def design_slab(
     if not ok:
         notes.append("section inadequate – increase thickness")
 
-    def spacing(ast):
-        if not math.isfinite(ast) or ast <= 0:
-            return "-"
-        for dia in (8, 10, 12):
-            s = 1000 * math.pi * dia * dia / 4 / ast
-            if s >= 100:
-                return f"T{dia} @ {int(min(s, 3 * d, 300) // 10 * 10)} c/c"
-        return "T12 @ 100 c/c (check)"
+    def mesh(ast):
+        return mesh_for(ast, (8, 10, 12), min(3 * d, 300.0))
+
+    def spacing(m):
+        return str(m) if m else "-"
+
+    mesh_x = mesh(ax)
+    mesh_y = mesh(ay) if My else mesh(ast_min)
+    mesh_neg = mesh(an) if Mneg else None
 
     fs = 0.58 * fy
     pt = 100 * ax / (1000 * d) if math.isfinite(ax) else 1.0
@@ -126,10 +130,13 @@ def design_slab(
         Mx,
         My,
         Mneg,
-        spacing(ax),
-        spacing(ay) if My else spacing(ast_min),
-        spacing(an) if Mneg else "-",
+        spacing(mesh_x),
+        spacing(mesh_y),
+        spacing(mesh_neg),
         dok,
         ok and dok,
         notes,
+        mesh_x=mesh_x,
+        mesh_y=mesh_y,
+        mesh_neg=mesh_neg,
     )

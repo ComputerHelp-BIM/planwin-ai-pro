@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .common import BarSet, Links
+
 
 def _concrete_stress(eps: np.ndarray, fck: float) -> np.ndarray:
     e = np.clip(eps, 0.0, None)
@@ -96,6 +98,8 @@ class ColumnCheck:
     bars: str = ""
     ties: str = ""
     notes: list[str] = field(default_factory=list)
+    main_bars: BarSet | None = None
+    tie: Links | None = None
 
 
 def biaxial_ratio(
@@ -206,8 +210,10 @@ def design_column(
     n, dia, prov = column_bars(As, b, D)
     tie_dia = max(8, math.ceil(dia / 4 / 2) * 2)
     tie_sp = min(b, D, 16 * dia, 300)
+    main = BarSet(n, dia)
+    tie = Links(2, tie_dia, float(int(tie_sp // 25 * 25)))
     return ColumnCheck(
-        ok, p, As, ratio, gov, f"{n}-T{dia} ({prov:.0f} mm²)", f"T{tie_dia} @ {int(tie_sp // 25 * 25)} c/c", notes
+        ok, p, As, ratio, gov, f"{main} ({prov:.0f} mm²)", f"T{tie_dia} @ {int(tie.spacing)} c/c", notes, main, tie
     )
 
 
