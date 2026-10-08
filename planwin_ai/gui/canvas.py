@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QKeyEvent, QMouseEvent, QPainter, QPainterPath, QPen, QPolygonF, QWheelEvent
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+    QPen,
+    QPolygonF,
+    QWheelEvent,
+)
 from PySide6.QtWidgets import QMenu, QWidget
 
 from ..core import geometry as G
@@ -24,7 +33,7 @@ class PlanCanvas(QWidget):
     status = Signal(str)
     cursorMoved = Signal(float, float)
 
-    def __init__(self, main: "MainWindow"):
+    def __init__(self, main: MainWindow):
         super().__init__()
         self.main = main
         self.setMouseTracking(True)
@@ -37,20 +46,20 @@ class PlanCanvas(QWidget):
         self.snap_step = 0.05
         self.show_loads = True
         self.show_marks = True
-        self._press: Optional[QPointF] = None
-        self._press_world: Optional[tuple[float, float]] = None
-        self._drag_rect: Optional[tuple[tuple[float, float], tuple[float, float]]] = None
+        self._press: QPointF | None = None
+        self._press_world: tuple[float, float] | None = None
+        self._drag_rect: tuple[tuple[float, float], tuple[float, float]] | None = None
         self._poly: list[tuple[float, float]] = []
-        self._beam_start: Optional[tuple[float, float]] = None
+        self._beam_start: tuple[float, float] | None = None
         self._mouse_world = (0.0, 0.0)
-        self._snap_pt: Optional[tuple[float, float]] = None
+        self._snap_pt: tuple[float, float] | None = None
         self._panning = False
-        self._last_pos: Optional[QPointF] = None
-        self.highlight_at: Optional[tuple[float, float]] = None
+        self._last_pos: QPointF | None = None
+        self.highlight_at: tuple[float, float] | None = None
 
     # ----------------------------------------------------------- helpers
     @property
-    def plan(self) -> Optional[Plan]:
+    def plan(self) -> Plan | None:
         return self.main.current_plan()
 
     @property
@@ -154,7 +163,9 @@ class PlanCanvas(QWidget):
         plan = self.plan
         if plan is None:
             p.setPen(QColor(pal["muted"]))
-            p.drawText(self.rect(), Qt.AlignCenter, "No plan – create one from the Project panel or ask the AI assistant")
+            p.drawText(
+                self.rect(), Qt.AlignCenter, "No plan – create one from the Project panel or ask the AI assistant"
+            )
             return
         res = self.main.plan_result(plan.name)
         sel = set(self.selection)
@@ -166,7 +177,11 @@ class PlanCanvas(QWidget):
             if len(s.points) < 3:
                 continue
             poly = QPolygonF([self.w2s(*pt) for pt in s.pts])
-            col = pal["slab_cant"] if s.distribution == "cantilever" else (pal["slab_grade"] if s.distribution == "on_grade" else pal["slab"])
+            col = (
+                pal["slab_cant"]
+                if s.distribution == "cantilever"
+                else (pal["slab_grade"] if s.distribution == "on_grade" else pal["slab"])
+            )
             p.setBrush(QColor(col))
             p.setPen(QPen(QColor(pal["select"] if s.id in sel else pal["slab_edge"]), 2.5 if s.id in sel else 1))
             p.drawPolygon(poly)
@@ -272,7 +287,9 @@ class PlanCanvas(QWidget):
             p.drawRect(r)
             if self.tool == "rect_slab":
                 p.setPen(QColor(pal["text"]))
-                p.drawText(r.adjusted(4, 4, 0, 0), Qt.AlignLeft | Qt.AlignTop, f"{abs(bx - ax):.2f} × {abs(by - ay):.2f} m")
+                p.drawText(
+                    r.adjusted(4, 4, 0, 0), Qt.AlignLeft | Qt.AlignTop, f"{abs(bx - ax):.2f} × {abs(by - ay):.2f} m"
+                )
         if self._poly:
             pts = [self.w2s(*q) for q in self._poly] + [self.w2s(*self._mouse_world)]
             p.drawPolyline(QPolygonF(pts))
@@ -453,13 +470,20 @@ class PlanCanvas(QWidget):
         plan = self.plan
 
         def fn():
-            s = Slab(mark=plan.next_mark("S"), points=[[round(x, 4), round(y, 4)] for x, y in G.ensure_ccw([tuple(q) for q in pts])],
-                     thickness=d["slab_thickness"], live=d["slab_live"], floor_finish=d["slab_ff"], other=d["slab_other"],
-                     grade=d["grade"])
+            s = Slab(
+                mark=plan.next_mark("S"),
+                points=[[round(x, 4), round(y, 4)] for x, y in G.ensure_ccw([tuple(q) for q in pts])],
+                thickness=d["slab_thickness"],
+                live=d["slab_live"],
+                floor_finish=d["slab_ff"],
+                other=d["slab_other"],
+                grade=d["grade"],
+            )
             if plan.floor_type == "ground":
                 s.distribution = "on_grade"
             plan.slabs.append(s)
             self.selection = [s.id]
+
         self.main.mutate("Add slab", fn)
 
     def _finish_poly(self):
@@ -480,6 +504,7 @@ class PlanCanvas(QWidget):
             c = Column(mark=plan.next_mark("C"), x=pt[0], y=pt[1], b=d["col_b"], d=d["col_d"], grade=d["grade"])
             plan.columns.append(c)
             self.selection = [c.id]
+
         self.main.mutate("Add column", fn)
 
     def _add_beam(self, a, b):
@@ -489,10 +514,20 @@ class PlanCanvas(QWidget):
         d = self.main.defaults
 
         def fn():
-            bm = Beam(mark=plan.next_mark("B"), x1=a[0], y1=a[1], x2=b[0], y2=b[1], b=d["beam_b"], d=d["beam_d"],
-                      grade=d["grade"], wall_thk=d["wall_thk"])
+            bm = Beam(
+                mark=plan.next_mark("B"),
+                x1=a[0],
+                y1=a[1],
+                x2=b[0],
+                y2=b[1],
+                b=d["beam_b"],
+                d=d["beam_d"],
+                grade=d["grade"],
+                wall_thk=d["wall_thk"],
+            )
             plan.beams.append(bm)
             self.selection = [bm.id]
+
         self.main.mutate("Add beam", fn)
 
     # ----------------------------------------------------------- context menu
@@ -511,20 +546,34 @@ class PlanCanvas(QWidget):
         if isinstance(obj, Slab):
             m.addSeparator()
             m.addAction("Make cantilever – fixed at this edge", lambda: self._set_cant_edge(obj, x, y))
-            for lab, dist in (("Two-way (auto)", "auto"), ("One-way", "one_way"), ("Slab on grade", "on_grade"),
-                              ("Uniform to edges", "uniform")):
-                m.addAction(f"Distribution: {lab}", lambda d=dist, s=obj: self.main.mutate(
-                    "Slab distribution", lambda: setattr(s, "distribution", d)))
+            for lab, dist in (
+                ("Two-way (auto)", "auto"),
+                ("One-way", "one_way"),
+                ("Slab on grade", "on_grade"),
+                ("Uniform to edges", "uniform"),
+            ):
+                m.addAction(
+                    f"Distribution: {lab}",
+                    lambda d=dist, s=obj: self.main.mutate("Slab distribution", lambda: setattr(s, "distribution", d)),
+                )
         if isinstance(obj, Beam):
             m.addSeparator()
             m.addAction("Bending moment / shear diagram", lambda: self.main.show_beam_diagram(obj))
-            m.addAction("Toggle cantilever", lambda: self.main.mutate("Cantilever", lambda: setattr(obj, "cantilever", not obj.cantilever)))
+            m.addAction(
+                "Toggle cantilever",
+                lambda: self.main.mutate("Cantilever", lambda: setattr(obj, "cantilever", not obj.cantilever)),
+            )
             for role in ("auto", "primary", "secondary"):
-                m.addAction(f"Role: {role}", lambda r=role: self.main.mutate("Beam role", lambda: setattr(obj, "role", r)))
+                m.addAction(
+                    f"Role: {role}", lambda r=role: self.main.mutate("Beam role", lambda: setattr(obj, "role", r))
+                )
         if isinstance(obj, Column):
             m.addSeparator()
             m.addAction("Load analysis (break-up)", lambda: self.main.show_column_breakup(obj))
-            m.addAction("Rotate 90°", lambda: self.main.mutate("Rotate column", lambda: setattr(obj, "angle", (obj.angle + 90) % 180)))
+            m.addAction(
+                "Rotate 90°",
+                lambda: self.main.mutate("Rotate column", lambda: setattr(obj, "angle", (obj.angle + 90) % 180)),
+            )
         m.addSeparator()
         m.addAction("Zoom extents (F)", self.zoom_extents)
         m.exec(ev.globalPosition().toPoint())
@@ -536,4 +585,5 @@ class PlanCanvas(QWidget):
         def fn():
             s.distribution = "cantilever"
             s.cant_edge = best
+
         self.main.mutate("Cantilever slab", fn)

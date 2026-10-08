@@ -20,8 +20,9 @@ def test_column_tension_check_uses_the_moment_of_each_end():
     """Both column ends carry the same combination name; the large moment at one end
     must not be replaced by the small moment at the other end."""
     one_end = is456.design_column([("0.9DL+1.5EQX", -200.0, 80.0, 0.0)], 0.3, 0.45, 3.0, 25, 500)
-    both = is456.design_column([("0.9DL+1.5EQX", -200.0, 80.0, 0.0), ("0.9DL+1.5EQX", -200.0, 0.0, 0.0)],
-                               0.3, 0.45, 3.0, 25, 500)
+    both = is456.design_column(
+        [("0.9DL+1.5EQX", -200.0, 80.0, 0.0), ("0.9DL+1.5EQX", -200.0, 0.0, 0.0)], 0.3, 0.45, 3.0, 25, 500
+    )
     assert both.steel_pct == one_end.steel_pct
     assert both.ratio == pytest.approx(one_end.ratio)
 
@@ -44,8 +45,16 @@ def test_minimum_eccentricity_about_one_axis_at_a_time():
 def test_footing_structural_design_uses_ultimate_reactions():
     """1.5(DL±EL) / 0.9DL±1.5EL may govern; scaling service cases by 1.2 is unconservative."""
     base = is456.design_footing(1000.0, 0.3, 0.45, 200, 25, 500, lateral=[(1000.0, 60.0, 0.0)])
-    ult = is456.design_footing(1000.0, 0.3, 0.45, 200, 25, 500, lateral=[(1000.0, 60.0, 0.0)],
-                               ultimate=[(1500.0, 0.0, 0.0), (1500.0, 135.0, 0.0)])
+    ult = is456.design_footing(
+        1000.0,
+        0.3,
+        0.45,
+        200,
+        25,
+        500,
+        lateral=[(1000.0, 60.0, 0.0)],
+        ultimate=[(1500.0, 0.0, 0.0), (1500.0, 135.0, 0.0)],
+    )
     assert (ult.L, ult.B) == (base.L, base.B)  # plan size is a service check
     assert ult.ast_L > base.ast_L or ult.D > base.D
 
@@ -64,8 +73,18 @@ def test_design_all_passes_ultimate_reactions_to_footings(monkeypatch):
 
 
 def test_boq_beam_concrete_excludes_slab_and_column_overlap():
-    prj = grid_building(GridSpec(bays_x=[5.0], bays_y=[5.0], upper_floors=0, auto_size=False,
-                                 column=(0.3, 0.3), beam_int=(0.3, 0.5), beam_ext=(0.3, 0.5), slab_thickness=0.15))
+    prj = grid_building(
+        GridSpec(
+            bays_x=[5.0],
+            bays_y=[5.0],
+            upper_floors=0,
+            auto_size=False,
+            column=(0.3, 0.3),
+            beam_int=(0.3, 0.5),
+            beam_ext=(0.3, 0.5),
+            slab_thickness=0.15,
+        )
+    )
     prj.seismic.enabled = prj.wind.enabled = False
     fm, fa, rep = run_full(prj)
     roof_t = 0.15
@@ -141,8 +160,16 @@ def test_files_from_100_get_automatic_slab_thickness_back():
     assert _spec_from(prj).slab_thickness == 0.0
 
 
-@pytest.mark.parametrize("name,expected", [("Block A/B", "Block_A_B"), ("a:b*c?", "a_b_c"), ("CON", "_CON"),
-                                           ("  ..", "project"), ("Shah & Sons <Tower>", "Shah_&_Sons__Tower")])
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("Block A/B", "Block_A_B"),
+        ("a:b*c?", "a_b_c"),
+        ("CON", "_CON"),
+        ("  ..", "project"),
+        ("Shah & Sons <Tower>", "Shah_&_Sons__Tower"),
+    ],
+)
 def test_safe_filename(name, expected):
     assert safe_filename(name) == expected
 
@@ -174,8 +201,17 @@ def test_pdf_escapes_markup_in_project_text(tmp_path, monkeypatch):
 
 
 # ------------------------------------------------------------------ misc
-@pytest.mark.parametrize("query,city", [("a", None), ("pun", "Pune"), ("Thane West", "Thane"), ("Delhi NCR", "Delhi"),
-                                        ("  mumbai ", "Mumbai"), ("xyz", None)])
+@pytest.mark.parametrize(
+    "query,city",
+    [
+        ("a", None),
+        ("pun", "Pune"),
+        ("Thane West", "Thane"),
+        ("Delhi NCR", "Delhi"),
+        ("  mumbai ", "Mumbai"),
+        ("xyz", None),
+    ],
+)
 def test_city_lookup(query, city):
     info = lookup_city(query)
     assert (info["city"] if info else None) == city

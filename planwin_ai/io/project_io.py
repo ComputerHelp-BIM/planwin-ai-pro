@@ -21,12 +21,15 @@ class ProjectFormatError(ValueError):
     pass
 
 
-def save_project(project: Project, path: str) -> str:
+def save_project(project: Project, path: str, stamp: bool = True) -> str:
+    """Write ``project`` atomically.  ``stamp=False`` omits the app version and time so that
+    generated files (the bundled templates) are byte-identical between rebuilds."""
     if not path.lower().endswith(EXT):
         path += EXT
     data = project.to_dict()
-    data["saved_with"] = __version__
-    data["saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    if stamp:
+        data["saved_with"] = __version__
+        data["saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     folder = os.path.dirname(os.path.abspath(path))
     os.makedirs(folder, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".pwai-", dir=folder)
@@ -56,7 +59,7 @@ def migrate(data: dict) -> dict:
 
 def load_project(path: str) -> Project:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as exc:
         raise ProjectFormatError(f"Not a valid PlanWin AI Pro project: {exc}") from exc

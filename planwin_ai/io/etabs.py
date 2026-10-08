@@ -15,15 +15,22 @@ from __future__ import annotations
 
 import datetime as _dt
 import math
-from collections import defaultdict
 
 from .. import APP_NAME, __version__
 from ..core.frame import FrameModel, is_combinations
 from ..core.model import grade_fck
 from ..core.solver import MLoad, MPoint
 
-_PAT = {"DL": ("Dead", "Dead"), "LL": ("Live", "Live"), "WLX": ("WLX", "Wind"), "WLY": ("WLY", "Wind"),
-        "EQX": ("EQX", "Seismic"), "EQY": ("EQY", "Seismic"), "ETX": ("ETX", "Seismic"), "ETY": ("ETY", "Seismic")}
+_PAT = {
+    "DL": ("Dead", "Dead"),
+    "LL": ("Live", "Live"),
+    "WLX": ("WLX", "Wind"),
+    "WLY": ("WLY", "Wind"),
+    "EQX": ("EQX", "Seismic"),
+    "EQY": ("EQY", "Seismic"),
+    "ETX": ("ETX", "Seismic"),
+    "ETY": ("ETY", "Seismic"),
+}
 
 
 def _f(v: float) -> str:
@@ -33,7 +40,6 @@ def _f(v: float) -> str:
 
 def write_etabs(fm: FrameModel, path: str, watermark: str = "") -> str:
     p = fm.p
-    elev = p.elevations()
     story_names = ["Base"] + [lv.name.replace('"', "'") for lv in p.levels]
     # ETABS story names must be unique
     seen = {}
@@ -41,10 +47,18 @@ def write_etabs(fm: FrameModel, path: str, watermark: str = "") -> str:
         if nm in seen:
             story_names[i] = f"{nm}_{i}"
         seen[story_names[i]] = i
-    out = [f"$ File {path} saved {_dt.datetime.now():%m/%d/%Y %H:%M:%S} by {APP_NAME} {__version__} {watermark}".rstrip(),
-           "", "$ PROGRAM INFORMATION", '  PROGRAM  "ETABS"  VERSION "18.0.0"', "",
-           "$ CONTROLS", '  UNITS  "KN"  "M"  "C"', f'  TITLE2  "{p.name[:40]}"', "",
-           "$ STORIES - IN SEQUENCE FROM TOP"]
+    out = [
+        f"$ File {path} saved {_dt.datetime.now():%m/%d/%Y %H:%M:%S} by {APP_NAME} {__version__} {watermark}".rstrip(),
+        "",
+        "$ PROGRAM INFORMATION",
+        '  PROGRAM  "ETABS"  VERSION "18.0.0"',
+        "",
+        "$ CONTROLS",
+        '  UNITS  "KN"  "M"  "C"',
+        f'  TITLE2  "{p.name[:40]}"',
+        "",
+        "$ STORIES - IN SEQUENCE FROM TOP",
+    ]
     for i in range(len(p.levels), 0, -1):
         out.append(f'  STORY "{story_names[i]}"  HEIGHT {_f(p.levels[i - 1].height)}')
     out.append(f'  STORY "{story_names[0]}"  ELEV 0')
@@ -66,19 +80,27 @@ def write_etabs(fm: FrameModel, path: str, watermark: str = "") -> str:
         if key not in secs:
             pre = "C" if m.kind == "column" else "B"
             secs[key] = f"{pre}{int(round(m.b * 1000))}X{int(round(m.d * 1000))}{m.grade}"
-            out.append(f'  FRAMESECTION  "{secs[key]}"  MATERIAL "{m.grade}"  SHAPE "Concrete Rectangular"  '
-                       f'D {_f(m.d)}  B {_f(m.b)}')
+            out.append(
+                f'  FRAMESECTION  "{secs[key]}"  MATERIAL "{m.grade}"  SHAPE "Concrete Rectangular"  '
+                f"D {_f(m.d)}  B {_f(m.b)}"
+            )
             # cracked-section property modifiers (IS 1893-1:2016 cl 6.4.3.1) and reduced torsion
-            out.append(f'  FRAMESECTION  "{secs[key]}"  JMOD {_f(m.torsion_factor)}  I2MOD {_f(m.i_factor)}  '
-                       f'I3MOD {_f(m.i_factor)}')
+            out.append(
+                f'  FRAMESECTION  "{secs[key]}"  JMOD {_f(m.torsion_factor)}  I2MOD {_f(m.i_factor)}  '
+                f"I3MOD {_f(m.i_factor)}"
+            )
     out += ["", "$ CONCRETE SECTIONS"]
-    for (kind, b, d, g), name in secs.items():
+    for (kind, _b, _d, _g), name in secs.items():
         if kind == "column":
-            out.append(f'  CONCRETESECTION  "{name}"  LONGBARMATERIAL "Fe{int(fy)}"  CONFINEBARMATERIAL "Fe{int(fy)}"  '
-                       f'TYPE "COLUMN"  PATTERN "RECTANGULAR"  CONFINEMENT "TIES"  COVER {_f(p.design.column_cover)}')
+            out.append(
+                f'  CONCRETESECTION  "{name}"  LONGBARMATERIAL "Fe{int(fy)}"  CONFINEBARMATERIAL "Fe{int(fy)}"  '
+                f'TYPE "COLUMN"  PATTERN "RECTANGULAR"  CONFINEMENT "TIES"  COVER {_f(p.design.column_cover)}'
+            )
         else:
-            out.append(f'  CONCRETESECTION  "{name}"  LONGBARMATERIAL "Fe{int(fy)}"  CONFINEBARMATERIAL "Fe{int(fy)}"  '
-                       f'TYPE "BEAM"  COVERTOP {_f(p.design.beam_cover + 0.02)}  COVERBOTTOM {_f(p.design.beam_cover + 0.02)}')
+            out.append(
+                f'  CONCRETESECTION  "{name}"  LONGBARMATERIAL "Fe{int(fy)}"  CONFINEBARMATERIAL "Fe{int(fy)}"  '
+                f'TYPE "BEAM"  COVERTOP {_f(p.design.beam_cover + 0.02)}  COVERBOTTOM {_f(p.design.beam_cover + 0.02)}'
+            )
     # points (unique XY)
     pts: dict[tuple[float, float], str] = {}
 
@@ -129,9 +151,14 @@ def write_etabs(fm: FrameModel, path: str, watermark: str = "") -> str:
     for c in cases:
         nm = _PAT[c][0]
         for nid, vec in fm.nodal.get(c, {}).items():
-            comps = " ".join(f"{k} {_f(v)}" for k, v in (("FX", vec[0]), ("FY", vec[1]), ("FZ", vec[2])) if abs(v) > 1e-9)
+            comps = " ".join(
+                f"{k} {_f(v)}" for k, v in (("FX", vec[0]), ("FY", vec[1]), ("FZ", vec[2])) if abs(v) > 1e-9
+            )
             if comps:
-                out.append(f'  POINTLOAD  "{node_pt[nid]}"  "{story_names[fm.nodes[nid].level]}"  TYPE "FORCE"  LC "{nm}"  {comps}')
+                out.append(
+                    f'  POINTLOAD  "{node_pt[nid]}"  "{story_names[fm.nodes[nid].level]}"  '
+                    f'TYPE "FORCE"  LC "{nm}"  {comps}'
+                )
     out += ["", "$ FRAME OBJECT LOADS"]
     for c in cases:
         nm = _PAT[c][0]
@@ -145,19 +172,24 @@ def write_etabs(fm: FrameModel, path: str, watermark: str = "") -> str:
                     w1, w2 = -ld.w1[2], -ld.w2[2]
                     if abs(w1) < 1e-9 and abs(w2) < 1e-9:
                         continue
-                    out.append(f'  LINELOAD  "{names[mid]}"  "{top}"  TYPE "TRAPF"  DIR "GRAV"  LC "{nm}"  '
-                               f'FSTART {_f(w1)}  FEND {_f(w2)}  RDSTART {_f(ld.a / Lm)}  RDEND {_f(ld.b / Lm)}')
+                    out.append(
+                        f'  LINELOAD  "{names[mid]}"  "{top}"  TYPE "TRAPF"  DIR "GRAV"  LC "{nm}"  '
+                        f"FSTART {_f(w1)}  FEND {_f(w2)}  RDSTART {_f(ld.a / Lm)}  RDEND {_f(ld.b / Lm)}"
+                    )
                 elif isinstance(ld, MPoint) and abs(ld.P[2]) > 1e-9:
-                    out.append(f'  LINELOAD  "{names[mid]}"  "{top}"  TYPE "POINTF"  DIR "GRAV"  LC "{nm}"  '
-                               f'FVAL {_f(-ld.P[2])}  RDIST {_f(ld.x / Lm)}')
+                    out.append(
+                        f'  LINELOAD  "{names[mid]}"  "{top}"  TYPE "POINTF"  DIR "GRAV"  LC "{nm}"  '
+                        f"FVAL {_f(-ld.P[2])}  RDIST {_f(ld.x / Lm)}"
+                    )
     out += ["", "$ LOAD CASES"]
     for c in cases:
         nm = _PAT[c][0]
         out.append(f'  LOADCASE "{nm}"  TYPE  "Linear Static"  INITCOND  "PRESET"')
         out.append(f'  LOADCASE "{nm}"  LOADPAT  "{nm}"  SF  1')
     out += ["", "$ LOAD COMBINATIONS"]
-    for j, cb in enumerate([c for c in is_combinations(p.seismic.enabled, p.wind.enabled, "ETX" in cases)
-                            if c.kind == "ultimate"], 1):
+    for j, cb in enumerate(
+        [c for c in is_combinations(p.seismic.enabled, p.wind.enabled, "ETX" in cases) if c.kind == "ultimate"], 1
+    ):
         cname = f"PW{j:02d}"
         out.append(f'  COMBO "{cname}"  TYPE "Linear Add"')
         for k, v in cb.factors.items():

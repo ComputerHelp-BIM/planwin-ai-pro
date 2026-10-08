@@ -10,7 +10,6 @@ from __future__ import annotations
 import csv
 from functools import lru_cache
 from importlib import resources
-from typing import Optional
 
 
 @lru_cache(maxsize=1)
@@ -20,7 +19,12 @@ def load_cities() -> dict[str, dict]:
     with path.open("r", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             vb = float(row["basic_wind_speed_mps"]) if row["basic_wind_speed_mps"] else None
-            out[row["city"].lower()] = {"city": row["city"], "vb": vb, "zone": row["seismic_zone"], "source": row["source"]}
+            out[row["city"].lower()] = {
+                "city": row["city"],
+                "vb": vb,
+                "zone": row["seismic_zone"],
+                "source": row["source"],
+            }
     return out
 
 
@@ -28,7 +32,7 @@ def city_names() -> list[str]:
     return sorted(v["city"] for v in load_cities().values())
 
 
-def lookup_city(name: str) -> Optional[dict]:
+def lookup_city(name: str) -> dict | None:
     if not name:
         return None
     data = load_cities()

@@ -1,4 +1,5 @@
 """PyInstaller entry script for PlanWin AI Pro (GUI, CLI via `cli` argument)."""
+
 import sys
 
 if len(sys.argv) > 1 and sys.argv[1] == "cli":

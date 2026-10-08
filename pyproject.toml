@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "planwin-ai-pro"
-version = "1.0.1"
+dynamic = ["version"]  # single source: planwin_ai/__init__.py
 description = "AI-assisted structural pre-processor, 3-D analysis and IS-code design for RCC buildings (successor to PlanWin/FrameWin)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,13 +16,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pyinstaller>=6.5", "pillow>=10"]
+dev = ["pytest>=8", "ruff>=0.16", "pyinstaller>=6.5", "pillow>=10"]
 
 [project.scripts]
 planwin-ai = "planwin_ai.cli:main"
 
 [project.gui-scripts]
 planwin-ai-pro = "planwin_ai.app:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "planwin_ai.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["planwin_ai*"]
@@ -32,3 +35,23 @@ include = ["planwin_ai*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["packaging/planwin_ai.spec"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, bugbear, pyupgrade
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = [
+  "E741",  # engineering symbols such as l, I are idiomatic
+  "B905",  # zip() over equal-length engineering arrays; strict= adds noise
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+"planwin_ai/gui/theme.py" = ["E501"]  # SVG icon and QSS data
+
+[tool.ruff.format]
+quote-style = "double"

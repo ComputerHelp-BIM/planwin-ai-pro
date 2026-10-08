@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Optional
 
 import numpy as np
 
@@ -80,7 +79,7 @@ class LevelInfo:
     name: str
     z: float
     plan: str
-    result: Optional[PlanResult] = None
+    result: PlanResult | None = None
     weight: float = 0.0
     nodes: list[int] = field(default_factory=list)
     column_nodes: dict[str, int] = field(default_factory=dict)  # mark -> node id
@@ -101,8 +100,8 @@ class FrameModel:
         self._mid = 0
 
     # ------------------------------------------------------------ nodes
-    def _node(self, lvl: int, x: float, y: float, z: float, create: bool = True, tag: str = "") -> Optional[int]:
-        for (px, py, nid) in self._reg.setdefault(lvl, []):
+    def _node(self, lvl: int, x: float, y: float, z: float, create: bool = True, tag: str = "") -> int | None:
+        for px, py, nid in self._reg.setdefault(lvl, []):
             if abs(px - x) <= NODE_TOL and abs(py - y) <= NODE_TOL:
                 return nid
         if not create:
@@ -116,7 +115,7 @@ class FrameModel:
         self.issues.append(Issue(level, "frame", msg, None, at))
 
     # ------------------------------------------------------------ build
-    def build(self) -> "FrameModel":
+    def build(self) -> FrameModel:
         p = self.p
         if not p.levels:
             raise FrameSolveError("No levels defined – add levels in the Levels table")
@@ -142,7 +141,7 @@ class FrameModel:
                 nid = self._node(i, c.x, c.y, z, tag=c.mark)
                 self.levels[i].column_nodes[c.mark] = nid
             for b in plan.beams:
-                for (x, y) in (b.p1, b.p2):
+                for x, y in (b.p1, b.p2):
                     if _footprint_column(plan, x, y) is None:
                         self._node(i, x, y, z)
             bl = plan.beams
@@ -161,11 +160,15 @@ class FrameModel:
                     on = [b for b in plan.beams if G.is_point_on_segment(c.pos, b.p1, b.p2, 0.05)]
                     if on:
                         self._node(i, c.x, c.y, z, tag=f"float {c.mark}")
-                        self._err(f"Column {c.mark} floats on beam {on[0].mark} at level {self.levels[i].name}",
-                                  c.pos, "warning")
+                        self._err(
+                            f"Column {c.mark} floats on beam {on[0].mark} at level {self.levels[i].name}",
+                            c.pos,
+                            "warning",
+                        )
                     else:
-                        self._err(f"Column {c.mark} at level {self.levels[i + 1].name} has no column or beam below",
-                                  c.pos)
+                        self._err(
+                            f"Column {c.mark} at level {self.levels[i + 1].name} has no column or beam below", c.pos
+                        )
 
         # ---- pass 2: members
         for i in range(1, len(self.levels)):
@@ -185,7 +188,7 @@ class FrameModel:
                 for t_end, (x, y) in ((0.0, b.p1), (1.0, b.p2)):
                     col = _footprint_column(plan, x, y)
                     ts[t_end] = self.levels[i].column_nodes[col.mark] if col else self._node(i, x, y, z)
-                for (px, py, nid) in self._reg[i]:
+                for px, py, nid in self._reg[i]:
                     t = G.project_param((px, py), b.p1, b.p2)
                     if 1e-6 < t < 1 - 1e-6 and G.point_line_distance((px, py), b.p1, b.p2) <= NODE_TOL:
                         ts[t] = nid
@@ -201,8 +204,11 @@ class FrameModel:
                             del ts[k]
                         ts[tt] = nid
                 pts = sorted(ts.items())
-                loads = [ld for ld in (res.beams[b.id].loads if res and b.id in res.beams else [])
-                         if not (isinstance(ld, PtLoad) and ld.src.startswith("from "))]
+                loads = [
+                    ld
+                    for ld in (res.beams[b.id].loads if res and b.id in res.beams else [])
+                    if not (isinstance(ld, PtLoad) and ld.src.startswith("from "))
+                ]
                 for (t0, n0), (t1, n1) in zip(pts, pts[1:]):
                     if n0 == n1:
                         continue
@@ -236,22 +242,36 @@ class FrameModel:
                         same = below.column_at(c.pos, 0.05) if below else None
                         if same is not None:
                             bot = self.levels[i - 1].column_nodes.get(same.mark)
-                            self._err(f"Column {c.mark} sits on {same.mark} below – marks should match", c.pos, "warning")
+                            self._err(
+                                f"Column {c.mark} sits on {same.mark} below – marks should match", c.pos, "warning"
+                            )
                         else:
                             bot = self._node(i - 1, c.x, c.y, zb, create=False)
                     if bot is None:
                         continue  # already reported
                     nb = self.nodes[bot]
                     if math.hypot(nb.x - c.x, nb.y - c.y) > 0.05:
-                        self._err(f"Column {c.mark} is offset {math.hypot(nb.x - c.x, nb.y - c.y):.2f} m from the column below",
-                                  c.pos, "warning")
+                        self._err(
+                            f"Column {c.mark} is offset {math.hypot(nb.x - c.x, nb.y - c.y):.2f} m "
+                            "from the column below",
+                            c.pos,
+                            "warning",
+                        )
                 cb, cd, ca = p.column_size(c.mark, i, c)
                 self._mid += 1
                 m = FMember(self._mid, bot, top, "column", cb, cd, E, ca, i, c.mark, c.mark, lv.grade, tf, cc_f)
                 w = cb * cd * 25.0
-                m.loads["DL"] = [MLoad(0, math.dist((self.nodes[bot].x, self.nodes[bot].y, self.nodes[bot].z),
-                                                    (self.nodes[top].x, self.nodes[top].y, self.nodes[top].z)),
-                                       (0, 0, -w), (0, 0, -w))]
+                m.loads["DL"] = [
+                    MLoad(
+                        0,
+                        math.dist(
+                            (self.nodes[bot].x, self.nodes[bot].y, self.nodes[bot].z),
+                            (self.nodes[top].x, self.nodes[top].y, self.nodes[top].z),
+                        ),
+                        (0, 0, -w),
+                        (0, 0, -w),
+                    )
+                ]
                 m.loads["LL"] = []
                 self.members[m.id] = m
         for nid, nd in self.nodes.items():
@@ -333,13 +353,13 @@ class FrameModel:
             return
         res = lv.result
         wts = []
-        for mark, nid in cols:
+        for mark, _nid in cols:
             cl = next((v for v in res.columns.values() if v.mark == mark), None) if res else None
             wts.append(max(cl.dead + 0.25 * cl.live, 0.0) if cl else 0.0)
         tot = sum(wts)
         if tot <= 1e-9:
             wts, tot = [1.0] * len(cols), float(len(cols))
-        for (mark, nid), w in zip(cols, wts):
+        for (_mark, nid), w in zip(cols, wts):
             vec = self.nodal.setdefault(case, {}).setdefault(nid, np.zeros(6))
             vec[axis] += force * w / tot
 
@@ -367,8 +387,19 @@ class FrameModel:
         s = p.seismic
         if s.enabled:
             for dname, axis, dim in (("EQX", 0, dx), ("EQY", 1, dy)):
-                r = seismic_static(weights, elev, s.base_level, s.zone, s.importance, s.response_reduction, s.soil,
-                                   s.damping, s.infill, dim, dname)
+                r = seismic_static(
+                    weights,
+                    elev,
+                    s.base_level,
+                    s.zone,
+                    s.importance,
+                    s.response_reduction,
+                    s.soil,
+                    s.damping,
+                    s.infill,
+                    dim,
+                    dname,
+                )
                 self.seismic[dname] = r
                 for i, f in enumerate(r.forces):
                     self._distribute(dname, i, f, axis)
@@ -378,8 +409,22 @@ class FrameModel:
         w = p.wind
         if w.enabled:
             for dname, axis, width in (("WLX", 0, dy), ("WLY", 1, dx)):
-                r = wind_storey_forces(elev, width, w.basic_speed, w.terrain, w.force_coeff, w.parapet, w.below_ground,
-                                       dname, k1=w.k1, k3=w.k3, k4=w.k4, kd=w.kd, ka=w.ka, kc=w.kc)
+                r = wind_storey_forces(
+                    elev,
+                    width,
+                    w.basic_speed,
+                    w.terrain,
+                    w.force_coeff,
+                    w.parapet,
+                    w.below_ground,
+                    dname,
+                    k1=w.k1,
+                    k3=w.k3,
+                    k4=w.k4,
+                    kd=w.kd,
+                    ka=w.ka,
+                    kc=w.kc,
+                )
                 self.wind[dname] = r
                 for i, f in enumerate(r.forces):
                     lv_w = self.levels[i]
@@ -399,12 +444,19 @@ class FrameModel:
                 c += ["ETX", "ETY"]
         return c
 
-    def analyze(self) -> "FrameAnalysis":
+    def analyze(self) -> FrameAnalysis:
         if not self.members:
             raise FrameSolveError("Frame has no members – build plans and levels first")
         res = FrameSolver(self.nodes, self.members, self.nodal).solve(self.cases())
-        return FrameAnalysis(self, res, is_combinations(self.p.seismic.enabled, self.p.wind.enabled,
-                                                         self.p.seismic.enabled and self.p.seismic.accidental_torsion))
+        return FrameAnalysis(
+            self,
+            res,
+            is_combinations(
+                self.p.seismic.enabled,
+                self.p.wind.enabled,
+                self.p.seismic.enabled and self.p.seismic.accidental_torsion,
+            ),
+        )
 
 
 def _footprint_column(plan, x: float, y: float, tol: float = 0.05):
@@ -501,8 +553,15 @@ class FrameAnalysis:
                     d = abs(self.displacement(nid, {case: 1})[axis] - self.displacement(below, {case: 1})[axis])
                     worst = max(worst, d)
                 if h > 0:
-                    out.append({"case": case, "level": mdl.levels[i].name, "drift_mm": worst * 1000,
-                                "ratio": worst / h, "ok": worst / h <= 0.004})
+                    out.append(
+                        {
+                            "case": case,
+                            "level": mdl.levels[i].name,
+                            "drift_mm": worst * 1000,
+                            "ratio": worst / h,
+                            "ok": worst / h <= 0.004,
+                        }
+                    )
         return out
 
     def equilibrium(self) -> dict[str, float]:

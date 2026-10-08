@@ -65,8 +65,14 @@ def _run(args: argparse.Namespace) -> int:
         return 0
     if args.cmd == "ask":
         prj = project_io.load_project(args.project) if args.project else Project()
-        asst = Assistant(Session(prj, out_dir=os.path.dirname(os.path.abspath(args.out)), watermark=lic.watermark,
-                                 exports_allowed=lic.exports_allowed))
+        asst = Assistant(
+            Session(
+                prj,
+                out_dir=os.path.dirname(os.path.abspath(args.out)),
+                watermark=lic.watermark,
+                exports_allowed=lic.exports_allowed,
+            )
+        )
         reply, res = asst.ask(args.prompt)
         print(reply)
         project_io.save_project(asst.session.project, args.out)
@@ -83,8 +89,12 @@ def _run(args: argparse.Namespace) -> int:
         return 0
     if args.cmd == "run":
         os.makedirs(args.out_dir, exist_ok=True)
-        s = Session(project_io.load_project(args.project), out_dir=args.out_dir, watermark=lic.watermark,
-                    exports_allowed=lic.exports_allowed)
+        s = Session(
+            project_io.load_project(args.project),
+            out_dir=args.out_dir,
+            watermark=lic.watermark,
+            exports_allowed=lic.exports_allowed,
+        )
         acts = []
         if args.autosize:
             acts.append({"action": "autosize_columns"})

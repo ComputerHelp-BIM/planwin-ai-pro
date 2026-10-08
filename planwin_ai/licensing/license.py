@@ -19,7 +19,6 @@ import datetime as _dt
 import json
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 PUBLIC_KEY_B64 = "V0T+AFyLGYzG0uLeNrXmhmv5rrhXSW8sUWGDr18eDu8="
 TRIAL_DAYS = 30
@@ -55,7 +54,7 @@ def verify(lic: dict, public_key_b64: str = PUBLIC_KEY_B64) -> bool:
 class LicenseState:
     mode: str  # "pro" | "trial" | "expired"
     holder: str = ""
-    expires: Optional[str] = None
+    expires: str | None = None
     days_left: int = 0
 
     @property
@@ -91,10 +90,10 @@ def install_license(text: str) -> LicenseState:
     return current_state()
 
 
-def current_state(today: Optional[_dt.date] = None) -> LicenseState:
+def current_state(today: _dt.date | None = None) -> LicenseState:
     today = today or _dt.date.today()
     try:
-        with open(_license_path(), "r", encoding="utf-8") as f:
+        with open(_license_path(), encoding="utf-8") as f:
             lic = json.load(f)
         if verify(lic):
             exp = lic.get("expires")
@@ -104,7 +103,7 @@ def current_state(today: Optional[_dt.date] = None) -> LicenseState:
         pass
     tp = _trial_path()
     try:
-        with open(tp, "r", encoding="utf-8") as f:
+        with open(tp, encoding="utf-8") as f:
             start = _dt.date.fromisoformat(f.read().strip())
     except (OSError, ValueError):
         start = today

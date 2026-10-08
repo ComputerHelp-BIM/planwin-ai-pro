@@ -11,7 +11,6 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 import requests
 
@@ -44,7 +43,7 @@ class ProviderError(RuntimeError):
     pass
 
 
-def get_key(provider: str) -> Optional[str]:
+def get_key(provider: str) -> str | None:
     env = {"claude": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}.get(provider)
     try:
         import keyring
@@ -106,9 +105,12 @@ def chat(cfg: ProviderConfig, history: list[dict], summary: str) -> dict:
             key = get_key("claude")
             if not key:
                 raise ProviderError("No Claude API key – add it in Settings › AI")
-            r = requests.post((cfg.base_url or "https://api.anthropic.com") + "/v1/messages", timeout=TIMEOUT,
-                              headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                              json={"model": model, "max_tokens": 1500, "system": system, "messages": msgs})
+            r = requests.post(
+                (cfg.base_url or "https://api.anthropic.com") + "/v1/messages",
+                timeout=TIMEOUT,
+                headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                json={"model": model, "max_tokens": 1500, "system": system, "messages": msgs},
+            )
             if r.status_code >= 400:
                 raise ProviderError(f"Claude API error {r.status_code}: {r.text[:300]}")
             data = r.json()
@@ -117,17 +119,31 @@ def chat(cfg: ProviderConfig, history: list[dict], summary: str) -> dict:
             key = get_key("openai")
             if not key:
                 raise ProviderError("No OpenAI API key – add it in Settings › AI")
-            r = requests.post((cfg.base_url or "https://api.openai.com/v1") + "/chat/completions", timeout=TIMEOUT,
-                              headers={"Authorization": f"Bearer {key}"},
-                              json={"model": model, "temperature": 0.2, "response_format": {"type": "json_object"},
-                                    "messages": [{"role": "system", "content": system}] + msgs})
+            r = requests.post(
+                (cfg.base_url or "https://api.openai.com/v1") + "/chat/completions",
+                timeout=TIMEOUT,
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "model": model,
+                    "temperature": 0.2,
+                    "response_format": {"type": "json_object"},
+                    "messages": [{"role": "system", "content": system}] + msgs,
+                },
+            )
             if r.status_code >= 400:
                 raise ProviderError(f"OpenAI API error {r.status_code}: {r.text[:300]}")
             text = r.json()["choices"][0]["message"]["content"]
         elif cfg.provider == "ollama":
-            r = requests.post((cfg.base_url or "http://localhost:11434") + "/api/chat", timeout=TIMEOUT * 2,
-                              json={"model": model, "stream": False, "format": "json",
-                                    "messages": [{"role": "system", "content": system}] + msgs})
+            r = requests.post(
+                (cfg.base_url or "http://localhost:11434") + "/api/chat",
+                timeout=TIMEOUT * 2,
+                json={
+                    "model": model,
+                    "stream": False,
+                    "format": "json",
+                    "messages": [{"role": "system", "content": system}] + msgs,
+                },
+            )
             if r.status_code >= 400:
                 raise ProviderError(f"Ollama error {r.status_code}: {r.text[:300]}")
             text = r.json()["message"]["content"]

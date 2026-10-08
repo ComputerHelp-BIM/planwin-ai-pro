@@ -1,7 +1,8 @@
 ; Inno Setup script – builds PlanWinAIPro-<ver>-win64-setup.exe from dist\PlanWinAIPro
 #define AppName "PlanWin AI Pro"
+; The version comes from planwin_ai/__init__.py: CI and scripts\build_windows.bat pass /DAppVersion=x.y.z
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #error AppVersion is not defined - compile with ISCC /DAppVersion=x.y.z (see scripts\build_windows.bat)
 #endif
 #define AppPublisher "Computer Help"
 #define AppURL "https://www.buildingsoftware.in"

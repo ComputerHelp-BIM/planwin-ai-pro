@@ -7,7 +7,7 @@ Functions are pure and side-effect free so they are easy to unit test.
 from __future__ import annotations
 
 import math
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
 Point = tuple[float, float]
 

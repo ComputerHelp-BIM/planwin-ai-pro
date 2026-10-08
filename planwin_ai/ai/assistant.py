@@ -28,12 +28,19 @@ class Assistant:
         last = self.session.last
         if "rep" in last:
             rep = last["rep"]
-            s["design"] = {"failures": rep.failures, "warnings": rep.warnings[:5],
-                           "concrete_m3": round(rep.boq["total_concrete"], 1), "steel_t": round(rep.boq["total_steel"] / 1000, 2)}
+            s["design"] = {
+                "failures": rep.failures,
+                "warnings": rep.warnings[:5],
+                "concrete_m3": round(rep.boq["total_concrete"], 1),
+                "steel_t": round(rep.boq["total_steel"] / 1000, 2),
+            }
             worst = sorted(rep.columns, key=lambda c: -c.utilisation)[:3]
             s["critical_columns"] = [(c.mark, c.level, round(c.Pu), c.steel_pct, c.ok) for c in worst]
         if "fm" in last:
-            s["lateral"] = {k: {"T": round(v.T, 3), "Ah": round(v.Ah, 4), "VB": round(v.Vb, 1)} for k, v in last["fm"].seismic.items()}
+            s["lateral"] = {
+                k: {"T": round(v.T, 3), "Ah": round(v.Ah, 4), "VB": round(v.Vb, 1)}
+                for k, v in last["fm"].seismic.items()
+            }
         s["parametric"] = bool(p.meta.get("grid_spec"))
         return json.dumps(s, default=str)[:6000]
 

@@ -2,14 +2,33 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGroupBox, QHBoxLayout,
-                               QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
-                               QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..core.model import Beam, Column, Level, PartLoad, Plan, PointLoad, Slab
 
@@ -33,7 +52,7 @@ def _spin(v: float, lo=-1e6, hi=1e6, dec=3, step=0.05) -> QDoubleSpinBox:
 class ProjectPanel(QWidget):
     planChanged = Signal(str)
 
-    def __init__(self, main: "MainWindow"):
+    def __init__(self, main: MainWindow):
         super().__init__()
         self.main = main
         lay = QVBoxLayout(self)
@@ -44,10 +63,12 @@ class ProjectPanel(QWidget):
         self.plans.currentTextChanged.connect(self._plan_selected)
         v1.addWidget(self.plans)
         row = QHBoxLayout()
-        for txt, fn, tip in (("New", self._new_plan, "Create an empty plan"),
-                             ("Copy", self._copy_plan, "Save current plan under a new name (PlanWin Save As)"),
-                             ("Rename", self._rename_plan, "Rename plan (levels are updated)"),
-                             ("Delete", self._delete_plan, "Delete plan")):
+        for txt, fn, tip in (
+            ("New", self._new_plan, "Create an empty plan"),
+            ("Copy", self._copy_plan, "Save current plan under a new name (PlanWin Save As)"),
+            ("Rename", self._rename_plan, "Rename plan (levels are updated)"),
+            ("Delete", self._delete_plan, "Delete plan"),
+        ):
             b = QPushButton(txt)
             b.setToolTip(tip)
             b.clicked.connect(fn)
@@ -68,14 +89,21 @@ class ProjectPanel(QWidget):
         v2 = QVBoxLayout(g2)
         self.levels = QTableWidget(0, 5)
         self.levels.setHorizontalHeaderLabels(["Level", "Plan", "Ht (m)", "Grade", "LL red%"])
-        self.levels.setToolTip("Ht = storey height below this level. LL red% = IS 875-2 live load reduction for column sizing.")
+        self.levels.setToolTip(
+            "Ht = storey height below this level. LL red% = IS 875-2 live load reduction for column sizing."
+        )
         self.levels.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.levels.verticalHeader().setVisible(False)
         self.levels.itemChanged.connect(self._level_item_changed)
         v2.addWidget(self.levels)
         row2 = QHBoxLayout()
-        for txt, fn in (("+ Level", self._add_level), ("− Level", self._del_level), ("▲", lambda: self._move(-1)),
-                        ("▼", lambda: self._move(1)), ("Fill ↑", self._fill_up)):
+        for txt, fn in (
+            ("+ Level", self._add_level),
+            ("− Level", self._del_level),
+            ("▲", lambda: self._move(-1)),
+            ("▼", lambda: self._move(1)),
+            ("Fill ↑", self._fill_up),
+        ):
             b = QPushButton(txt)
             b.clicked.connect(fn)
             row2.addWidget(b)
@@ -144,6 +172,7 @@ class ProjectPanel(QWidget):
         name, ok = QInputDialog.getText(self, "Copy plan", "New plan name:", text=f"{src.name} copy")
         if ok and name.strip():
             import copy
+
             from ..core.model import new_id
 
             def fn():
@@ -152,6 +181,7 @@ class ProjectPanel(QWidget):
                 for o in p.slabs + p.columns + p.beams:
                     o.id = new_id()
                 self.main.project.add_plan(p)
+
             self.main.mutate("Copy plan", fn)
             self.main.set_current_plan(self.main.project.plans[-1].name)
 
@@ -171,6 +201,7 @@ class ProjectPanel(QWidget):
                 for lv in self.main.project.levels:
                     if lv.plan == old:
                         lv.plan = p.name
+
             self.main.mutate("Rename plan", fn)
             self.main.set_current_plan(p.name)
 
@@ -179,7 +210,9 @@ class ProjectPanel(QWidget):
         if not p:
             return
         used = [lv.name for lv in self.main.project.levels if lv.plan == p.name]
-        msg = f"Delete plan '{p.name}'?" + (f"\nIt is used by levels: {', '.join(used)} (they will be removed)." if used else "")
+        msg = f"Delete plan '{p.name}'?" + (
+            f"\nIt is used by levels: {', '.join(used)} (they will be removed)." if used else ""
+        )
         if QMessageBox.question(self, "Delete plan", msg) != QMessageBox.Yes:
             return
 
@@ -187,6 +220,7 @@ class ProjectPanel(QWidget):
             pr = self.main.project
             pr.plans = [q for q in pr.plans if q is not p]
             pr.levels = [lv for lv in pr.levels if lv.plan != p.name]
+
         self.main.mutate("Delete plan", fn)
         self.main.set_current_plan(self.main.project.plans[0].name if self.main.project.plans else "")
 
@@ -200,6 +234,7 @@ class ProjectPanel(QWidget):
 
         def fn():
             p.floor_type, p.floor_height_above = ft, fh
+
         self.main.mutate("Plan properties", fn)
 
     # ----------------------------------------------------------- levels
@@ -253,8 +288,10 @@ class ProjectPanel(QWidget):
         r = self.levels.currentRow()
         lv = self.main.project.levels
         if 0 <= r < len(lv) and 0 <= r + d < len(lv):
+
             def fn():
                 lv[r], lv[r + d] = lv[r + d], lv[r]
+
             self.main.mutate("Move level", fn)
             self.levels.selectRow(r + d)
 
@@ -274,29 +311,61 @@ class ProjectPanel(QWidget):
                     lv[k].live_reduction = lv[r].live_reduction
                 else:
                     lv[k].height = lv[r].height
+
         self.main.mutate("Fill levels upward", fn)
 
 
 # =========================================================================== properties
-SLAB_FIELDS = [("mark", "Mark", "str"), ("thickness", "Thickness (m)", "float"), ("live", "Live load (kN/m²)", "float"),
-               ("floor_finish", "Floor finish (kN/m²)", "float"), ("other", "Other dead (kN/m²)", "float"),
-               ("density", "Concrete density (kN/m³)", "float"),
-               ("distribution", "Load distribution", ["auto", "two_way", "one_way", "one_way_long", "cantilever", "uniform", "on_grade"]),
-               ("cant_edge", "Cantilever fixed edge #", "int_opt"), ("grade", "Grade", GRADES), ("room", "Room / use", "str")]
-COLUMN_FIELDS = [("mark", "Mark", "str"), ("x", "X (m)", "float"), ("y", "Y (m)", "float"), ("b", "Breadth b (m)", "float"),
-                 ("d", "Depth d (m)", "float"), ("angle", "Angle (°)", "float"), ("grade", "Grade", GRADES)]
-BEAM_FIELDS = [("mark", "Mark", "str"), ("b", "Breadth (m)", "float"), ("d", "Depth (m)", "float"), ("grade", "Grade", GRADES),
-               ("role", "Role", ["auto", "primary", "secondary"]), ("cantilever", "Cantilever", "bool"),
-               ("external", "External beam", "bool"), ("wall_thk", "Wall thickness (m)", "float"),
-               ("wall_height", "Wall height (m, blank = auto)", "float_opt"), ("wall_density", "Wall density (kN/m³)", "float"),
-               ("plaster_thk", "Plaster both faces (m)", "float"), ("parapet", "Parapet height (m, blank = none)", "float_opt"),
-               ("include_self", "Consider self weight", "bool"), ("include_wall", "Consider wall load", "bool"),
-               ("include_plaster", "Consider plaster load", "bool"),
-               ("x1", "Start X", "float"), ("y1", "Start Y", "float"), ("x2", "End X", "float"), ("y2", "End Y", "float")]
+SLAB_FIELDS = [
+    ("mark", "Mark", "str"),
+    ("thickness", "Thickness (m)", "float"),
+    ("live", "Live load (kN/m²)", "float"),
+    ("floor_finish", "Floor finish (kN/m²)", "float"),
+    ("other", "Other dead (kN/m²)", "float"),
+    ("density", "Concrete density (kN/m³)", "float"),
+    (
+        "distribution",
+        "Load distribution",
+        ["auto", "two_way", "one_way", "one_way_long", "cantilever", "uniform", "on_grade"],
+    ),
+    ("cant_edge", "Cantilever fixed edge #", "int_opt"),
+    ("grade", "Grade", GRADES),
+    ("room", "Room / use", "str"),
+]
+COLUMN_FIELDS = [
+    ("mark", "Mark", "str"),
+    ("x", "X (m)", "float"),
+    ("y", "Y (m)", "float"),
+    ("b", "Breadth b (m)", "float"),
+    ("d", "Depth d (m)", "float"),
+    ("angle", "Angle (°)", "float"),
+    ("grade", "Grade", GRADES),
+]
+BEAM_FIELDS = [
+    ("mark", "Mark", "str"),
+    ("b", "Breadth (m)", "float"),
+    ("d", "Depth (m)", "float"),
+    ("grade", "Grade", GRADES),
+    ("role", "Role", ["auto", "primary", "secondary"]),
+    ("cantilever", "Cantilever", "bool"),
+    ("external", "External beam", "bool"),
+    ("wall_thk", "Wall thickness (m)", "float"),
+    ("wall_height", "Wall height (m, blank = auto)", "float_opt"),
+    ("wall_density", "Wall density (kN/m³)", "float"),
+    ("plaster_thk", "Plaster both faces (m)", "float"),
+    ("parapet", "Parapet height (m, blank = none)", "float_opt"),
+    ("include_self", "Consider self weight", "bool"),
+    ("include_wall", "Consider wall load", "bool"),
+    ("include_plaster", "Consider plaster load", "bool"),
+    ("x1", "Start X", "float"),
+    ("y1", "Start Y", "float"),
+    ("x2", "End X", "float"),
+    ("y2", "End Y", "float"),
+]
 
 
 class PropertiesPanel(QWidget):
-    def __init__(self, main: "MainWindow"):
+    def __init__(self, main: MainWindow):
         super().__init__()
         self.main = main
         outer = QVBoxLayout(self)
@@ -321,8 +390,8 @@ class PropertiesPanel(QWidget):
         self.widgets: dict[str, tuple[Any, str]] = {}
         self.initial: dict[str, Any] = {}  # value of each field when the selection was shown
         self.objs: list = []
-        self.loads_tbl: Optional[QTableWidget] = None
-        self.wedge_tbl: Optional[QTableWidget] = None
+        self.loads_tbl: QTableWidget | None = None
+        self.wedge_tbl: QTableWidget | None = None
         self.apply_btn.setEnabled(False)
 
     def show_selection(self, ids: list[str]):
@@ -336,8 +405,10 @@ class PropertiesPanel(QWidget):
         self.objs = [o for o in self.objs if o is not None]
         if not self.objs:
             self.title.setText("Nothing selected")
-            self.info.setText("Select a slab, beam or column on the plan. Multi-select (Shift / window) to set values "
-                              "for many elements at once – like PlanWin 'Set Value'.")
+            self.info.setText(
+                "Select a slab, beam or column on the plan. Multi-select (Shift / window) to set values "
+                "for many elements at once – like PlanWin 'Set Value'."
+            )
             self.apply_btn.setEnabled(False)
             return
         kinds = {type(o) for o in self.objs}
@@ -349,8 +420,11 @@ class PropertiesPanel(QWidget):
         o = self.objs[0]
         spec = SLAB_FIELDS if isinstance(o, Slab) else COLUMN_FIELDS if isinstance(o, Column) else BEAM_FIELDS
         kind = type(o).__name__
-        self.title.setText(f"{kind} {o.mark}" if len(self.objs) == 1
-                           else f"{len(self.objs)} {kind.lower()}s – set value (only the fields you change are applied)")
+        self.title.setText(
+            f"{kind} {o.mark}"
+            if len(self.objs) == 1
+            else f"{len(self.objs)} {kind.lower()}s – set value (only the fields you change are applied)"
+        )
         for name, label, typ in spec:
             if len(self.objs) > 1 and name in ("mark", "x", "y", "x1", "y1", "x2", "y2"):
                 continue
@@ -376,13 +450,17 @@ class PropertiesPanel(QWidget):
             self.widgets[name] = (w, typ if not isinstance(typ, list) else "choice")
             self.initial[name] = self._read(name)
         if isinstance(o, Beam) and len(self.objs) == 1:
-            self.loads_tbl = self._table(["Dist (m)", "Dead (kN)", "Live (kN)", "Desc"],
-                                         [[p.dist, p.dead, p.live, p.desc] for p in o.point_loads])
+            self.loads_tbl = self._table(
+                ["Dist (m)", "Dead (kN)", "Live (kN)", "Desc"],
+                [[p.dist, p.dead, p.live, p.desc] for p in o.point_loads],
+            )
             self.form.addRow(QLabel("Point loads (up to 20)"))
             self.form.addRow(self.loads_tbl)
             self.form.addRow(self._tbl_buttons(self.loads_tbl, [0, 0, 0, "P"]))
-            self.wedge_tbl = self._table(["Start (m)", "Length (m)", "w1 (kN/m)", "w2 (kN/m)", "Case D/L"],
-                                         [[w.start, w.length, w.w1, w.w2, w.case] for w in o.part_loads])
+            self.wedge_tbl = self._table(
+                ["Start (m)", "Length (m)", "w1 (kN/m)", "w2 (kN/m)", "Case D/L"],
+                [[w.start, w.length, w.w1, w.w2, w.case] for w in o.part_loads],
+            )
             self.form.addRow(QLabel("Wedge / part loads"))
             self.form.addRow(self.wedge_tbl)
             self.form.addRow(self._tbl_buttons(self.wedge_tbl, [0, 1, 0, 0, "D"]))
@@ -411,6 +489,7 @@ class PropertiesPanel(QWidget):
             t.insertRow(r)
             for c, v in enumerate(default):
                 t.setItem(r, c, QTableWidgetItem(str(v)))
+
         a.clicked.connect(add)
         d.clicked.connect(lambda: t.removeRow(t.currentRow()) if t.currentRow() >= 0 else None)
         h.addWidget(a)
@@ -425,14 +504,22 @@ class PropertiesPanel(QWidget):
             return
         res = self.main.plan_result(plan.name)
         if isinstance(o, Slab):
-            txt = f"Area {o.area:.2f} m² · Dead {o.dead:.2f} kN/m² · Live {o.live_load:.2f} kN/m² · Total {(o.dead + o.live_load) * o.area:.1f} kN"
+            txt = (
+                f"Area {o.area:.2f} m² · Dead {o.dead:.2f} kN/m² · Live {o.live_load:.2f} kN/m² · "
+                f"Total {(o.dead + o.live_load) * o.area:.1f} kN"
+            )
         elif isinstance(o, Beam):
             c = o.udl_components(plan.floor_height_above, plan.floor_type)
-            txt = (f"Span {o.length:.3f} m · wall ht {o.wall_h(plan.floor_height_above, plan.floor_type):.2f} m\n"
-                   f"Self {c['self']:.2f} + wall {c['wall']:.2f} + plaster {c['plaster']:.2f} = {sum(c.values()):.2f} kN/m")
+            txt = (
+                f"Span {o.length:.3f} m · wall ht {o.wall_h(plan.floor_height_above, plan.floor_type):.2f} m\n"
+                f"Self {c['self']:.2f} + wall {c['wall']:.2f} + plaster {c['plaster']:.2f} = {sum(c.values()):.2f} kN/m"
+            )
             if res and o.id in res.beams:
                 br = res.beams[o.id]
-                txt += f"\nTotal on beam: D {br.total('D'):.1f} kN, L {br.total('L'):.1f} kN (eq. UDL {br.equivalent_udl():.2f} kN/m)"
+                txt += (
+                    f"\nTotal on beam: D {br.total('D'):.1f} kN, L {br.total('L'):.1f} kN "
+                    f"(eq. UDL {br.equivalent_udl():.2f} kN/m)"
+                )
                 txt += "\nSupports: " + ", ".join(f"{s.kind} @ {s.x:.2f} m" for s in br.supports)
         else:
             txt = f"{o.b * 1000:.0f} × {o.d * 1000:.0f} mm at ({o.x:.3f}, {o.y:.3f})"
@@ -488,8 +575,12 @@ class PropertiesPanel(QWidget):
                 QMessageBox.warning(self, "Properties", f"{k} must be positive")
                 return
         if isinstance(self.objs[0], Column) and "b" in vals and "d" in vals and vals["d"] < vals["b"]:
-            QMessageBox.information(self, "Properties", "Note: column depth is less than breadth (FrameWin convention "
-                                                        "keeps depth ≥ breadth; rotate the column instead).")
+            QMessageBox.information(
+                self,
+                "Properties",
+                "Note: column depth is less than breadth (FrameWin convention "
+                "keeps depth ≥ breadth; rotate the column instead).",
+            )
         objs = list(self.objs)
 
         def fn():
@@ -500,6 +591,7 @@ class PropertiesPanel(QWidget):
                     o.point_loads = loads
                 if wedges is not None:
                     o.part_loads = wedges
+
         self.main.mutate("Edit properties", fn)
         self.show_selection([o.id for o in objs])
 
@@ -508,11 +600,22 @@ class PropertiesPanel(QWidget):
 class ResultsPanel(QTabWidget):
     issueActivated = Signal(object)
 
-    def __init__(self, main: "MainWindow"):
+    def __init__(self, main: MainWindow):
         super().__init__()
         self.main = main
         self.tables: dict[str, QTableWidget] = {}
-        for name in ("Issues", "Column loads", "Beam loads", "Columns", "Beams", "Footings", "Slabs", "Lateral", "Drift", "BOQ & cost"):
+        for name in (
+            "Issues",
+            "Column loads",
+            "Beam loads",
+            "Columns",
+            "Beams",
+            "Footings",
+            "Slabs",
+            "Lateral",
+            "Drift",
+            "BOQ & cost",
+        ):
             t = QTableWidget()
             t.setEditTriggers(QAbstractItemView.NoEditTriggers)
             t.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -524,7 +627,7 @@ class ResultsPanel(QTabWidget):
         self.tables["Issues"].cellDoubleClicked.connect(self._issue_clicked)
         self._issues: list = []
 
-    def _fill(self, name: str, headers: list[str], rows: list[list], bad_col: Optional[int] = None):
+    def _fill(self, name: str, headers: list[str], rows: list[list], bad_col: int | None = None):
         t = self.tables[name]
         t.setSortingEnabled(False)
         t.clear()
@@ -568,16 +671,29 @@ class ResultsPanel(QTabWidget):
                 for i in res.issues:
                     issues.append([plan.name, i.level, i.kind, i.message])
                     self._issues.append(i)
-                self._fill("Column loads", ["Column", "Dead kN", "Live kN", "Total kN", "From beams"],
-                           [[c.mark, c.dead, c.live, c.total, ", ".join(p[0] for p in c.parts)] for c in res.columns.values()])
+                self._fill(
+                    "Column loads",
+                    ["Column", "Dead kN", "Live kN", "Total kN", "From beams"],
+                    [[c.mark, c.dead, c.live, c.total, ", ".join(p[0] for p in c.parts)] for c in res.columns.values()],
+                )
                 bmap = {b.id: b for b in plan.beams}
                 rows = []
                 for bid, br in res.beams.items():
                     b = bmap.get(bid)
                     if b:
-                        rows.append([b.mark, br.length, br.total("D"), br.total("L"), br.equivalent_udl(),
-                                     " / ".join(f"{s.kind[0].upper()}@{s.x:.2f}" for s in br.supports)])
-                self._fill("Beam loads", ["Beam", "Span m", "Total D kN", "Total L kN", "Eq. UDL kN/m", "Supports"], rows)
+                        rows.append(
+                            [
+                                b.mark,
+                                br.length,
+                                br.total("D"),
+                                br.total("L"),
+                                br.equivalent_udl(),
+                                " / ".join(f"{s.kind[0].upper()}@{s.x:.2f}" for s in br.supports),
+                            ]
+                        )
+                self._fill(
+                    "Beam loads", ["Beam", "Span m", "Total D kN", "Total L kN", "Eq. UDL kN/m", "Supports"], rows
+                )
         fm = m.frame_model()
         if not fm:
             self._clear("Lateral")
@@ -593,21 +709,106 @@ class ResultsPanel(QTabWidget):
         if not rep:
             self._clear("Columns", "Beams", "Footings", "Slabs", "Drift", "BOQ & cost")
         if rep:
-            self._fill("Columns", ["Level", "Col", "b", "D", "Pu kN", "Mux", "Muy", "p %", "Bars", "Ties", "Ratio", "OK", "Governing"],
-                       [[c.level, c.mark, c.b, c.d, c.Pu, c.Mux, c.Muy, c.steel_pct, c.bars, c.ties, c.utilisation,
-                         "YES" if c.ok else "NO", c.governing] for c in rep.columns], bad_col=11)
-            self._fill("Beams", ["Level", "Beam", "b", "D", "Span", "Mu+", "Mu- L", "Mu- R", "Vu", "Bottom", "Top L", "Top R",
-                                 "Stirrups", "OK", "Notes"],
-                       [[b.level, b.mark, b.b, b.d, b.span, b.M_sag, b.M_hog_l, b.M_hog_r, b.V_max, b.bottom, b.top_l, b.top_r,
-                         b.stirrups, "YES" if b.ok else "NO", "; ".join(b.notes)] for b in rep.beams], bad_col=13)
-            self._fill("Footings", ["Col", "P kN", "L m", "B m", "D m", "Bars ∥L", "Bars ∥B", "q kN/m²", "OK"],
-                       [[f.mark, f.P_service, f.L, f.B, f.D, f.bars_L, f.bars_B, f.q, "YES" if f.ok else "NO"] for f in rep.footings],
-                       bad_col=8)
-            self._fill("Slabs", ["Plan", "Slab", "lx", "ly", "Type", "D mm", "Short", "Long", "Top", "OK", "Notes"],
-                       [[pn, s.mark, s.lx, s.ly, s.kind, s.D_mm, s.ast_x, s.ast_y, s.ast_neg, "YES" if s.ok else "NO",
-                         "; ".join(s.notes)] for pn, s in rep.slabs], bad_col=9)
-            self._fill("Drift", ["Case", "Level", "Drift mm", "Ratio", "OK"],
-                       [[d["case"], d["level"], d["drift_mm"], d["ratio"], "YES" if d["ok"] else "NO"] for d in rep.drifts], bad_col=4)
+            self._fill(
+                "Columns",
+                ["Level", "Col", "b", "D", "Pu kN", "Mux", "Muy", "p %", "Bars", "Ties", "Ratio", "OK", "Governing"],
+                [
+                    [
+                        c.level,
+                        c.mark,
+                        c.b,
+                        c.d,
+                        c.Pu,
+                        c.Mux,
+                        c.Muy,
+                        c.steel_pct,
+                        c.bars,
+                        c.ties,
+                        c.utilisation,
+                        "YES" if c.ok else "NO",
+                        c.governing,
+                    ]
+                    for c in rep.columns
+                ],
+                bad_col=11,
+            )
+            self._fill(
+                "Beams",
+                [
+                    "Level",
+                    "Beam",
+                    "b",
+                    "D",
+                    "Span",
+                    "Mu+",
+                    "Mu- L",
+                    "Mu- R",
+                    "Vu",
+                    "Bottom",
+                    "Top L",
+                    "Top R",
+                    "Stirrups",
+                    "OK",
+                    "Notes",
+                ],
+                [
+                    [
+                        b.level,
+                        b.mark,
+                        b.b,
+                        b.d,
+                        b.span,
+                        b.M_sag,
+                        b.M_hog_l,
+                        b.M_hog_r,
+                        b.V_max,
+                        b.bottom,
+                        b.top_l,
+                        b.top_r,
+                        b.stirrups,
+                        "YES" if b.ok else "NO",
+                        "; ".join(b.notes),
+                    ]
+                    for b in rep.beams
+                ],
+                bad_col=13,
+            )
+            self._fill(
+                "Footings",
+                ["Col", "P kN", "L m", "B m", "D m", "Bars ∥L", "Bars ∥B", "q kN/m²", "OK"],
+                [
+                    [f.mark, f.P_service, f.L, f.B, f.D, f.bars_L, f.bars_B, f.q, "YES" if f.ok else "NO"]
+                    for f in rep.footings
+                ],
+                bad_col=8,
+            )
+            self._fill(
+                "Slabs",
+                ["Plan", "Slab", "lx", "ly", "Type", "D mm", "Short", "Long", "Top", "OK", "Notes"],
+                [
+                    [
+                        pn,
+                        s.mark,
+                        s.lx,
+                        s.ly,
+                        s.kind,
+                        s.D_mm,
+                        s.ast_x,
+                        s.ast_y,
+                        s.ast_neg,
+                        "YES" if s.ok else "NO",
+                        "; ".join(s.notes),
+                    ]
+                    for pn, s in rep.slabs
+                ],
+                bad_col=9,
+            )
+            self._fill(
+                "Drift",
+                ["Case", "Level", "Drift mm", "Ratio", "OK"],
+                [[d["case"], d["level"], d["drift_mm"], d["ratio"], "YES" if d["ok"] else "NO"] for d in rep.drifts],
+                bad_col=4,
+            )
             lines = [list(x) for x in rep.boq.get("lines", [])]
             lines.append(["TOTAL", "", "", "", rep.boq.get("cost", 0.0)])
             lines.append(["Steel/concrete ratio", "kg/m³", rep.boq.get("steel_per_m3", 0.0), "", ""])

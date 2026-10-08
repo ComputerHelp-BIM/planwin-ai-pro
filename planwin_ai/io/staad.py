@@ -24,9 +24,16 @@ from ..core.solver import MLoad, MPoint
 
 # LOADTYPE is optional in STAAD; seismic keywords differ between V8i ("Seismic") and
 # CONNECT ("Seismic-H"), so seismic cases are written without LOADTYPE for portability.
-_TYPES = {"DL": ("Dead", "DEAD LOAD"), "LL": ("Live", "LIVE LOAD"), "WLX": ("Wind", "WIND X"),
-          "WLY": ("Wind", "WIND Y"), "EQX": ("", "SEISMIC X (IS 1893 STATIC)"), "EQY": ("", "SEISMIC Y (IS 1893 STATIC)"),
-          "ETX": ("", "ACCIDENTAL TORSION X"), "ETY": ("", "ACCIDENTAL TORSION Y")}
+_TYPES = {
+    "DL": ("Dead", "DEAD LOAD"),
+    "LL": ("Live", "LIVE LOAD"),
+    "WLX": ("Wind", "WIND X"),
+    "WLY": ("Wind", "WIND Y"),
+    "EQX": ("", "SEISMIC X (IS 1893 STATIC)"),
+    "EQY": ("", "SEISMIC Y (IS 1893 STATIC)"),
+    "ETX": ("", "ACCIDENTAL TORSION X"),
+    "ETY": ("", "ACCIDENTAL TORSION Y"),
+}
 
 
 def _f(v: float) -> str:
@@ -41,7 +48,7 @@ def _ranges(ids: list[int]) -> str:
         j = i
         while j + 1 < len(ids) and ids[j + 1] == ids[j] + 1:
             j += 1
-        out.append(f"{ids[i]} TO {ids[j]}" if j - i >= 2 else " ".join(str(k) for k in ids[i:j + 1]))
+        out.append(f"{ids[i]} TO {ids[j]}" if j - i >= 2 else " ".join(str(k) for k in ids[i : j + 1]))
         i = j + 1
     return " ".join(out)
 
@@ -106,12 +113,15 @@ def write_staad(fm: FrameModel, path: str, engineer: str = "", watermark: str = 
         props[(yd, zd, round(m.i_factor, 3), round(m.torsion_factor, 3))].append(mid_map[mid])
     L.append("MEMBER PROPERTY INDIAN")
     for (yd, zd, fi, ft), ids in sorted(props.items()):
-        iz = fi * zd * yd ** 3 / 12.0
-        iy = fi * yd * zd ** 3 / 12.0
+        iz = fi * zd * yd**3 / 12.0
+        iy = fi * yd * zd**3 / 12.0
         a_, c_ = max(yd, zd), min(yd, zd)
-        j = ft * (1 / 3 - 0.21 * (c_ / a_) * (1 - (c_ / a_) ** 4 / 12)) * a_ * c_ ** 3
-        L.extend(_wrap("", f"{_ranges(ids)} PRIS AX {yd * zd:.6g} IX {j:.6g} IY {iy:.6g} IZ {iz:.6g} "
-                           f"YD {_f(yd)} ZD {_f(zd)}"))
+        j = ft * (1 / 3 - 0.21 * (c_ / a_) * (1 - (c_ / a_) ** 4 / 12)) * a_ * c_**3
+        L.extend(
+            _wrap(
+                "", f"{_ranges(ids)} PRIS AX {yd * zd:.6g} IX {j:.6g} IY {iy:.6g} IZ {iz:.6g} YD {_f(yd)} ZD {_f(zd)}"
+            )
+        )
     L.append("CONSTANTS")
     by_grade = defaultdict(list)
     for mid, m in fm.members.items():

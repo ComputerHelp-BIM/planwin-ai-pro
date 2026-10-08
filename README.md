@@ -1,4 +1,4 @@
-# PlanWin AI Pro 1.0.1
+# PlanWin AI Pro
 
 **AI-assisted structural pre-processor, 3-D analysis and IS-code design for RCC framed buildings.**
 This is the Python successor to Computer Help's PlanWin / FrameWin (VB6). It keeps the familiar PlanWin workflow:
@@ -18,9 +18,9 @@ Each build on GitHub Actions produces three files. Find them under **Actions →
 
 | File | Use |
 |---|---|
-| `PlanWinAIPro-1.0.1-win64-setup.exe` | Installer: Start-menu entry, desktop icon, `.pwai`/`.plw` file association, uninstaller |
-| `PlanWinAIPro-1.0.1-win64-portable.exe` | Single exe that runs from anywhere with no install. First start takes about 10 s while it unpacks |
-| `PlanWinAIPro-1.0.1-win64-folder.zip` | Unzip and run `PlanWinAIPro.exe`. Fastest start |
+| `PlanWinAIPro-<version>-win64-setup.exe` | Installer: Start-menu entry, desktop icon, `.pwai`/`.plw` file association, uninstaller |
+| `PlanWinAIPro-<version>-win64-portable.exe` | Single exe that runs from anywhere with no install. First start takes about 10 s while it unpacks |
+| `PlanWinAIPro-<version>-win64-folder.zip` | Unzip and run `PlanWinAIPro.exe`. Fastest start |
 
 The exe is not code-signed yet, so Windows SmartScreen may warn on first run (*More info → Run anyway*). See *Roadmap* for signing.
 
@@ -124,7 +124,7 @@ python -m planwin_ai                                     # run the app
 scripts\build_windows.bat                                # exe + portable + installer (needs Inno Setup 6)
 ```
 
-**Releases:** bump the version in `planwin_ai/__init__.py`, `pyproject.toml` and `packaging/version_info.txt`, update
+**Releases:** bump `__version__` in `planwin_ai/__init__.py` (the only place the version lives), update
 `CHANGELOG.md`, then either push a tag `vX.Y.Z` or run the *build-windows* workflow manually with **release** ticked.
 GitHub Actions tests, builds, self-tests and publishes the release (the manual run creates the tag itself).
 Versioning follows **Semantic Versioning** (MAJOR.MINOR.PATCH).

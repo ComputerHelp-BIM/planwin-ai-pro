@@ -14,7 +14,9 @@ def _setup_logging() -> str:
 
     path = os.path.join(app_data_dir(), "planwin.log")
     handler = RotatingFileHandler(path, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
-    logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, handlers=[handler], format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     return path
 
 
@@ -36,8 +38,10 @@ def selftest() -> int:
     w.close()
     eq = fa.equilibrium()
     ok = rep.failures == 0 and abs(eq["EQX"]) < 1e-3 and len(fm.members) > 0
-    print(f"PlanWin AI Pro {__version__} selftest: members={len(fm.members)} DL={eq['DL']:.1f} kN "
-          f"failures={rep.failures} -> {'OK' if ok else 'FAILED'}")
+    print(
+        f"PlanWin AI Pro {__version__} selftest: members={len(fm.members)} DL={eq['DL']:.1f} kN "
+        f"failures={rep.failures} -> {'OK' if ok else 'FAILED'}"
+    )
     app.quit()
     return 0 if ok else 1
 
@@ -74,7 +78,9 @@ def main(argv: list[str] | None = None) -> int:
 
     def excepthook(t, v, tb):
         logging.getLogger("planwin").error("Unhandled exception:\n%s", "".join(traceback.format_exception(t, v, tb)))
-        QMessageBox.critical(None, APP_NAME, f"An unexpected error occurred:\n{v}\n\nDetails were written to\n{log_path}")
+        QMessageBox.critical(
+            None, APP_NAME, f"An unexpected error occurred:\n{v}\n\nDetails were written to\n{log_path}"
+        )
 
     sys.excepthook = excepthook
     path = next((a for a in argv[1:] if a.lower().endswith((".pwai", ".plw"))), None)

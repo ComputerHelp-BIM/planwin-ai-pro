@@ -7,21 +7,38 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Qt, QThread, Signal
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtWidgets import (QDockWidget, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import (
+    QDockWidget,
+    QHBoxLayout,
+    QLabel,
+    QPlainTextEdit,
+    QPushButton,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .theme import PALETTES
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
 
-CHIPS = [("Analyze", "analyze"), ("Design", "design"), ("Auto-size columns", "auto size columns"),
-         ("Export STAAD", "export staad"), ("Export ETABS", "export etabs"), ("PDF report", "export pdf"), ("Help", "help")]
+CHIPS = [
+    ("Analyze", "analyze"),
+    ("Design", "design"),
+    ("Auto-size columns", "auto size columns"),
+    ("Export STAAD", "export staad"),
+    ("Export ETABS", "export etabs"),
+    ("PDF report", "export pdf"),
+    ("Help", "help"),
+]
 
-EXAMPLES = ["G+4 residential in Pune, 3x2 bays of 4.5 m with mumty and 1.2 m balcony",
-            "Office G+6 in Bengaluru, 4 by 3 bays of 6 m, floor height 3.6",
-            "Make it G+7 and use M30 Fe500",
-            "Zone IV, soft soil, SBC 150, then analyze and design"]
+EXAMPLES = [
+    "G+4 residential in Pune, 3x2 bays of 4.5 m with mumty and 1.2 m balcony",
+    "Office G+6 in Bengaluru, 4 by 3 bays of 6 m, floor height 3.6",
+    "Make it G+7 and use M30 Fe500",
+    "Zone IV, soft soil, SBC 150, then analyze and design",
+]
 
 
 class _Worker(QObject):
@@ -53,7 +70,7 @@ class _Input(QPlainTextEdit):
 
 
 class ChatDock(QDockWidget):
-    def __init__(self, main: "MainWindow"):
+    def __init__(self, main: MainWindow):
         super().__init__("AI Assistant", main)
         self.main = main
         self.setObjectName("ChatDock")
@@ -104,13 +121,24 @@ class ChatDock(QDockWidget):
 
     def refresh_provider(self):
         cfg = self.main.assistant.config
-        name = {"offline": "Offline engine (no internet)", "claude": "Claude", "openai": "OpenAI", "ollama": "Ollama (local)"}
-        self.provider_lbl.setText(f"Engine: {name.get(cfg.provider, cfg.provider)} {cfg.model}  ·  Settings ▸ AI to change")
+        name = {
+            "offline": "Offline engine (no internet)",
+            "claude": "Claude",
+            "openai": "OpenAI",
+            "ollama": "Ollama (local)",
+        }
+        self.provider_lbl.setText(
+            f"Engine: {name.get(cfg.provider, cfg.provider)} {cfg.model}  ·  Settings ▸ AI to change"
+        )
 
     def _welcome(self):
         ex = "".join(f'<li><a href="ex:{html.escape(e)}">{html.escape(e)}</a></li>' for e in EXAMPLES)
-        self._add("assistant", "Hi! I'm your structural assistant. Describe a building and I'll create the PlanWin plans, "
-                               "FrameWin levels, loads and design. Try one of these:" + f"<ul>{ex}</ul>", raw=True)
+        self._add(
+            "assistant",
+            "Hi! I'm your structural assistant. Describe a building and I'll create the PlanWin plans, "
+            "FrameWin levels, loads and design. Try one of these:" + f"<ul>{ex}</ul>",
+            raw=True,
+        )
 
     def _anchor(self, url):
         s = url.toString()
@@ -130,8 +158,10 @@ class ChatDock(QDockWidget):
             bg = pal["chat_user"] if role == "user" else pal["chat_bot"]
             body = text if raw else html.escape(text).replace("\n", "<br>")
             who = "You" if role == "user" else "✦ Assistant"
-            parts.append(f'<table width="100%" cellpadding="8" style="margin-bottom:6px"><tr><td style="background:{bg};'
-                         f'color:{pal["text"]}"><b>{who}</b><br>{body}</td></tr></table>')
+            parts.append(
+                f'<table width="100%" cellpadding="8" style="margin-bottom:6px"><tr><td style="background:{bg};'
+                f'color:{pal["text"]}"><b>{who}</b><br>{body}</td></tr></table>'
+            )
         css = f"<style>a {{ color: {pal['link']}; }}</style>"
         self.view.setHtml(css + "".join(parts))
         self.view.verticalScrollBar().setValue(self.view.verticalScrollBar().maximum())

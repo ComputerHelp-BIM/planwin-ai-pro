@@ -7,7 +7,7 @@ virtual machines and remote desktops without GPU drivers.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from PySide6.QtCore import QPointF, Qt
@@ -21,13 +21,13 @@ if TYPE_CHECKING:
 
 
 class _Canvas3D(QWidget):
-    def __init__(self, owner: "Frame3DView"):
+    def __init__(self, owner: Frame3DView):
         super().__init__()
         self.o = owner
         self.yaw, self.pitch = -35.0, 25.0
         self.zoom = 1.0
         self.pan = QPointF(0, 0)
-        self._last: Optional[QPointF] = None
+        self._last: QPointF | None = None
         self._btn = None
         self.setMinimumSize(300, 300)
 
@@ -130,7 +130,7 @@ class _Canvas3D(QWidget):
 
 
 class Frame3DView(QWidget):
-    def __init__(self, main: "MainWindow"):
+    def __init__(self, main: MainWindow):
         super().__init__()
         self.main = main
         lay = QVBoxLayout(self)

@@ -7,14 +7,15 @@ against a :class:`Session` so the GUI and the CLI behave identically.
 
 from __future__ import annotations
 
-import os
-import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ..core.generator import OCCUPANCY, SPEC_IS_INPUT, GridSpec, auto_slab_thickness, grid_building
 from ..core.model import Project
 from ..io.cities import lookup_city
+from ..services import exports
+from ..services.exports import safe_filename as safe_filename  # re-export (moved in 1.1.0)
 from .templates import TEMPLATES, build_template
 
 ACTION_SCHEMA: dict[str, dict[str, str]] = {
@@ -29,16 +30,29 @@ ACTION_SCHEMA: dict[str, dict[str, str]] = {
         "city": "Indian city name (sets wind speed and seismic zone)",
         "balcony": '{"side": "south|north", "depth": m} or null',
         "mumty": "true/false (stair cabin on roof)",
-        "column": "[b, d] m", "beam_int": "[b, d] m", "beam_ext": "[b, d] m",
-        "grade": "concrete grade e.g. M25", "name": "project name",
+        "column": "[b, d] m",
+        "beam_int": "[b, d] m",
+        "beam_ext": "[b, d] m",
+        "grade": "concrete grade e.g. M25",
+        "name": "project name",
     },
     "load_template": {"key": "|".join(t.key for t in TEMPLATES)},
     "modify_building": {"...": "any new_building field to change; regenerates the parametric model"},
-    "set_loads": {"plan": "plan name or 'all'", "live": "kN/m2", "floor_finish": "kN/m2", "other": "kN/m2",
-                  "thickness": "slab thickness m"},
+    "set_loads": {
+        "plan": "plan name or 'all'",
+        "live": "kN/m2",
+        "floor_finish": "kN/m2",
+        "other": "kN/m2",
+        "thickness": "slab thickness m",
+    },
     "set_location": {"city": "Indian city"},
-    "set_seismic": {"zone": "II|III|IV|V", "soil": "hard|medium|soft", "importance": "1.0|1.2|1.5",
-                    "response_reduction": "3|5", "enabled": "true/false"},
+    "set_seismic": {
+        "zone": "II|III|IV|V",
+        "soil": "hard|medium|soft",
+        "importance": "1.0|1.2|1.5",
+        "response_reduction": "3|5",
+        "enabled": "true/false",
+    },
     "set_wind": {"basic_speed": "m/s", "terrain": "1-4", "enabled": "true/false"},
     "set_materials": {"concrete": "M20..M50", "steel": "415|500|550"},
     "set_sbc": {"sbc": "safe bearing capacity kN/m2"},
@@ -46,7 +60,7 @@ ACTION_SCHEMA: dict[str, dict[str, str]] = {
     "optimize_sizes": {"max_iter": "iterations (default 5)", "target_col_pct": "max column steel % (default 3)"},
     "analyze": {},
     "design": {},
-    "export": {"format": "staad|etabs|dxf|dxf3d|excel|pdf|project", "path": "optional file path"},
+    "export": {"format": "|".join(exports.keys()), "path": "optional file path", "plan": "plan name (dxf)"},
     "answer": {"text": "reply only, no model change"},
 }
 
@@ -58,7 +72,7 @@ class Session:
     last: dict[str, Any] = field(default_factory=dict)  # fm, fa, rep, plan_results
     watermark: str = ""
     exports_allowed: bool = True
-    on_change: Optional[Callable[[str], None]] = None
+    on_change: Callable[[str], None] | None = None
 
 
 @dataclass
@@ -77,14 +91,6 @@ def _to_bool(v: Any) -> bool:
     return bool(v)
 
 
-def safe_filename(name: str, default: str = "project") -> str:
-    """File-system-safe base name (Windows forbids <>:"/\\|?* and trailing dots/spaces)."""
-    out = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", str(name or "")).replace(" ", "_").strip("._ ")[:120]
-    if re.fullmatch(r"(?i)(con|prn|aux|nul|com\d|lpt\d)(\..*)?", out):  # reserved device names on Windows
-        out = "_" + out
-    return out or default
-
-
 def _spec_from(project: Project) -> GridSpec:
     d = dict(project.meta.get("grid_spec") or {})
     valid = set(asdict(GridSpec()))
@@ -101,7 +107,7 @@ def _spec_from(project: Project) -> GridSpec:
     return spec
 
 
-def _clean_spec(params: dict, base: Optional[GridSpec] = None) -> GridSpec:
+def _clean_spec(params: dict, base: GridSpec | None = None) -> GridSpec:
     spec = base or GridSpec()
     valid = set(asdict(spec))
     for k, v in params.items():
@@ -149,14 +155,18 @@ def execute(session: Session, actions: list[dict]) -> ActionResult:
 def _new_building(s: Session, p: dict, r: ActionResult):
     spec = _clean_spec(p)
     if not p.get("name"):
-        spec.name = f"{spec.occupancy.replace('_', ' ').title()} G+{spec.upper_floors}" + (f" – {spec.city}" if p.get("city") else "")
+        spec.name = f"{spec.occupancy.replace('_', ' ').title()} G+{spec.upper_floors}" + (
+            f" – {spec.city}" if p.get("city") else ""
+        )
     s.project = grid_building(spec)
     s.last.clear()
     r.changed = True
     nfl = spec.upper_floors
-    r.messages.append(f"Created {s.project.name}: G+{nfl}, {len(spec.bays_x)}×{len(spec.bays_y)} bays "
-                      f"({sum(spec.bays_x):.1f} × {sum(spec.bays_y):.1f} m), {spec.occupancy}, "
-                      f"{s.project.wind.city} (zone {s.project.seismic.zone}, Vb {s.project.wind.basic_speed} m/s).")
+    r.messages.append(
+        f"Created {s.project.name}: G+{nfl}, {len(spec.bays_x)}×{len(spec.bays_y)} bays "
+        f"({sum(spec.bays_x):.1f} × {sum(spec.bays_y):.1f} m), {spec.occupancy}, "
+        f"{s.project.wind.city} (zone {s.project.seismic.zone}, Vb {s.project.wind.basic_speed} m/s)."
+    )
 
 
 def _modify(s: Session, p: dict, r: ActionResult):
@@ -219,8 +229,9 @@ def _set_location(s: Session, p: dict, r: ActionResult):
     pr.seismic.zone = info["zone"]
     s.last.clear()
     r.changed = True
-    r.messages.append(f"Location {info['city']}: seismic zone {info['zone']}, Vb {pr.wind.basic_speed} m/s "
-                      f"({info['source']}).")
+    r.messages.append(
+        f"Location {info['city']}: seismic zone {info['zone']}, Vb {pr.wind.basic_speed} m/s ({info['source']})."
+    )
 
 
 def _set_seismic(s: Session, p: dict, r: ActionResult):
@@ -244,8 +255,10 @@ def _set_seismic(s: Session, p: dict, r: ActionResult):
         sm.enabled = _to_bool(p["enabled"])
     s.last.clear()
     r.changed = True
-    r.messages.append(f"Seismic: zone {sm.zone}, {sm.soil} soil, I={sm.importance}, R={sm.response_reduction}"
-                      + ("" if sm.enabled else " (disabled)"))
+    r.messages.append(
+        f"Seismic: zone {sm.zone}, {sm.soil} soil, I={sm.importance}, R={sm.response_reduction}"
+        + ("" if sm.enabled else " (disabled)")
+    )
 
 
 def _set_wind(s: Session, p: dict, r: ActionResult):
@@ -258,7 +271,9 @@ def _set_wind(s: Session, p: dict, r: ActionResult):
         w.enabled = _to_bool(p["enabled"])
     s.last.clear()
     r.changed = True
-    r.messages.append(f"Wind: Vb {w.basic_speed} m/s, terrain category {w.terrain}" + ("" if w.enabled else " (disabled)"))
+    r.messages.append(
+        f"Wind: Vb {w.basic_speed} m/s, terrain category {w.terrain}" + ("" if w.enabled else " (disabled)")
+    )
 
 
 def _set_materials(s: Session, p: dict, r: ActionResult):
@@ -276,7 +291,9 @@ def _set_materials(s: Session, p: dict, r: ActionResult):
         pr.design.fy_main = pr.design.fy_shear = fy
     s.last.clear()
     r.changed = True
-    r.messages.append(f"Materials: concrete {pr.levels[0].grade if pr.levels else '-'}, steel Fe{int(pr.design.fy_main)}")
+    r.messages.append(
+        f"Materials: concrete {pr.levels[0].grade if pr.levels else '-'}, steel Fe{int(pr.design.fy_main)}"
+    )
 
 
 def _set_sbc(s: Session, p: dict, r: ActionResult):
@@ -289,11 +306,15 @@ def _set_sbc(s: Session, p: dict, r: ActionResult):
 def _autosize(s: Session, p: dict, r: ActionResult):
     from ..design.runner import autosize_columns
 
-    out = autosize_columns(s.project, steel_pct=float(p.get("steel_pct", 1.0)), same_size=_to_bool(p.get("same_size", True)))
+    out = autosize_columns(
+        s.project, steel_pct=float(p.get("steel_pct", 1.0)), same_size=_to_bool(p.get("same_size", True))
+    )
     s.last.clear()
     r.changed = True
     big = sorted(out.items(), key=lambda kv: -max(kv[1]))[:3]
-    r.messages.append("Columns auto-sized from axial load. Largest: " + ", ".join(f"{k} depth {max(v):.2f} m" for k, v in big))
+    r.messages.append(
+        "Columns auto-sized from axial load. Largest: " + ", ".join(f"{k} depth {max(v):.2f} m" for k, v in big)
+    )
 
 
 def _optimize(s: Session, p: dict, r: ActionResult):
@@ -310,8 +331,10 @@ def _analyze(s: Session, p: dict, r: ActionResult):
     from ..core.plan_engine import PlanEngine
 
     pr = s.project
-    s.last["plan_results"] = {pl.name: PlanEngine(pl, None, pr.design.two_way_ratio_limit,
-                                                  pr.design.continuity_in_load_transfer).run() for pl in pr.plans}
+    s.last["plan_results"] = {
+        pl.name: PlanEngine(pl, None, pr.design.two_way_ratio_limit, pr.design.continuity_in_load_transfer).run()
+        for pl in pr.plans
+    }
     fm = FrameModel(pr).build()
     errs = [i for i in fm.issues if i.level == "error"]
     if errs:
@@ -321,7 +344,10 @@ def _analyze(s: Session, p: dict, r: ActionResult):
     s.last.update(fm=fm, fa=fa)
     r.analysed = True
     eq = fa.equilibrium()
-    msg = f"Analysis done: {len(fm.nodes)} joints, {len(fm.members)} members. Vertical reaction DL {eq['DL']:.0f} kN, LL {eq['LL']:.0f} kN."
+    msg = (
+        f"Analysis done: {len(fm.nodes)} joints, {len(fm.members)} members. "
+        f"Vertical reaction DL {eq['DL']:.0f} kN, LL {eq['LL']:.0f} kN."
+    )
     for k, v in fm.seismic.items():
         msg += f" {k}: T={v.T:.2f}s Ah={v.Ah:.4f} VB={v.Vb:.0f} kN."
     r.messages.append(msg)
@@ -336,61 +362,41 @@ def _design(s: Session, p: dict, r: ActionResult):
     s.last["rep"] = rep
     r.analysed = True
     b = rep.boq
-    r.messages.append(f"Design done: {len(rep.columns)} column segments, {len(rep.beams)} beams, {len(rep.footings)} footings, "
-                      f"{len(rep.slabs)} slabs – {rep.failures} need attention. Concrete {b['total_concrete']:.1f} m³, "
-                      f"steel {b['total_steel'] / 1000:.1f} t ({b['steel_per_m3']:.0f} kg/m³), est. cost ₹{b['cost'] / 1e5:.1f} lakh.")
+    r.messages.append(
+        f"Design done: {len(rep.columns)} column segments, {len(rep.beams)} beams, {len(rep.footings)} footings, "
+        f"{len(rep.slabs)} slabs – {rep.failures} need attention. Concrete {b['total_concrete']:.1f} m³, "
+        f"steel {b['total_steel'] / 1000:.1f} t ({b['steel_per_m3']:.0f} kg/m³), est. cost ₹{b['cost'] / 1e5:.1f} lakh."
+    )
     for w in rep.warnings[:3]:
         r.messages.append("⚠ " + w)
     if rep.failures or any(not d["ok"] for d in rep.drifts):
-        r.messages.append("Tip: say 'optimise sizes' (or FrameWin ▸ Optimise sizes) to enlarge failing members automatically.")
+        r.messages.append(
+            "Tip: say 'optimise sizes' (or FrameWin ▸ Optimise sizes) to enlarge failing members automatically."
+        )
 
 
 def _export(s: Session, p: dict, r: ActionResult):
     if not s.exports_allowed:
         raise ValueError("exports are disabled – the trial has expired. Please activate a licence")
-    fmt = str(p.get("format", "")).lower()
-    base = os.path.join(s.out_dir, safe_filename(s.project.name))
-    path = p.get("path")
-    from ..io import dxf_io, project_io, reports, staad, etabs
+    fmt = exports.get(p.get("format", ""))
 
-    def need_fm():
+    def ensure_frame():
         if "fm" not in s.last or "fa" not in s.last:
             _analyze(s, {}, r)
-        return s.last["fm"]
+        return s.last["fm"], s.last["fa"]
 
-    if fmt in ("staad", "std"):
-        out = staad.write_staad(need_fm(), path or base + ".std", watermark=s.watermark)
-    elif fmt in ("etabs", "e2k"):
-        out = etabs.write_etabs(need_fm(), path or base + ".e2k", watermark=s.watermark)
-    elif fmt == "dxf":
-        plan = s.project.plans[0] if s.project.plans else None
-        tgt = p.get("plan")
-        if tgt:
-            plan = s.project.plan(tgt) or plan
-        if plan is None:
-            raise ValueError("no plan to export")
-        from ..core.plan_engine import PlanEngine
-
-        out = dxf_io.export_plan_dxf(plan, path or f"{base}_{safe_filename(plan.name, 'plan')}_2DPLAN.dxf", PlanEngine(plan).run(),
-                                     watermark=s.watermark)
-    elif fmt == "dxf3d":
-        out = dxf_io.export_frame_dxf(need_fm(), path or base + "_3d.dxf")
-    elif fmt in ("excel", "xlsx"):
+    def ensure_design():
         if "rep" not in s.last:
             _design(s, {}, r)
-        out = reports.write_excel(path or base + ".xlsx", s.project, s.last.get("plan_results", {}), s.last["fm"],
-                                  s.last["fa"], s.last["rep"], s.watermark)
-    elif fmt in ("pdf", "report"):
-        if "rep" not in s.last:
-            _design(s, {}, r)
-        out = reports.write_pdf(path or base + ".pdf", s.project, s.last.get("plan_results", {}), s.last["fm"],
-                                s.last["rep"], s.watermark)
-    elif fmt in ("project", "pwai"):
-        out = project_io.save_project(s.project, path or base + ".pwai")
-    else:
-        raise ValueError(f"unknown export format '{fmt}'")
+        return s.last["rep"]
+
+    params = {k: v for k, v in p.items() if k not in ("format", "path")}
+    ctx = exports.ExportContext(
+        s.project, s.out_dir, s.watermark, params, ensure_frame, ensure_design, lambda: s.last.get("plan_results", {})
+    )
+    out = exports.run(fmt, ctx, p.get("path"))
     r.files.append(out)
-    r.messages.append(f"Exported {fmt.upper()} → {out}")
+    r.messages.append(f"Exported {fmt.label} → {out}")
 
 
 def _answer(s: Session, p: dict, r: ActionResult):
@@ -399,8 +405,19 @@ def _answer(s: Session, p: dict, r: ActionResult):
 
 
 _HANDLERS: dict[str, Callable[[Session, dict, ActionResult], None]] = {
-    "new_building": _new_building, "modify_building": _modify, "load_template": _template, "set_loads": _set_loads,
-    "set_location": _set_location, "set_seismic": _set_seismic, "set_wind": _set_wind, "set_materials": _set_materials,
-    "set_sbc": _set_sbc, "autosize_columns": _autosize, "optimize_sizes": _optimize, "analyze": _analyze, "design": _design, "export": _export,
+    "new_building": _new_building,
+    "modify_building": _modify,
+    "load_template": _template,
+    "set_loads": _set_loads,
+    "set_location": _set_location,
+    "set_seismic": _set_seismic,
+    "set_wind": _set_wind,
+    "set_materials": _set_materials,
+    "set_sbc": _set_sbc,
+    "autosize_columns": _autosize,
+    "optimize_sizes": _optimize,
+    "analyze": _analyze,
+    "design": _design,
+    "export": _export,
     "answer": _answer,
 }

@@ -33,8 +33,9 @@ from planwin_ai.licensing.license import canonical, verify  # noqa: E402
 
 def cmd_init(a):
     k = Ed25519PrivateKey.generate()
-    Path(a.out).write_bytes(k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                            serialization.NoEncryption()))
+    Path(a.out).write_bytes(
+        k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    )
     pub = k.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     print("Private key written to", a.out)
     print("PUBLIC_KEY_B64 =", base64.b64encode(pub).decode())
@@ -42,8 +43,15 @@ def cmd_init(a):
 
 def cmd_issue(a):
     key = serialization.load_pem_private_key(Path(a.key).read_bytes(), password=None)
-    lic = {"name": a.name, "company": a.company, "email": a.email, "edition": "pro",
-           "issued": dt.date.today().isoformat(), "expires": a.expires, "seats": int(a.seats)}
+    lic = {
+        "name": a.name,
+        "company": a.company,
+        "email": a.email,
+        "edition": "pro",
+        "issued": dt.date.today().isoformat(),
+        "expires": a.expires,
+        "seats": int(a.seats),
+    }
     lic["sig"] = base64.b64encode(key.sign(canonical(lic))).decode()
     pub = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     assert verify(lic, base64.b64encode(pub).decode()), "self-check failed"

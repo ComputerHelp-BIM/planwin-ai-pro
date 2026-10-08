@@ -7,12 +7,21 @@ import json
 import logging
 import os
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
-from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMessageBox,
-                               QTabWidget, QToolBar)
+from PySide6.QtWidgets import (
+    QApplication,
+    QDockWidget,
+    QFileDialog,
+    QInputDialog,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QTabWidget,
+    QToolBar,
+)
 
 from .. import APP_NAME, COMPANY, __version__
 from ..ai.actions import ActionResult, Session, execute
@@ -36,25 +45,42 @@ UNDO_LIMIT = 60
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, project: Optional[Project] = None, path: Optional[str] = None):
+    def __init__(self, project: Project | None = None, path: str | None = None):
         super().__init__()
         self.settings = QSettings(COMPANY, "PlanWinAIPro")
         self.theme_name = self.settings.value("theme", "light")
         self.license = current_state()
-        self.session = Session(project or build_template("residential_g4"), out_dir=os.path.expanduser("~"),
-                               watermark=self.license.watermark, exports_allowed=self.license.exports_allowed)
-        cfg = ProviderConfig(self.settings.value("ai/provider", "offline"), self.settings.value("ai/model", ""),
-                             self.settings.value("ai/base_url", ""))
+        self.session = Session(
+            project or build_template("residential_g4"),
+            out_dir=os.path.expanduser("~"),
+            watermark=self.license.watermark,
+            exports_allowed=self.license.exports_allowed,
+        )
+        cfg = ProviderConfig(
+            self.settings.value("ai/provider", "offline"),
+            self.settings.value("ai/model", ""),
+            self.settings.value("ai/base_url", ""),
+        )
         self.assistant = Assistant(self.session, cfg)
-        self.path: Optional[str] = path
+        self.path: str | None = path
         self.dirty = False
         self.undo_stack: list[str] = []
         self.redo_stack: list[str] = []
-        self._ai_snapshot: Optional[str] = None
+        self._ai_snapshot: str | None = None
         self._plan_cache: dict[str, PlanResult] = {}
         self.current_plan_name = self.project.plans[0].name if self.project.plans else ""
-        self.defaults = {"slab_thickness": 0.125, "slab_live": 2.0, "slab_ff": 1.0, "slab_other": 0.5, "col_b": 0.3,
-                         "col_d": 0.45, "beam_b": 0.23, "beam_d": 0.45, "wall_thk": 0.23, "grade": "M25"}
+        self.defaults = {
+            "slab_thickness": 0.125,
+            "slab_live": 2.0,
+            "slab_ff": 1.0,
+            "slab_other": 0.5,
+            "col_b": 0.3,
+            "col_d": 0.45,
+            "beam_b": 0.23,
+            "beam_d": 0.45,
+            "wall_thk": 0.23,
+            "grade": "M25",
+        }
 
         self.setWindowTitle(APP_NAME)
         self.resize(1500, 920)
@@ -101,17 +127,19 @@ class MainWindow(QMainWindow):
     def project(self) -> Project:
         return self.session.project
 
-    def current_plan(self) -> Optional[Plan]:
+    def current_plan(self) -> Plan | None:
         return self.project.plan(self.current_plan_name) if self.current_plan_name else None
 
-    def plan_result(self, name: str) -> Optional[PlanResult]:
+    def plan_result(self, name: str) -> PlanResult | None:
         if name not in self._plan_cache:
             plan = self.project.plan(name)
             if plan is None:
                 return None
             d = self.project.design
             try:
-                self._plan_cache[name] = PlanEngine(plan, None, d.two_way_ratio_limit, d.continuity_in_load_transfer).run()
+                self._plan_cache[name] = PlanEngine(
+                    plan, None, d.two_way_ratio_limit, d.continuity_in_load_transfer
+                ).run()
             except Exception as exc:  # never break painting
                 log.exception("plan analysis failed")
                 self.statusBar().showMessage(f"Plan analysis failed: {exc}", 8000)
@@ -162,9 +190,14 @@ class MainWindow(QMainWindow):
         m.addAction(self._act("Import legacy PlanWin plan (.plw)…", self.import_plw))
         m.addAction(self._act("Import DXF (SLAB / COLUMN / BEAM layers)…", self.import_dxf))
         ex = m.addMenu(icon("export"), "Export")
-        for label, fmt, flt in (("STAAD.Pro file (.std)…", "staad", "STAAD (*.std)"), ("ETABS file (.e2k)…", "etabs", "ETABS (*.e2k)"),
-                                ("DXF – current plan…", "dxf", "DXF (*.dxf)"), ("DXF – 3-D frame…", "dxf3d", "DXF (*.dxf)"),
-                                ("Excel workbook…", "excel", "Excel (*.xlsx)"), ("PDF report…", "pdf", "PDF (*.pdf)")):
+        for label, fmt, flt in (
+            ("STAAD.Pro file (.std)…", "staad", "STAAD (*.std)"),
+            ("ETABS file (.e2k)…", "etabs", "ETABS (*.e2k)"),
+            ("DXF – current plan…", "dxf", "DXF (*.dxf)"),
+            ("DXF – 3-D frame…", "dxf3d", "DXF (*.dxf)"),
+            ("Excel workbook…", "excel", "Excel (*.xlsx)"),
+            ("PDF report…", "pdf", "PDF (*.pdf)"),
+        ):
             ex.addAction(self._act(label, lambda _=False, f=fmt, fl=flt: self.export(f, fl)))
         m.addSeparator()
         m.addAction(self._act("Exit", self.close, "Alt+F4"))
@@ -189,16 +222,25 @@ class MainWindow(QMainWindow):
         tb.setObjectName("tools")
         tb.setMovable(False)
         self.addToolBar(tb)
-        for a in (self._act("New", self.new_from_template, ic="template", tip="New from template"),
-                  self._act("Open", self.open_dialog, ic="open"), self._act("Save", self.save, ic="save"),
-                  self.undo_act, self.redo_act):
+        for a in (
+            self._act("New", self.new_from_template, ic="template", tip="New from template"),
+            self._act("Open", self.open_dialog, ic="open"),
+            self._act("Save", self.save, ic="save"),
+            self.undo_act,
+            self.redo_act,
+        ):
             tb.addAction(a)
         tb.addSeparator()
         self.tool_actions = {}
-        for tool, label, ic, key in (("select", "Select", "select", "S"), ("pan", "Pan", "pan", "H"),
-                                     ("rect_slab", "Rectangular slab", "rect", "R"), ("poly_slab", "Irregular slab", "poly", "P"),
-                                     ("column", "Column", "column", "C"), ("beam", "Beam", "beam", "B"),
-                                     ("measure", "Measure", "measure", "D")):
+        for tool, label, ic, key in (
+            ("select", "Select", "select", "S"),
+            ("pan", "Pan", "pan", "H"),
+            ("rect_slab", "Rectangular slab", "rect", "R"),
+            ("poly_slab", "Irregular slab", "poly", "P"),
+            ("column", "Column", "column", "C"),
+            ("beam", "Beam", "beam", "B"),
+            ("measure", "Measure", "measure", "D"),
+        ):
             a = self._act(label, lambda _=False, t=tool: self.set_tool(t), key, ic, checkable=True)
             self.tool_group.addAction(a)
             self.tool_actions[tool] = a
@@ -206,36 +248,66 @@ class MainWindow(QMainWindow):
             m.addAction(a)
         self.tool_actions["select"].setChecked(True)
         m.addSeparator()
-        acol = self._act("Auto columns (Judge)", self.auto_columns, ic="autocol", tip="Place columns at all slab corners")
+        acol = self._act(
+            "Auto columns (Judge)", self.auto_columns, ic="autocol", tip="Place columns at all slab corners"
+        )
         abeam = self._act("Auto beams", self.auto_beams, ic="autobeam", tip="Create beams along all slab edges")
-        aplan = self._act("Analyse plan (load take-down)", self.analyze_plan, "F5", "analyze",
-                          tip="Slab → beam → column load transfer with equilibrium check")
+        aplan = self._act(
+            "Analyse plan (load take-down)",
+            self.analyze_plan,
+            "F5",
+            "analyze",
+            tip="Slab → beam → column load transfer with equilibrium check",
+        )
         for a in (acol, abeam, aplan):
             m.addAction(a)
             tb.addAction(a)
-        m.addAction(self._act("Mark external beams", lambda: self.mutate("External beams", lambda: mark_external_beams(self.current_plan()))))
+        m.addAction(
+            self._act(
+                "Mark external beams",
+                lambda: self.mutate("External beams", lambda: mark_external_beams(self.current_plan())),
+            )
+        )
         m.addAction(self._act("Zoom extents", self.canvas.zoom_extents, "F", "zoomfit"))
         tb.addSeparator()
         # ---- framewin
         m = mb.addMenu("Frame&Win")
-        afr = self._act("Build & analyse 3-D frame", self.analyze_frame, "F6", "frame", tip="Stack levels, apply IS loads and solve")
-        ades = self._act("Design all (IS 456)", self.design_all, "F7", "design", tip="Columns, beams, footings, slabs, BOQ")
+        afr = self._act(
+            "Build & analyse 3-D frame", self.analyze_frame, "F6", "frame", tip="Stack levels, apply IS loads and solve"
+        )
+        ades = self._act(
+            "Design all (IS 456)", self.design_all, "F7", "design", tip="Columns, beams, footings, slabs, BOQ"
+        )
         m.addAction(afr)
         m.addAction(ades)
         m.addSeparator()
         m.addAction(self._act("Auto-size columns…", self.autosize))
-        m.addAction(self._act("Optimise sizes until design passes", self.optimize, tip="Enlarge failing columns/beams and re-run (max 5 iterations)"))
+        m.addAction(
+            self._act(
+                "Optimise sizes until design passes",
+                self.optimize,
+                tip="Enlarge failing columns/beams and re-run (max 5 iterations)",
+            )
+        )
         m.addAction(self._act("Column sizes by level…", self.column_sizes))
         m.addAction(self._act("Joint loads (water tank)…", self.joint_loads))
         m.addAction(self._act("Project settings (seismic, wind, design)…", self.project_settings, "Ctrl+,", "settings"))
         tb.addAction(afr)
         tb.addAction(ades)
         tb.addSeparator()
-        exp_btn = self._act("Export STAAD", lambda: self.export("staad", "STAAD (*.std)"), ic="export", tip="Write STAAD.Pro .std")
+        exp_btn = self._act(
+            "Export STAAD", lambda: self.export("staad", "STAAD (*.std)"), ic="export", tip="Write STAAD.Pro .std"
+        )
         tb.addAction(exp_btn)
-        tb.addAction(self._act("Export ETABS", lambda: self.export("etabs", "ETABS (*.e2k)"), ic="export", tip="Write ETABS .e2k"))
+        tb.addAction(
+            self._act(
+                "Export ETABS", lambda: self.export("etabs", "ETABS (*.e2k)"), ic="export", tip="Write ETABS .e2k"
+            )
+        )
         tb.addSeparator()
-        self.ai_toggle = self._act("AI Assistant", self.toggle_chat, "Ctrl+K", None, tip="Open / close the AI side panel", checkable=True)
+        self.ai_toggle = self._act(
+            "AI Assistant", self.toggle_chat, "Ctrl+K", None, tip="Open / close the AI side panel", checkable=True
+        )
         self.ai_toggle.setIcon(icon("ai", "#FFFFFF"))
         tb.addAction(self.ai_toggle)
         ai_btn = tb.widgetForAction(self.ai_toggle)
@@ -249,7 +321,11 @@ class MainWindow(QMainWindow):
         a = self._act("Show marks", self._toggle_marks, checkable=True)
         a.setChecked(True)
         m.addAction(a)
-        m.addAction(self._act("Dark theme", lambda: self.apply_theme("dark" if self.theme_name == "light" else "light"), "Ctrl+T"))
+        m.addAction(
+            self._act(
+                "Dark theme", lambda: self.apply_theme("dark" if self.theme_name == "light" else "light"), "Ctrl+T"
+            )
+        )
         m.addSeparator()
         for d in (self.findChild(QDockWidget, "Project"), self.props_dock, self.chat, self.results_dock):
             if d:
@@ -277,7 +353,7 @@ class MainWindow(QMainWindow):
     def snapshot(self) -> str:
         return project_io.project_to_json(self.project)
 
-    def push_undo(self, snapshot: Optional[str] = None):
+    def push_undo(self, snapshot: str | None = None):
         self.undo_stack.append(snapshot if snapshot is not None else self.snapshot())
         if len(self.undo_stack) > UNDO_LIMIT:
             self.undo_stack.pop(0)
@@ -327,7 +403,9 @@ class MainWindow(QMainWindow):
 
     def refresh_all(self):
         self.project_panel.refresh()
-        self.props.show_selection([i for i in self.canvas.selection if self.current_plan() and self.current_plan().find(i)])
+        self.props.show_selection(
+            [i for i in self.canvas.selection if self.current_plan() and self.current_plan().find(i)]
+        )
         self.results.refresh()
         if self.tabs.currentIndex() == 1:
             self.view3d.refresh()
@@ -376,7 +454,7 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
 
-    def after_ai_change(self, res: Optional[ActionResult]):
+    def after_ai_change(self, res: ActionResult | None):
         snap, self._ai_snapshot = self._ai_snapshot, None
         if res is None:
             return
@@ -399,13 +477,17 @@ class MainWindow(QMainWindow):
     def maybe_save(self) -> bool:
         if not self.dirty:
             return True
-        r = QMessageBox.question(self, APP_NAME, "Save changes to the current project?",
-                                 QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
+        r = QMessageBox.question(
+            self,
+            APP_NAME,
+            "Save changes to the current project?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+        )
         if r == QMessageBox.Save:
             return self.save()
         return r == QMessageBox.Discard
 
-    def _load_project(self, prj: Project, path: Optional[str] = None):
+    def _load_project(self, prj: Project, path: str | None = None):
         self.session.project = prj
         self.session.last.clear()
         self.path = path
@@ -439,8 +521,9 @@ class MainWindow(QMainWindow):
     def open_dialog(self):
         if not self.maybe_save():
             return
-        fn, _ = QFileDialog.getOpenFileName(self, "Open project", self._last_dir(),
-                                            "PlanWin AI Pro (*.pwai);;Legacy PlanWin plan (*.plw)")
+        fn, _ = QFileDialog.getOpenFileName(
+            self, "Open project", self._last_dir(), "PlanWin AI Pro (*.pwai);;Legacy PlanWin plan (*.plw)"
+        )
         if fn:
             self.open_path(fn)
 
@@ -471,8 +554,9 @@ class MainWindow(QMainWindow):
         return True
 
     def save_as(self) -> bool:
-        fn, _ = QFileDialog.getSaveFileName(self, "Save project", os.path.join(self._last_dir(), self.project.name + ".pwai"),
-                                            "PlanWin AI Pro (*.pwai)")
+        fn, _ = QFileDialog.getSaveFileName(
+            self, "Save project", os.path.join(self._last_dir(), self.project.name + ".pwai"), "PlanWin AI Pro (*.pwai)"
+        )
         if not fn:
             return False
         self.path = fn if fn.lower().endswith(".pwai") else fn + ".pwai"
@@ -499,9 +583,13 @@ class MainWindow(QMainWindow):
         else:
             self.mutate("Import plan", lambda: self.project.add_plan(plan))
             self.set_current_plan(plan.name)
-        QMessageBox.information(self, "Import", f"Imported PlanWin {rep.version} plan '{plan.name}': {rep.slabs} slabs, "
-                                                f"{rep.columns} columns, {rep.beams} beams.\nLoads converted from tonnes to kN; "
-                                                "beam UDLs kept as 'Legacy UDL' loads." + ("\n" + "\n".join(rep.notes) if rep.notes else ""))
+        QMessageBox.information(
+            self,
+            "Import",
+            f"Imported PlanWin {rep.version} plan '{plan.name}': {rep.slabs} slabs, "
+            f"{rep.columns} columns, {rep.beams} beams.\nLoads converted from tonnes to kN; "
+            "beam UDLs kept as 'Legacy UDL' loads." + ("\n" + "\n".join(rep.notes) if rep.notes else ""),
+        )
 
     def import_dxf(self):
         from ..io.dxf_io import import_dxf
@@ -519,15 +607,28 @@ class MainWindow(QMainWindow):
             return
         self.mutate("Import DXF", lambda: self.project.add_plan(plan))
         self.set_current_plan(plan.name)
-        QMessageBox.information(self, "Import DXF", f"{len(plan.slabs)} slabs, {len(plan.columns)} columns, {len(plan.beams)} beams."
-                                                    + ("\n" + "\n".join(notes) if notes else "") +
-                                                    "\nNext: Auto beams, then Analyse plan.")
+        QMessageBox.information(
+            self,
+            "Import DXF",
+            f"{len(plan.slabs)} slabs, {len(plan.columns)} columns, {len(plan.beams)} beams."
+            + ("\n" + "\n".join(notes) if notes else "")
+            + "\nNext: Auto beams, then Analyse plan.",
+        )
 
     def export(self, fmt: str, flt: str):
         if not self.license.exports_allowed:
-            QMessageBox.warning(self, "Export", "The trial has expired – exports are disabled. Please activate a licence.")
+            QMessageBox.warning(
+                self, "Export", "The trial has expired – exports are disabled. Please activate a licence."
+            )
             return
-        ext = {"staad": ".std", "etabs": ".e2k", "dxf": "_2DPLAN.dxf", "dxf3d": "_3d.dxf", "excel": ".xlsx", "pdf": ".pdf"}[fmt]
+        ext = {
+            "staad": ".std",
+            "etabs": ".e2k",
+            "dxf": "_2DPLAN.dxf",
+            "dxf3d": "_3d.dxf",
+            "excel": ".xlsx",
+            "pdf": ".pdf",
+        }[fmt]
         base = (self.current_plan_name if fmt == "dxf" else self.project.name).replace(" ", "_")
         fn, _ = QFileDialog.getSaveFileName(self, "Export", os.path.join(self._last_dir(), base + ext), flt)
         if not fn:
@@ -578,8 +679,14 @@ class MainWindow(QMainWindow):
         if not plan:
             return
         if kind == "column" and len(self.project.plans) > 1:
-            if QMessageBox.question(self, "Renumber columns", "Column marks link levels in FrameWin and must stay the same "
-                                    "on every floor. Renumber anyway?") != QMessageBox.Yes:
+            if (
+                QMessageBox.question(
+                    self,
+                    "Renumber columns",
+                    "Column marks link levels in FrameWin and must stay the same on every floor. Renumber anyway?",
+                )
+                != QMessageBox.Yes
+            ):
                 return
         self.mutate(f"Renumber {kind}s", lambda: plan.renumber(kind))
 
@@ -593,10 +700,12 @@ class MainWindow(QMainWindow):
         self.results_dock.raise_()
         self.results.setCurrentIndex(0 if res and res.issues else 1)
         if res:
-            msg = (f"Applied DL {res.applied['D']:.1f} kN + LL {res.applied['L']:.1f} kN\n"
-                   f"Column reactions DL {res.reacted['D']:.1f} kN + LL {res.reacted['L']:.1f} kN\n"
-                   f"Difference {res.imbalance_pct:.3f} %  (should be ~0)\n\n"
-                   f"{len(res.errors)} error(s), {len(res.warnings)} warning(s).")
+            msg = (
+                f"Applied DL {res.applied['D']:.1f} kN + LL {res.applied['L']:.1f} kN\n"
+                f"Column reactions DL {res.reacted['D']:.1f} kN + LL {res.reacted['L']:.1f} kN\n"
+                f"Difference {res.imbalance_pct:.3f} %  (should be ~0)\n\n"
+                f"{len(res.errors)} error(s), {len(res.warnings)} warning(s)."
+            )
             (QMessageBox.warning if res.errors else QMessageBox.information)(self, "Analysis summary", msg)
 
     def move_copy_dialog(self):
@@ -620,9 +729,16 @@ class MainWindow(QMainWindow):
                         tgt.id = new_id()
                         prefix = "S" if isinstance(tgt, Slab) else "C" if isinstance(tgt, Column) else "B"
                         tgt.mark = plan.next_mark(prefix)
-                        (plan.slabs if isinstance(tgt, Slab) else plan.columns if isinstance(tgt, Column) else plan.beams).append(tgt)
+                        (
+                            plan.slabs
+                            if isinstance(tgt, Slab)
+                            else plan.columns
+                            if isinstance(tgt, Column)
+                            else plan.beams
+                        ).append(tgt)
                     new_sel.append(tgt.id)
             self.canvas.selection = new_sel
+
         self.mutate("Move/copy", fn)
 
     def mirror_dialog(self):
@@ -647,17 +763,24 @@ class MainWindow(QMainWindow):
                     tgt.x, tgt.y = G.mirror_point((tgt.x, tgt.y), axis, at)
                     tgt.angle = (-tgt.angle) % 180
                 else:
-                    (tgt.x1, tgt.y1), (tgt.x2, tgt.y2) = G.mirror_point(tgt.p1, axis, at), G.mirror_point(tgt.p2, axis, at)
+                    (tgt.x1, tgt.y1), (tgt.x2, tgt.y2) = (
+                        G.mirror_point(tgt.p1, axis, at),
+                        G.mirror_point(tgt.p2, axis, at),
+                    )
                 if keep:
                     tgt.id = new_id()
                     if isinstance(tgt, Slab):
-                        tgt.mark = plan.next_mark("S"); plan.slabs.append(tgt)
+                        tgt.mark = plan.next_mark("S")
+                        plan.slabs.append(tgt)
                     elif isinstance(tgt, Column):
                         if plan.column_at(tgt.pos, 0.02):
                             continue
-                        tgt.mark = plan.next_mark("C"); plan.columns.append(tgt)
+                        tgt.mark = plan.next_mark("C")
+                        plan.columns.append(tgt)
                     else:
-                        tgt.mark = plan.next_mark("B"); plan.beams.append(tgt)
+                        tgt.mark = plan.next_mark("B")
+                        plan.beams.append(tgt)
+
         self.mutate("Mirror", fn)
 
     def copy_selection_to_new_plan(self):
@@ -677,6 +800,7 @@ class MainWindow(QMainWindow):
             for o in p.slabs + p.columns + p.beams:
                 o.id = new_id()
             self.project.add_plan(p)
+
         self.mutate("Copy to new plan", fn)
         self.set_current_plan(self.project.plans[-1].name)
 
@@ -692,12 +816,17 @@ class MainWindow(QMainWindow):
         cl = res.columns.get(col.id) if res else None
         if not cl:
             return
-        lines = "\n".join(f"  from {m}: D {d:.2f} kN, L {l:.2f} kN" for m, d, l in cl.parts) or "  (no beams frame into it)"
-        QMessageBox.information(self, f"Column {col.mark} – load analysis",
-                                f"Load from this level\nDead {cl.dead:.2f} kN · Live {cl.live:.2f} kN · Total {cl.total:.2f} kN\n\n{lines}")
+        lines = (
+            "\n".join(f"  from {m}: D {d:.2f} kN, L {l:.2f} kN" for m, d, l in cl.parts) or "  (no beams frame into it)"
+        )
+        QMessageBox.information(
+            self,
+            f"Column {col.mark} – load analysis",
+            f"Load from this level\nDead {cl.dead:.2f} kN · Live {cl.live:.2f} kN · Total {cl.total:.2f} kN\n\n{lines}",
+        )
 
     # ================================================================ FrameWin commands
-    def _run(self, actions: list[dict], title: str) -> Optional[ActionResult]:
+    def _run(self, actions: list[dict], title: str) -> ActionResult | None:
         QApplication.setOverrideCursor(Qt.WaitCursor)
         t0 = time.time()
         try:
@@ -728,8 +857,15 @@ class MainWindow(QMainWindow):
             self.view3d.mode.setCurrentText("Design utilisation")
 
     def optimize(self):
-        if QMessageBox.question(self, "Optimise sizes", "Enlarge failing columns and beams and re-run analysis/design "
-                                "up to 5 times? (Undo restores the current sizes.)") != QMessageBox.Yes:
+        if (
+            QMessageBox.question(
+                self,
+                "Optimise sizes",
+                "Enlarge failing columns and beams and re-run analysis/design "
+                "up to 5 times? (Undo restores the current sizes.)",
+            )
+            != QMessageBox.Yes
+        ):
             return
         self.push_undo()
         res = self._run([{"action": "optimize_sizes"}, {"action": "design"}], "Optimise sizes")
@@ -745,8 +881,18 @@ class MainWindow(QMainWindow):
         from ..design.runner import autosize_columns
 
         b = dlg.breadth.value() or None
-        self.mutate("Auto-size columns", lambda: autosize_columns(self.project, b, dlg.pct.value(), dlg.same.isChecked(),
-                                                                  dlg.step.value(), dlg.mf.value(), dlg.inc.value()))
+        self.mutate(
+            "Auto-size columns",
+            lambda: autosize_columns(
+                self.project,
+                b,
+                dlg.pct.value(),
+                dlg.same.isChecked(),
+                dlg.step.value(),
+                dlg.mf.value(),
+                dlg.inc.value(),
+            ),
+        )
         self.column_sizes()
 
     def column_sizes(self):
@@ -794,16 +940,21 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, f"About {APP_NAME}", dialogs.about_text(self.license.label()))
 
     def quick_start(self):
-        QMessageBox.information(self, "Quick start", (
-            "1. File ▸ New from template, or press Ctrl+K and describe your building to the AI assistant.\n"
-            "2. PlanWin: draw slabs (R / P), place columns (C or Auto columns), then Auto beams.\n"
-            "3. Analyse plan (F5) – check the Issues tab until the load difference is ~0 %.\n"
-            "4. Project panel ▸ Levels: assign a plan to each level with storey heights.\n"
-            "5. FrameWin ▸ Auto-size columns, Project settings (zone, wind, SBC).\n"
-            "6. Build & analyse 3-D frame (F6), then Design all (F7).\n"
-            "7. Export STAAD / ETABS / DXF / Excel / PDF.\n\n"
-            "Shortcuts: S select · H pan · R rectangle slab · P polygon slab · C column · B beam · D measure · "
-            "F zoom extents · Del delete · Ctrl+Z/Y undo/redo · double-click beam for BM/SF."))
+        QMessageBox.information(
+            self,
+            "Quick start",
+            (
+                "1. File ▸ New from template, or press Ctrl+K and describe your building to the AI assistant.\n"
+                "2. PlanWin: draw slabs (R / P), place columns (C or Auto columns), then Auto beams.\n"
+                "3. Analyse plan (F5) – check the Issues tab until the load difference is ~0 %.\n"
+                "4. Project panel ▸ Levels: assign a plan to each level with storey heights.\n"
+                "5. FrameWin ▸ Auto-size columns, Project settings (zone, wind, SBC).\n"
+                "6. Build & analyse 3-D frame (F6), then Design all (F7).\n"
+                "7. Export STAAD / ETABS / DXF / Excel / PDF.\n\n"
+                "Shortcuts: S select · H pan · R rectangle slab · P polygon slab · C column · B beam · D measure · "
+                "F zoom extents · Del delete · Ctrl+Z/Y undo/redo · double-click beam for BM/SF."
+            ),
+        )
 
     def apply_theme(self, name: str):
         self.theme_name = name
@@ -879,7 +1030,12 @@ class MainWindow(QMainWindow):
         # The autosave is deleted on every save and clean exit, so one that still exists
         # belongs to the session that crashed – never to an older, already-saved project.
         if os.path.exists(auto) and self.settings.value("clean_exit", "true") == "false":
-            if QMessageBox.question(self, "Recover", "PlanWin AI Pro did not close normally. Recover the autosaved project?") == QMessageBox.Yes:
+            if (
+                QMessageBox.question(
+                    self, "Recover", "PlanWin AI Pro did not close normally. Recover the autosaved project?"
+                )
+                == QMessageBox.Yes
+            ):
                 try:
                     self._load_project(project_io.load_project(auto))
                 except Exception as exc:
@@ -888,8 +1044,12 @@ class MainWindow(QMainWindow):
                 self._discard_autosave()
         self.settings.setValue("clean_exit", "false")
         if self.license.mode == "expired":
-            QMessageBox.warning(self, "Licence", "Your trial has expired. Modelling still works, but exports are disabled.\n"
-                                                 "Tools ▸ Licence to activate.")
+            QMessageBox.warning(
+                self,
+                "Licence",
+                "Your trial has expired. Modelling still works, but exports are disabled.\n"
+                "Tools ▸ Licence to activate.",
+            )
 
     def closeEvent(self, ev):
         if not self.maybe_save():
@@ -908,4 +1068,7 @@ def _translate(o, dx, dy):
         o.x += dx
         o.y += dy
     else:
-        o.x1 += dx; o.x2 += dx; o.y1 += dy; o.y2 += dy
+        o.x1 += dx
+        o.x2 += dx
+        o.y1 += dy
+        o.y2 += dy

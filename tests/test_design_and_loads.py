@@ -16,7 +16,7 @@ def test_singly_reinforced_textbook():
 
 
 def test_mu_lim():
-    assert is456.mu_lim(20, 415, 230, 450) / 1e6 == pytest.approx(0.138 * 20 * 230 * 450 ** 2 / 1e6, rel=0.01)
+    assert is456.mu_lim(20, 415, 230, 450) / 1e6 == pytest.approx(0.138 * 20 * 230 * 450**2 / 1e6, rel=0.01)
 
 
 def test_tau_c_table():
@@ -79,7 +79,7 @@ def test_wind_k2_and_pressure():
     assert k2(25, 2) == pytest.approx((1.07 + 1.12) / 2)
     pd = design_pressure(10, 44, 3)
     vz = 44 * 0.91
-    assert pd == pytest.approx(max(0.9 * 0.9 * 0.6 * vz ** 2 / 1000, 0.7 * 0.6 * vz ** 2 / 1000))
+    assert pd == pytest.approx(max(0.9 * 0.9 * 0.6 * vz**2 / 1000, 0.7 * 0.6 * vz**2 / 1000))
 
 
 def test_combinations_count():
@@ -119,7 +119,9 @@ def test_templates_analyse_in_equilibrium(key):
     assert not [i for i in fm.issues if i.level == "error"]
     fa = fm.analyze()
     applied_D = sum(lv.result.applied["D"] for lv in fm.levels[1:])
-    applied_D += sum(m.b * m.d * 25 * abs(fm.nodes[m.n2].z - fm.nodes[m.n1].z) for m in fm.members.values() if m.kind == "column")
+    applied_D += sum(
+        m.b * m.d * 25 * abs(fm.nodes[m.n2].z - fm.nodes[m.n1].z) for m in fm.members.values() if m.kind == "column"
+    )
     applied_D += sum(jl.get("fz", 0) for jl in prj.joint_loads)
     eq = fa.equilibrium()
     assert eq["DL"] == pytest.approx(applied_D, rel=1e-6)
@@ -139,10 +141,18 @@ def test_beam_framing_into_offset_column_stays_connected():
     from planwin_ai.core.model import Beam, Column, Level, Plan, Project
 
     plan = Plan(name="P")
-    plan.columns = [Column(mark="C1", x=0, y=0, b=0.23, d=0.6, angle=90), Column(mark="C2", x=6, y=0),
-                    Column(mark="C3", x=0.3, y=5), Column(mark="C4", x=6, y=5)]
-    plan.beams = [Beam(mark="B1", x1=0, y1=0, x2=6, y2=0), Beam(mark="B2", x1=0.3, y1=0, x2=0.3, y2=5),
-                  Beam(mark="B3", x1=0.3, y1=5, x2=6, y2=5), Beam(mark="B4", x1=6, y1=0, x2=6, y2=5)]
+    plan.columns = [
+        Column(mark="C1", x=0, y=0, b=0.23, d=0.6, angle=90),
+        Column(mark="C2", x=6, y=0),
+        Column(mark="C3", x=0.3, y=5),
+        Column(mark="C4", x=6, y=5),
+    ]
+    plan.beams = [
+        Beam(mark="B1", x1=0, y1=0, x2=6, y2=0),
+        Beam(mark="B2", x1=0.3, y1=0, x2=0.3, y2=5),
+        Beam(mark="B3", x1=0.3, y1=5, x2=6, y2=5),
+        Beam(mark="B4", x1=6, y1=0, x2=6, y2=5),
+    ]
     prj = Project(plans=[plan], levels=[Level("L1", "P", 3.0)])
     fm = FrameModel(prj).build()
     c1 = fm.levels[1].column_nodes["C1"]
@@ -154,8 +164,6 @@ def test_beam_framing_into_offset_column_stays_connected():
 
 def test_optimizer_reduces_failures():
     prj = build_template("bungalow")
-    for lv in prj.levels:
-        pass
     for mark in list({c.mark for c in prj.plans[1].columns}):
         for i in range(1, len(prj.levels) + 1):
             prj.set_column_size(mark, i, 0.23, 0.23, 0)

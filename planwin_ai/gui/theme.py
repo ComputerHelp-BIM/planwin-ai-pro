@@ -10,18 +10,58 @@ ACCENT = "#2F7DE1"
 
 PALETTES = {
     "light": {
-        "bg": "#F4F6F9", "panel": "#FFFFFF", "text": "#1B2430", "muted": "#5B6675", "border": "#D5DBE3",
-        "canvas": "#FBFCFE", "grid_minor": "#EEF1F5", "grid_major": "#DCE2EA", "slab": "#DCEBFF", "slab_cant": "#FFE7C2",
-        "slab_grade": "#E5E7EB", "slab_edge": "#7FA6D9", "beam": "#1F4E99", "beam_ext": "#0E2F66", "beam_cant": "#C2410C",
-        "column": "#1B2430", "select": "#F59E0B", "error": "#DC2626", "ok": "#16A34A", "warn": "#D97706",
-        "text_canvas": "#334155", "chat_user": "#E3EEFF", "chat_bot": "#F1F3F6", "alt_row": "#F6F8FB", "link": "#1D4ED8",
+        "bg": "#F4F6F9",
+        "panel": "#FFFFFF",
+        "text": "#1B2430",
+        "muted": "#5B6675",
+        "border": "#D5DBE3",
+        "canvas": "#FBFCFE",
+        "grid_minor": "#EEF1F5",
+        "grid_major": "#DCE2EA",
+        "slab": "#DCEBFF",
+        "slab_cant": "#FFE7C2",
+        "slab_grade": "#E5E7EB",
+        "slab_edge": "#7FA6D9",
+        "beam": "#1F4E99",
+        "beam_ext": "#0E2F66",
+        "beam_cant": "#C2410C",
+        "column": "#1B2430",
+        "select": "#F59E0B",
+        "error": "#DC2626",
+        "ok": "#16A34A",
+        "warn": "#D97706",
+        "text_canvas": "#334155",
+        "chat_user": "#E3EEFF",
+        "chat_bot": "#F1F3F6",
+        "alt_row": "#F6F8FB",
+        "link": "#1D4ED8",
     },
     "dark": {
-        "bg": "#14181F", "panel": "#1B2029", "text": "#E6EAF0", "muted": "#98A2B3", "border": "#2C3442",
-        "canvas": "#10141A", "grid_minor": "#1A2029", "grid_major": "#262E3A", "slab": "#1E3A5F", "slab_cant": "#5B4320",
-        "slab_grade": "#2A2F38", "slab_edge": "#4C77AE", "beam": "#7FB2FF", "beam_ext": "#A9CBFF", "beam_cant": "#FB923C",
-        "column": "#E6EAF0", "select": "#FBBF24", "error": "#F87171", "ok": "#4ADE80", "warn": "#FBBF24",
-        "text_canvas": "#CBD5E1", "chat_user": "#1F3B63", "chat_bot": "#232A35", "alt_row": "#202734", "link": "#93C5FD",
+        "bg": "#14181F",
+        "panel": "#1B2029",
+        "text": "#E6EAF0",
+        "muted": "#98A2B3",
+        "border": "#2C3442",
+        "canvas": "#10141A",
+        "grid_minor": "#1A2029",
+        "grid_major": "#262E3A",
+        "slab": "#1E3A5F",
+        "slab_cant": "#5B4320",
+        "slab_grade": "#2A2F38",
+        "slab_edge": "#4C77AE",
+        "beam": "#7FB2FF",
+        "beam_ext": "#A9CBFF",
+        "beam_cant": "#FB923C",
+        "column": "#E6EAF0",
+        "select": "#FBBF24",
+        "error": "#F87171",
+        "ok": "#4ADE80",
+        "warn": "#FBBF24",
+        "text_canvas": "#CBD5E1",
+        "chat_user": "#1F3B63",
+        "chat_bot": "#232A35",
+        "alt_row": "#202734",
+        "link": "#93C5FD",
     },
 }
 
@@ -29,34 +69,34 @@ PALETTES = {
 def qss(theme: str) -> str:
     c = PALETTES[theme]
     return f"""
-    QMainWindow, QDialog {{ background: {c['bg']}; color: {c['text']}; }}
-    QWidget {{ color: {c['text']}; font-size: 9.5pt; }}
-    QDockWidget::title {{ background: {c['panel']}; padding: 6px; border-bottom: 1px solid {c['border']}; font-weight: 600; }}
-    QToolBar {{ background: {c['panel']}; border-bottom: 1px solid {c['border']}; spacing: 2px; padding: 3px; }}
+    QMainWindow, QDialog {{ background: {c["bg"]}; color: {c["text"]}; }}
+    QWidget {{ color: {c["text"]}; font-size: 9.5pt; }}
+    QDockWidget::title {{ background: {c["panel"]}; padding: 6px; border-bottom: 1px solid {c["border"]}; font-weight: 600; }}
+    QToolBar {{ background: {c["panel"]}; border-bottom: 1px solid {c["border"]}; spacing: 2px; padding: 3px; }}
     QToolButton {{ padding: 4px 6px; border-radius: 6px; }}
-    QToolButton:hover {{ background: {c['border']}; }}
+    QToolButton:hover {{ background: {c["border"]}; }}
     QToolButton:checked {{ background: rgba(47, 125, 225, 0.18); border: 1px solid {ACCENT}; }}
     QToolButton#aiButton {{ background: {ACCENT}; color: white; font-weight: 600; padding: 4px 10px; }}
     QToolButton#aiButton:checked {{ background: #1E5BB0; border: none; }}
-    QMenuBar {{ background: {c['panel']}; }}
-    QMenu {{ background: {c['panel']}; border: 1px solid {c['border']}; }}
+    QMenuBar {{ background: {c["panel"]}; }}
+    QMenu {{ background: {c["panel"]}; border: 1px solid {c["border"]}; }}
     QMenu::item:selected {{ background: {ACCENT}; color: white; }}
-    QTabWidget::pane {{ border: 1px solid {c['border']}; background: {c['panel']}; }}
-    QTabBar::tab {{ padding: 6px 12px; background: {c['bg']}; border: 1px solid {c['border']}; border-bottom: none;
+    QTabWidget::pane {{ border: 1px solid {c["border"]}; background: {c["panel"]}; }}
+    QTabBar::tab {{ padding: 6px 12px; background: {c["bg"]}; border: 1px solid {c["border"]}; border-bottom: none;
                     border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 2px; }}
-    QTabBar::tab:selected {{ background: {c['panel']}; font-weight: 600; }}
-    QTableWidget {{ alternate-background-color: {c['alt_row']}; gridline-color: {c['border']}; }}
+    QTabBar::tab:selected {{ background: {c["panel"]}; font-weight: 600; }}
+    QTableWidget {{ alternate-background-color: {c["alt_row"]}; gridline-color: {c["border"]}; }}
     QTableWidget, QListWidget, QTreeWidget, QTextBrowser, QPlainTextEdit, QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox {{
-        background: {c['panel']}; border: 1px solid {c['border']}; border-radius: 6px; selection-background-color: {ACCENT}; }}
-    QHeaderView {{ background: {c['bg']}; }}
-    QTableCornerButton::section {{ background: {c['bg']}; border: none; }}
-    QHeaderView::section {{ background: {c['bg']}; padding: 4px; border: none; border-bottom: 1px solid {c['border']}; font-weight: 600; }}
-    QPushButton {{ background: {c['panel']}; border: 1px solid {c['border']}; border-radius: 6px; padding: 5px 12px; }}
+        background: {c["panel"]}; border: 1px solid {c["border"]}; border-radius: 6px; selection-background-color: {ACCENT}; }}
+    QHeaderView {{ background: {c["bg"]}; }}
+    QTableCornerButton::section {{ background: {c["bg"]}; border: none; }}
+    QHeaderView::section {{ background: {c["bg"]}; padding: 4px; border: none; border-bottom: 1px solid {c["border"]}; font-weight: 600; }}
+    QPushButton {{ background: {c["panel"]}; border: 1px solid {c["border"]}; border-radius: 6px; padding: 5px 12px; }}
     QPushButton:hover {{ border-color: {ACCENT}; }}
     QPushButton#primary {{ background: {ACCENT}; color: white; border: none; font-weight: 600; }}
     QPushButton#chip {{ border-radius: 11px; padding: 3px 10px; font-size: 8.5pt; }}
-    QStatusBar {{ background: {c['panel']}; border-top: 1px solid {c['border']}; }}
-    QGroupBox {{ border: 1px solid {c['border']}; border-radius: 8px; margin-top: 12px; padding-top: 8px; font-weight: 600; }}
+    QStatusBar {{ background: {c["panel"]}; border-top: 1px solid {c["border"]}; }}
+    QGroupBox {{ border: 1px solid {c["border"]}; border-radius: 8px; margin-top: 12px; padding-top: 8px; font-weight: 600; }}
     QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}
     """
 

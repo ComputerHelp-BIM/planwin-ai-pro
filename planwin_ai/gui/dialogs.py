@@ -3,16 +3,36 @@ joint loads, licence, about and beam diagrams."""
 
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout,
-                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
-                               QPlainTextEdit, QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem,
-                               QTabWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QRadioButton,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .. import APP_NAME, COMPANY, __version__
 from ..ai.providers import DEFAULT_MODELS, ProviderConfig, get_key, set_key
@@ -52,75 +72,139 @@ class SettingsDialog(QDialog):
         self.resize(560, 520)
         tabs = QTabWidget()
         # info
-        w = QWidget(); f = QFormLayout(w)
-        self.name = QLineEdit(project.name); self.client = QLineEdit(project.client)
-        self.engineer = QLineEdit(project.engineer); self.location = QLineEdit(project.location)
-        for lab, wd in (("Project name", self.name), ("Client", self.client), ("Engineer", self.engineer), ("Location", self.location)):
+        w = QWidget()
+        f = QFormLayout(w)
+        self.name = QLineEdit(project.name)
+        self.client = QLineEdit(project.client)
+        self.engineer = QLineEdit(project.engineer)
+        self.location = QLineEdit(project.location)
+        for lab, wd in (
+            ("Project name", self.name),
+            ("Client", self.client),
+            ("Engineer", self.engineer),
+            ("Location", self.location),
+        ):
             f.addRow(lab, wd)
         tabs.addTab(w, "Project")
         # seismic
         s = project.seismic
-        w = QWidget(); f = QFormLayout(w)
-        self.s_en = QCheckBox("Include seismic loads (equivalent static, IS 1893-1:2016)"); self.s_en.setChecked(s.enabled)
-        self.zone = QComboBox(); self.zone.addItems(["II", "III", "IV", "V"]); self.zone.setCurrentText(s.zone)
-        self.imp = QComboBox(); self.imp.addItems(["1.0", "1.2", "1.5"]); self.imp.setEditable(True); self.imp.setCurrentText(f"{s.importance:g}")
-        self.R = QComboBox(); self.R.addItems(["3.0 (OMRF)", "5.0 (SMRF)"]); self.R.setCurrentIndex(1 if s.response_reduction >= 5 else 0)
-        self.soil = QComboBox(); self.soil.addItems(["hard", "medium", "soft"]); self.soil.setCurrentText(s.soil)
+        w = QWidget()
+        f = QFormLayout(w)
+        self.s_en = QCheckBox("Include seismic loads (equivalent static, IS 1893-1:2016)")
+        self.s_en.setChecked(s.enabled)
+        self.zone = QComboBox()
+        self.zone.addItems(["II", "III", "IV", "V"])
+        self.zone.setCurrentText(s.zone)
+        self.imp = QComboBox()
+        self.imp.addItems(["1.0", "1.2", "1.5"])
+        self.imp.setEditable(True)
+        self.imp.setCurrentText(f"{s.importance:g}")
+        self.R = QComboBox()
+        self.R.addItems(["3.0 (OMRF)", "5.0 (SMRF)"])
+        self.R.setCurrentIndex(1 if s.response_reduction >= 5 else 0)
+        self.soil = QComboBox()
+        self.soil.addItems(["hard", "medium", "soft"])
+        self.soil.setCurrentText(s.soil)
         self.damp = _dspin(s.damping, 0, 0.3, 3, 0.01)
-        self.infill = QCheckBox("Masonry infill (Ta = 0.09 h/√d)"); self.infill.setChecked(s.infill)
-        self.base = QSpinBox(); self.base.setRange(0, 50); self.base.setValue(s.base_level)
-        self.torsion = QCheckBox("Accidental torsion ±0.05 b (cl 7.8.2)"); self.torsion.setChecked(s.accidental_torsion)
+        self.infill = QCheckBox("Masonry infill (Ta = 0.09 h/√d)")
+        self.infill.setChecked(s.infill)
+        self.base = QSpinBox()
+        self.base.setRange(0, 50)
+        self.base.setValue(s.base_level)
+        self.torsion = QCheckBox("Accidental torsion ±0.05 b (cl 7.8.2)")
+        self.torsion.setChecked(s.accidental_torsion)
         f.addRow(self.s_en)
-        for lab, wd in (("Zone", self.zone), ("Importance factor I", self.imp), ("Response reduction R", self.R),
-                        ("Soil type", self.soil), ("Damping ratio", self.damp), ("", self.infill),
-                        ("", self.torsion), ("Seismic base level index", self.base)):
+        for lab, wd in (
+            ("Zone", self.zone),
+            ("Importance factor I", self.imp),
+            ("Response reduction R", self.R),
+            ("Soil type", self.soil),
+            ("Damping ratio", self.damp),
+            ("", self.infill),
+            ("", self.torsion),
+            ("Seismic base level index", self.base),
+        ):
             f.addRow(lab, wd)
         f.addRow(QLabel("<i>Base level 1 = plinth: weights at and below the plinth are excluded from base shear.</i>"))
         tabs.addTab(w, "Seismic")
         # wind
         wp = project.wind
-        w = QWidget(); f = QFormLayout(w)
-        self.w_en = QCheckBox("Include wind loads (IS 875-3:2015)"); self.w_en.setChecked(wp.enabled)
-        self.city = QComboBox(); self.city.addItems(city_names()); self.city.setEditable(True); self.city.setCurrentText(wp.city)
+        w = QWidget()
+        f = QFormLayout(w)
+        self.w_en = QCheckBox("Include wind loads (IS 875-3:2015)")
+        self.w_en.setChecked(wp.enabled)
+        self.city = QComboBox()
+        self.city.addItems(city_names())
+        self.city.setEditable(True)
+        self.city.setCurrentText(wp.city)
         self.city.activated.connect(self._city)
         self.vb = _dspin(wp.basic_speed, 0, 80, 1, 1)
-        self.terrain = QSpinBox(); self.terrain.setRange(1, 4); self.terrain.setValue(wp.terrain)
-        self.k1 = _dspin(wp.k1, 0.5, 1.5, 3, 0.01); self.k3 = _dspin(wp.k3, 0.5, 1.5, 3, 0.01); self.k4 = _dspin(wp.k4, 1, 1.5, 3, 0.05)
+        self.terrain = QSpinBox()
+        self.terrain.setRange(1, 4)
+        self.terrain.setValue(wp.terrain)
+        self.k1 = _dspin(wp.k1, 0.5, 1.5, 3, 0.01)
+        self.k3 = _dspin(wp.k3, 0.5, 1.5, 3, 0.01)
+        self.k4 = _dspin(wp.k4, 1, 1.5, 3, 0.05)
         self.cf = _dspin(wp.force_coeff, 0.5, 2.5, 2, 0.05)
         self.parapet = _dspin(wp.parapet, 0, 5, 2, 0.1)
         self.below = _dspin(wp.below_ground, 0, 20, 2, 0.1)
         f.addRow(self.w_en)
-        for lab, wd in (("City (sets Vb & zone)", self.city), ("Basic wind speed Vb (m/s)", self.vb), ("Terrain category", self.terrain),
-                        ("k1 risk coefficient", self.k1), ("k3 topography", self.k3), ("k4 importance (cyclonic)", self.k4),
-                        ("Force coefficient Cf", self.cf), ("Parapet height (m)", self.parapet),
-                        ("Height below ground (m)", self.below)):
+        for lab, wd in (
+            ("City (sets Vb & zone)", self.city),
+            ("Basic wind speed Vb (m/s)", self.vb),
+            ("Terrain category", self.terrain),
+            ("k1 risk coefficient", self.k1),
+            ("k3 topography", self.k3),
+            ("k4 importance (cyclonic)", self.k4),
+            ("Force coefficient Cf", self.cf),
+            ("Parapet height (m)", self.parapet),
+            ("Height below ground (m)", self.below),
+        ):
             f.addRow(lab, wd)
         tabs.addTab(w, "Wind")
         # design
         d = project.design
-        w = QWidget(); f = QFormLayout(w)
-        self.fy = QComboBox(); self.fy.addItems(["415", "500", "550"]); self.fy.setCurrentText(f"{int(d.fy_main)}")
+        w = QWidget()
+        f = QFormLayout(w)
+        self.fy = QComboBox()
+        self.fy.addItems(["415", "500", "550"])
+        self.fy.setCurrentText(f"{int(d.fy_main)}")
         self.sbc = _dspin(d.sbc, 10, 2000, 0, 10)
-        self.cov_b = _dspin(d.beam_cover * 1000, 15, 75, 0, 5); self.cov_c = _dspin(d.column_cover * 1000, 20, 75, 0, 5)
-        self.cov_s = _dspin(d.slab_cover * 1000, 15, 50, 0, 5); self.cov_f = _dspin(d.footing_cover * 1000, 40, 100, 0, 5)
-        self.pmin = _dspin(d.min_column_steel_pct, 0.8, 2, 2, 0.1); self.pmax = _dspin(d.max_column_steel_pct, 2, 6, 2, 0.5)
+        self.cov_b = _dspin(d.beam_cover * 1000, 15, 75, 0, 5)
+        self.cov_c = _dspin(d.column_cover * 1000, 20, 75, 0, 5)
+        self.cov_s = _dspin(d.slab_cover * 1000, 15, 50, 0, 5)
+        self.cov_f = _dspin(d.footing_cover * 1000, 40, 100, 0, 5)
+        self.pmin = _dspin(d.min_column_steel_pct, 0.8, 2, 2, 0.1)
+        self.pmax = _dspin(d.max_column_steel_pct, 2, 6, 2, 0.5)
         self.ratio = _dspin(d.two_way_ratio_limit, 1, 3, 2, 0.1)
-        self.cont = QCheckBox("Continuous beams in PlanWin load take-down"); self.cont.setChecked(d.continuity_in_load_transfer)
-        self.tors = QCheckBox("Torsion release (J = 10 %)"); self.tors.setChecked(d.torsion_release)
+        self.cont = QCheckBox("Continuous beams in PlanWin load take-down")
+        self.cont.setChecked(d.continuity_in_load_transfer)
+        self.tors = QCheckBox("Torsion release (J = 10 %)")
+        self.tors.setChecked(d.torsion_release)
         self.keff = _dspin(d.effective_length_factor, 0.5, 2.5, 2, 0.05)
         self.crb = _dspin(d.crack_beam, 0.1, 1.0, 2, 0.05)
         self.crc = _dspin(d.crack_column, 0.1, 1.0, 2, 0.05)
-        for lab, wd in (("Steel grade fy (MPa)", self.fy), ("Safe bearing capacity (kN/m²)", self.sbc),
-                        ("Beam cover (mm)", self.cov_b), ("Column cover (mm)", self.cov_c), ("Slab cover (mm)", self.cov_s),
-                        ("Footing cover (mm)", self.cov_f), ("Min column steel %", self.pmin), ("Max column steel %", self.pmax),
-                        ("Two-way slab if ly/lx ≤", self.ratio), ("Column effective length factor", self.keff),
-                        ("Cracked I factor – beams", self.crb), ("Cracked I factor – columns", self.crc)):
+        for lab, wd in (
+            ("Steel grade fy (MPa)", self.fy),
+            ("Safe bearing capacity (kN/m²)", self.sbc),
+            ("Beam cover (mm)", self.cov_b),
+            ("Column cover (mm)", self.cov_c),
+            ("Slab cover (mm)", self.cov_s),
+            ("Footing cover (mm)", self.cov_f),
+            ("Min column steel %", self.pmin),
+            ("Max column steel %", self.pmax),
+            ("Two-way slab if ly/lx ≤", self.ratio),
+            ("Column effective length factor", self.keff),
+            ("Cracked I factor – beams", self.crb),
+            ("Cracked I factor – columns", self.crc),
+        ):
             f.addRow(lab, wd)
         f.addRow(self.cont)
         f.addRow(self.tors)
         tabs.addTab(w, "Design")
         # rates
-        w = QWidget(); f = QFormLayout(w)
+        w = QWidget()
+        f = QFormLayout(w)
         self.rates = {}
         for k, v in d.rates.items():
             sp = _dspin(v, 0, 1e7, 0, 50)
@@ -140,7 +224,12 @@ class SettingsDialog(QDialog):
 
     def apply(self):
         p = self.p
-        p.name, p.client, p.engineer, p.location = self.name.text(), self.client.text(), self.engineer.text(), self.location.text()
+        p.name, p.client, p.engineer, p.location = (
+            self.name.text(),
+            self.client.text(),
+            self.engineer.text(),
+            self.location.text(),
+        )
         s = p.seismic
         s.enabled, s.zone, s.soil = self.s_en.isChecked(), self.zone.currentText(), self.soil.currentText()
         s.importance = float(self.imp.currentText().split()[0])
@@ -148,7 +237,12 @@ class SettingsDialog(QDialog):
         s.damping, s.infill, s.base_level = self.damp.value(), self.infill.isChecked(), self.base.value()
         s.accidental_torsion = self.torsion.isChecked()
         w = p.wind
-        w.enabled, w.city, w.basic_speed, w.terrain = self.w_en.isChecked(), self.city.currentText(), self.vb.value(), self.terrain.value()
+        w.enabled, w.city, w.basic_speed, w.terrain = (
+            self.w_en.isChecked(),
+            self.city.currentText(),
+            self.vb.value(),
+            self.terrain.value(),
+        )
         w.k1, w.k3, w.k4, w.force_coeff = self.k1.value(), self.k3.value(), self.k4.value(), self.cf.value()
         w.parapet, w.below_ground = self.parapet.value(), self.below.value()
         d = p.design
@@ -184,8 +278,10 @@ class AISettingsDialog(QDialog):
         f.addRow("Model", self.model)
         f.addRow("API key", self.key)
         f.addRow("Endpoint (optional)", self.base)
-        note = QLabel("Keys are stored in Windows Credential Manager, never in project files. Only a compact model summary "
-                      "(no drawings) is sent to the AI provider. 'offline' works without internet.")
+        note = QLabel(
+            "Keys are stored in Windows Credential Manager, never in project files. Only a compact model summary "
+            "(no drawings) is sent to the AI provider. 'offline' works without internet."
+        )
         note.setWordWrap(True)
         f.addRow(note)
         f.addRow(_buttons(self))
@@ -201,8 +297,12 @@ class AISettingsDialog(QDialog):
         p = self.provider.currentText()
         if self.key.text().strip() and p in ("claude", "openai"):
             if not set_key(p, self.key.text().strip()):
-                QMessageBox.warning(self, "AI", "Could not store the key in the credential manager; set the "
-                                                "ANTHROPIC_API_KEY / OPENAI_API_KEY environment variable instead.")
+                QMessageBox.warning(
+                    self,
+                    "AI",
+                    "Could not store the key in the credential manager; set the "
+                    "ANTHROPIC_API_KEY / OPENAI_API_KEY environment variable instead.",
+                )
         return ProviderConfig(p, self.model.text().strip(), self.base.text().strip())
 
 
@@ -247,9 +347,14 @@ class AutoSizeDialog(QDialog):
         self.step = _dspin(0.05, 0, 0.5, 3, 0.05)
         self.mf = _dspin(1.25, 1.0, 2.0, 2, 0.05)
         self.inc = _dspin(0.0, 0, 0.3, 3, 0.025)
-        for lab, wd in (("Breadth b (m)", self.breadth), ("Assumed steel %", self.pct), ("", self.same),
-                        ("Max reduction per floor (m)", self.step), ("Moment allowance factor", self.mf),
-                        ("Increase below ground, each side (m)", self.inc)):
+        for lab, wd in (
+            ("Breadth b (m)", self.breadth),
+            ("Assumed steel %", self.pct),
+            ("", self.same),
+            ("Max reduction per floor (m)", self.step),
+            ("Moment allowance factor", self.mf),
+            ("Increase below ground, each side (m)", self.inc),
+        ):
             f.addRow(lab, wd)
         info = QLabel("Depth from Pu·factor ≤ 0.4 fck Ac + 0.67 fy Asc using the cumulative PlanWin column loads.")
         info.setWordWrap(True)
@@ -290,11 +395,18 @@ class ColumnSizesDialog(QDialog):
                     it = QTableWidgetItem(f"{b:g} x {d:g}")
                 self.t.setItem(r, c, it)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("Edit as 'b x d'. Select a cell and use the buttons to copy to all levels above/below or the whole row."))
+        lay.addWidget(
+            QLabel(
+                "Edit as 'b x d'. Select a cell and use the buttons to copy to all levels above/below or the whole row."
+            )
+        )
         lay.addWidget(self.t)
         row = QHBoxLayout()
-        for txt, fn in (("Copy ⇈ above", lambda: self._copy(1)), ("Copy ⇊ below", lambda: self._copy(-1)),
-                        ("Copy to all columns", self._copy_all)):
+        for txt, fn in (
+            ("Copy ⇈ above", lambda: self._copy(1)),
+            ("Copy ⇊ below", lambda: self._copy(-1)),
+            ("Copy to all columns", self._copy_all),
+        ):
             b = QPushButton(txt)
             b.clicked.connect(fn)
             row.addWidget(b)
@@ -343,8 +455,12 @@ class MoveCopyDialog(QDialog):
         self.dx, self.dy = _dspin(0, -1e4, 1e4, 3, 0.5), _dspin(0, -1e4, 1e4, 3, 0.5)
         self.copy = QCheckBox("Copy (keep originals)")
         self.copy.setChecked(True)
-        self.n = QSpinBox(); self.n.setRange(1, 50)
-        f.addRow("ΔX (m)", self.dx); f.addRow("ΔY (m)", self.dy); f.addRow(self.copy); f.addRow("Number of copies", self.n)
+        self.n = QSpinBox()
+        self.n.setRange(1, 50)
+        f.addRow("ΔX (m)", self.dx)
+        f.addRow("ΔY (m)", self.dy)
+        f.addRow(self.copy)
+        f.addRow("Number of copies", self.n)
         f.addRow(_buttons(self))
 
 
@@ -353,11 +469,16 @@ class MirrorDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Mirror selection")
         f = QFormLayout(self)
-        self.vertical = QRadioButton("About vertical line X = …"); self.vertical.setChecked(True)
+        self.vertical = QRadioButton("About vertical line X = …")
+        self.vertical.setChecked(True)
         self.horizontal = QRadioButton("About horizontal line Y = …")
         self.at = _dspin(0, -1e4, 1e4, 3, 0.5)
-        self.copy = QCheckBox("Keep originals (mirror copy)"); self.copy.setChecked(True)
-        f.addRow(self.vertical); f.addRow(self.horizontal); f.addRow("Line position (m)", self.at); f.addRow(self.copy)
+        self.copy = QCheckBox("Keep originals (mirror copy)")
+        self.copy.setChecked(True)
+        f.addRow(self.vertical)
+        f.addRow(self.horizontal)
+        f.addRow("Line position (m)", self.at)
+        f.addRow(self.copy)
         f.addRow(_buttons(self))
 
 
@@ -376,13 +497,18 @@ class JointLoadDialog(QDialog):
             for c, k in enumerate(("level", "mark", "fz", "case")):
                 self.t.setItem(r, c, QTableWidgetItem(str(jl.get(k, ""))))
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel(f"Level # counts from 1 (= {project.levels[0].name if project.levels else 'first level'})."))
+        lay.addWidget(
+            QLabel(f"Level # counts from 1 (= {project.levels[0].name if project.levels else 'first level'}).")
+        )
         lay.addWidget(self.t)
         row = QHBoxLayout()
-        a = QPushButton("+ Row"); d = QPushButton("− Row")
+        a = QPushButton("+ Row")
+        d = QPushButton("− Row")
         a.clicked.connect(lambda: self._add())
         d.clicked.connect(lambda: self.t.removeRow(self.t.currentRow()))
-        row.addWidget(a); row.addWidget(d); row.addStretch(1)
+        row.addWidget(a)
+        row.addWidget(d)
+        row.addStretch(1)
         lay.addLayout(row)
         lay.addWidget(_buttons(self))
 
@@ -396,8 +522,14 @@ class JointLoadDialog(QDialog):
         out = []
         for r in range(self.t.rowCount()):
             try:
-                out.append({"level": int(self.t.item(r, 0).text()), "mark": self.t.item(r, 1).text().strip(),
-                            "fz": float(self.t.item(r, 2).text()), "case": self.t.item(r, 3).text().strip() or "D"})
+                out.append(
+                    {
+                        "level": int(self.t.item(r, 0).text()),
+                        "mark": self.t.item(r, 1).text().strip(),
+                        "fz": float(self.t.item(r, 2).text()),
+                        "case": self.t.item(r, 3).text().strip() or "D",
+                    }
+                )
             except (ValueError, AttributeError):
                 continue
         self.p.joint_loads = out
@@ -423,19 +555,21 @@ class LicenseDialog(QDialog):
     def _load(self):
         fn, _ = QFileDialog.getOpenFileName(self, "Licence file", "", "Licence (*.lic *.json);;All files (*)")
         if fn:
-            with open(fn, "r", encoding="utf-8") as f:
+            with open(fn, encoding="utf-8") as f:
                 self.text.setPlainText(f.read())
 
 
 def about_text(license_label: str) -> str:
-    return (f"<h2>{APP_NAME} {__version__}</h2>"
-            f"<p>AI-assisted structural pre-processor, analysis and IS-code design for RCC framed buildings.<br>"
-            f"Successor to PlanWin / FrameWin by {COMPANY}.</p>"
-            "<p>Codes: IS 456:2000 · IS 875 (Parts 1–3) · IS 1893 (Part 1):2016<br>"
-            "Exports: STAAD.Pro (.std) · ETABS (.e2k) · DXF 2D/3D · Excel · PDF</p>"
-            f"<p><b>{license_label}</b></p>"
-            "<p style='color:gray'>Results are design aids and must be verified by a qualified structural engineer.</p>"
-            f"<p>© {COMPANY} / Building Software · www.buildingsoftware.in</p>")
+    return (
+        f"<h2>{APP_NAME} {__version__}</h2>"
+        f"<p>AI-assisted structural pre-processor, analysis and IS-code design for RCC framed buildings.<br>"
+        f"Successor to PlanWin / FrameWin by {COMPANY}.</p>"
+        "<p>Codes: IS 456:2000 · IS 875 (Parts 1–3) · IS 1893 (Part 1):2016<br>"
+        "Exports: STAAD.Pro (.std) · ETABS (.e2k) · DXF 2D/3D · Excel · PDF</p>"
+        f"<p><b>{license_label}</b></p>"
+        "<p style='color:gray'>Results are design aids and must be verified by a qualified structural engineer.</p>"
+        f"<p>© {COMPANY} / Building Software · www.buildingsoftware.in</p>"
+    )
 
 
 # =========================================================================== beam diagram
@@ -476,7 +610,7 @@ class _Plot(QWidget):
 
 
 class BeamDiagramDialog(QDialog):
-    def __init__(self, parent: "MainWindow", beam, br):
+    def __init__(self, parent: MainWindow, beam, br):
         super().__init__(parent)
         self.setWindowTitle(f"Beam {beam.mark} – factored 1.5(D+L) diagrams (PlanWin)")
         self.resize(760, 520)
@@ -484,7 +618,9 @@ class BeamDiagramDialog(QDialog):
         lay = QVBoxLayout(self)
         sup = ", ".join(f"{s.kind} @ {s.x:.2f} m" for s in br.supports)
         lay.addWidget(QLabel(f"Span {br.length:.3f} m · {beam.b * 1000:.0f}×{beam.d * 1000:.0f} mm · supports: {sup}"))
-        lay.addWidget(_Plot(dia["x"], dia["M"], "Bending moment (sagging +, drawn below axis)", "kN·m", parent.theme_name))
+        lay.addWidget(
+            _Plot(dia["x"], dia["M"], "Bending moment (sagging +, drawn below axis)", "kN·m", parent.theme_name)
+        )
         lay.addWidget(_Plot(dia["x"], dia["V"], "Shear force", "kN", parent.theme_name))
         from ..core.model import grade_fck
         from ..design import is456

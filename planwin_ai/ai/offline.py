@@ -26,14 +26,16 @@ _OCC = [
     (r"\b(it ?park|data ?cent\w*|software)\b", "it_park"),
 ]
 
-HELP = ("I can build and edit models for you. Try:\n"
-        "• 'G+4 residential in Pune, 3x2 bays of 4.5 m with mumty'\n"
-        "• 'office G+6, bays 6 x 6 m, 4 by 3 bays, Bengaluru'\n"
-        "• 'make it G+7' / 'floor height 3.3' / 'add 1.2 m balcony'\n"
-        "• 'live load 3 kN/m2', 'zone IV soft soil', 'M30 Fe500', 'SBC 250'\n"
-        "• 'auto size columns', 'analyze', 'design', 'optimise sizes', 'export staad | etabs | dxf | excel | pdf'\n"
-        "• 'template office' – templates: " + ", ".join(t.key for t in TEMPLATES) + "\n"
-        "Connect Claude, OpenAI or Ollama in Settings › AI for free-form requests and engineering Q&A.")
+HELP = (
+    "I can build and edit models for you. Try:\n"
+    "• 'G+4 residential in Pune, 3x2 bays of 4.5 m with mumty'\n"
+    "• 'office G+6, bays 6 x 6 m, 4 by 3 bays, Bengaluru'\n"
+    "• 'make it G+7' / 'floor height 3.3' / 'add 1.2 m balcony'\n"
+    "• 'live load 3 kN/m2', 'zone IV soft soil', 'M30 Fe500', 'SBC 250'\n"
+    "• 'auto size columns', 'analyze', 'design', 'optimise sizes', 'export staad | etabs | dxf | excel | pdf'\n"
+    "• 'template office' – templates: " + ", ".join(t.key for t in TEMPLATES) + "\n"
+    "Connect Claude, OpenAI or Ollama in Settings › AI for free-form requests and engineering Q&A."
+)
 
 
 def _bays(count: int, span: float) -> list[float]:
@@ -88,7 +90,9 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
         if re.search(pat, t):
             spec["occupancy"] = occ
             break
-    m = re.search(r"(?:typical\s*)?floor\s*height\s*(?:of|=|is)?\s*" + _NUM, t) or re.search(r"storey\s*height\s*" + _NUM, t)
+    m = re.search(r"(?:typical\s*)?floor\s*height\s*(?:of|=|is)?\s*" + _NUM, t) or re.search(
+        r"storey\s*height\s*" + _NUM, t
+    )
     if m:
         spec["floor_height"] = float(m.group(1))
     m = re.search(r"ground\s*(?:floor|storey)?\s*height\s*(?:of|=|is)?\s*" + _NUM, t)
@@ -114,9 +118,25 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
     if city and spec:
         spec["city"] = city
 
-    building_words = re.search(r"\b(building|bungalow|block|tower|apartment|g\s*\+|storey|bays?|create|make|generate|design a)\b", t)
-    structural_spec = {k for k in spec if k in ("upper_floors", "bays_x", "bays_y", "floor_height", "ground_height",
-                                                  "foundation_depth", "balcony", "mumty", "occupancy")}
+    building_words = re.search(
+        r"\b(building|bungalow|block|tower|apartment|g\s*\+|storey|bays?|create|make|generate|design a)\b", t
+    )
+    structural_spec = {
+        k
+        for k in spec
+        if k
+        in (
+            "upper_floors",
+            "bays_x",
+            "bays_y",
+            "floor_height",
+            "ground_height",
+            "foundation_depth",
+            "balcony",
+            "mumty",
+            "occupancy",
+        )
+    }
     modify = re.search(r"\b(make it|change|increase|decrease|modify|add|set|update)\b", t) and has_model
     if structural_spec and (building_words or modify):
         if modify and not re.search(r"\b(create|new|generate)\b", t):
@@ -194,9 +214,20 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
         actions.append({"action": "analyze"})
     if re.search(r"\bdesign\b", t) and not re.search(r"design a\b", t):
         actions.append({"action": "design"})
-    for key, fmt in (("staad", "staad"), (".std", "staad"), ("etabs", "etabs"), ("e2k", "etabs"), ("3d dxf", "dxf3d"),
-                     ("dxf", "dxf"), ("cad", "dxf"), ("excel", "excel"), ("xlsx", "excel"), ("spreadsheet", "excel"),
-                     ("pdf", "pdf"), ("report", "pdf")):
+    for key, fmt in (
+        ("staad", "staad"),
+        (".std", "staad"),
+        ("etabs", "etabs"),
+        ("e2k", "etabs"),
+        ("3d dxf", "dxf3d"),
+        ("dxf", "dxf"),
+        ("cad", "dxf"),
+        ("excel", "excel"),
+        ("xlsx", "excel"),
+        ("spreadsheet", "excel"),
+        ("pdf", "pdf"),
+        ("report", "pdf"),
+    ):
         if re.search(r"\b(export|generate|create|save|give|make)\b", t) and key in t:
             actions.append({"action": "export", "format": fmt})
             break

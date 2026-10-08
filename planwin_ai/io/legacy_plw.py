@@ -101,7 +101,7 @@ class _Tokens:
 
 
 def read_plw(path: str) -> tuple[Plan, ImportReport]:
-    with open(path, "r", encoding="latin-1") as f:
+    with open(path, encoding="latin-1") as f:
         lines = f.readlines()
     if not lines or not lines[0].startswith("Ver "):
         raise LegacyFormatError("Not a PlanWin .plw file (missing version header)")
@@ -137,16 +137,32 @@ def _read_v1_3(lines: list[str], name: str, rep: ImportReport) -> Plan:
         pts = [(_num(tk.next()), _num(tk.next())) for _ in range(cnt)]
         cx = sum(p[0] for p in pts) / max(cnt, 1)
         cy = sum(p[1] for p in pts) / max(cnt, 1)
-        plan.columns.append(Column(mark=mark, x=round(cx, 4), y=round(cy, 4), b=_num(breadth, 0.23) or 0.23,
-                                   d=_num(length, 0.45) or 0.45, angle=_num(ang)))
+        plan.columns.append(
+            Column(
+                mark=mark,
+                x=round(cx, 4),
+                y=round(cy, 4),
+                b=_num(breadth, 0.23) or 0.23,
+                d=_num(length, 0.45) or 0.45,
+                angle=_num(ang),
+            )
+        )
     for _ in range(nb):
         (_, width, depth, mark, grade, udl, btype, nload, *_rest) = tk.take(14)
         pts = [(_num(tk.next()), _num(tk.next())) for _ in range(4)]
         p1 = ((pts[0][0] + pts[3][0]) / 2, (pts[0][1] + pts[3][1]) / 2)
         p2 = ((pts[1][0] + pts[2][0]) / 2, (pts[1][1] + pts[2][1]) / 2)
-        b = Beam(mark=mark, x1=round(p1[0], 4), y1=round(p1[1], 4), x2=round(p2[0], 4), y2=round(p2[1], 4),
-                 b=_num(width, 0.23), d=_num(depth, 0.45), grade=_grade(grade),
-                 cantilever=btype.lower().startswith("cant"))
+        b = Beam(
+            mark=mark,
+            x1=round(p1[0], 4),
+            y1=round(p1[1], 4),
+            x2=round(p2[0], 4),
+            y2=round(p2[1], 4),
+            b=_num(width, 0.23),
+            d=_num(depth, 0.45),
+            grade=_grade(grade),
+            cantilever=btype.lower().startswith("cant"),
+        )
         _legacy_udl(b, _num(udl))
         for _ in range(int(_num(nload))):
             _, ltype, desc, st, ln, w1, w2 = tk.take(7)
@@ -184,15 +200,21 @@ def _read_v5(lines: list[str], name: str, rep: ImportReport) -> Plan:
     defaults = L[i].split(",")
     i += 1
     floor_type = (defaults[6].strip().lower() if len(defaults) > 6 else "typical") or "typical"
-    plan = Plan(name=name, floor_type=floor_type if floor_type in ("typical", "ground", "roof") else "typical",
-                floor_height_above=fha or 3.0)
+    plan = Plan(
+        name=name,
+        floor_type=floor_type if floor_type in ("typical", "ground", "roof") else "typical",
+        floor_height_above=fha or 3.0,
+    )
     for _ in range(ns):
-        a = L[i].split(","); i += 1
-        bline = L[i].split(","); i += 1
+        a = L[i].split(",")
+        i += 1
+        bline = L[i].split(",")
+        i += 1
         cnt = int(_num(a[1]))
         pts = []
         for _ in range(cnt):
-            x, y = L[i].split(",")[:2]; i += 1
+            x, y = L[i].split(",")[:2]
+            i += 1
             pts.append([round(_num(x), 4), round(_num(y), 4)])
         nobj = int(_num(bline[1])) if len(bline) > 1 else 0
         i += nobj
@@ -207,22 +229,44 @@ def _read_v5(lines: list[str], name: str, rep: ImportReport) -> Plan:
             s.distribution = "on_grade"
         plan.slabs.append(s)
     for _ in range(nc):
-        a = L[i].split(","); i += 1
-        L[i].split(","); i += 1
-        plan.columns.append(Column(mark=a[0], angle=_num(a[1]), d=_num(a[2], 0.45) or 0.45, b=_num(a[3], 0.23) or 0.23,
-                                   x=round(_num(a[4]), 4), y=round(_num(a[5]), 4)))
+        a = L[i].split(",")
+        i += 1
+        L[i].split(",")
+        i += 1
+        plan.columns.append(
+            Column(
+                mark=a[0],
+                angle=_num(a[1]),
+                d=_num(a[2], 0.45) or 0.45,
+                b=_num(a[3], 0.23) or 0.23,
+                x=round(_num(a[4]), 4),
+                y=round(_num(a[5]), 4),
+            )
+        )
     for _ in range(nb):
-        a = L[i].split(","); i += 1
-        bline = L[i].split(","); i += 1
-        p = [_num(v) for v in L[i].split(",")[:8]]; i += 1
+        a = L[i].split(",")
+        i += 1
+        bline = L[i].split(",")
+        i += 1
+        p = [_num(v) for v in L[i].split(",")[:8]]
+        i += 1
         nload = int(_num(a[12])) if len(a) > 12 else 0
         nobj = int(_num(a[16])) if len(a) > 16 else 0
         ndw = int(_num(bline[6])) if len(bline) > 6 else 0
         p1 = ((p[0] + p[6]) / 2, (p[1] + p[7]) / 2)
         p2 = ((p[2] + p[4]) / 2, (p[3] + p[5]) / 2)
-        b = Beam(mark=a[0], b=_num(a[1], 0.23), d=_num(a[2], 0.45), grade=_grade(a[3]),
-                 x1=round(p1[0], 4), y1=round(p1[1], 4), x2=round(p2[0], 4), y2=round(p2[1], 4),
-                 cantilever=a[5].lower().startswith("cant"), external=(bline[0].strip().lower().startswith("e")))
+        b = Beam(
+            mark=a[0],
+            b=_num(a[1], 0.23),
+            d=_num(a[2], 0.45),
+            grade=_grade(a[3]),
+            x1=round(p1[0], 4),
+            y1=round(p1[1], 4),
+            x2=round(p2[0], 4),
+            y2=round(p2[1], 4),
+            cantilever=a[5].lower().startswith("cant"),
+            external=(bline[0].strip().lower().startswith("e")),
+        )
         info = (a[14] if len(a) > 14 else "").split(":")
         if len(info) >= 8 and info[2]:
             b.wall_thk = _num(info[2], 0.23)
@@ -235,7 +279,8 @@ def _read_v5(lines: list[str], name: str, rep: ImportReport) -> Plan:
         else:
             _legacy_udl(b, _num(a[4]))
         for _ in range(nload):
-            t = L[i].split(","); i += 1
+            t = L[i].split(",")
+            i += 1
             _beam_load(b, t[0], t[1], _num(t[2]), _num(t[3]), _num(t[4]), _num(t[5]))
         i += ndw + nobj
         plan.beams.append(b)

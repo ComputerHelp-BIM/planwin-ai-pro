@@ -13,20 +13,42 @@ Units: metres, kN, kN/m, kN/m^2, kN/m^3, MPa (N/mm^2) for material strengths.
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import hashlib
 import itertools
 import math
 import uuid
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, fields
-from typing import Any, Optional
+from typing import Any
 
 from . import geometry as G
 
 SCHEMA_VERSION = 1
 
 
+_id_seed: str | None = None
+_id_counter = itertools.count()
+
+
 def new_id() -> str:
-    return uuid.uuid4().hex[:10]
+    """Random 10-hex-digit object id (deterministic inside :func:`deterministic_ids`)."""
+    if _id_seed is None:
+        return uuid.uuid4().hex[:10]
+    return hashlib.sha1(f"{_id_seed}:{next(_id_counter)}".encode()).hexdigest()[:10]
+
+
+@contextlib.contextmanager
+def deterministic_ids(seed: str) -> Iterator[None]:
+    """Reproducible ids, e.g. for the bundled template library (stable files under git)."""
+    global _id_seed, _id_counter
+    saved = _id_seed, _id_counter
+    _id_seed, _id_counter = seed, itertools.count()
+    try:
+        yield
+    finally:
+        _id_seed, _id_counter = saved
 
 
 # --------------------------------------------------------------------- loads
@@ -66,7 +88,7 @@ class Slab:
     #: auto | two_way | one_way (spans short way) | one_way_long | cantilever | on_grade
     #: "uniform" distributes the load evenly to all supporting edges.
     distribution: str = "auto"
-    cant_edge: Optional[int] = None  # index i of fixed edge (points[i] -> points[i+1])
+    cant_edge: int | None = None  # index i of fixed edge (points[i] -> points[i+1])
     grade: str = "M25"
     room: str = ""
 
@@ -130,14 +152,14 @@ class Beam:
     external: bool = False
     # wall / plaster above the beam (PlanWin "double arrow" dialog)
     wall_thk: float = 0.23
-    wall_height: Optional[float] = None  # None -> floor height above - beam depth
+    wall_height: float | None = None  # None -> floor height above - beam depth
     wall_density: float = 20.0
     plaster_thk: float = 0.03  # both faces combined
     plaster_density: float = 20.0
     include_self: bool = True
     include_wall: bool = True
     include_plaster: bool = True
-    parapet: Optional[float] = None  # roof parapet height (m) overrides wall height
+    parapet: float | None = None  # roof parapet height (m) overrides wall height
     point_loads: list[PointLoad] = field(default_factory=list)
     part_loads: list[PartLoad] = field(default_factory=list)
 
@@ -204,7 +226,7 @@ class Plan:
         self.beams = [b for b in self.beams if b.id not in ids]
         return n0 - (len(self.slabs) + len(self.columns) + len(self.beams))
 
-    def column_at(self, p: G.Point, tol: float = 0.05) -> Optional[Column]:
+    def column_at(self, p: G.Point, tol: float = 0.05) -> Column | None:
         best, bd = None, tol
         for c in self.columns:
             d = G.dist(c.pos, p)
@@ -241,6 +263,7 @@ class Plan:
         columns by mark), so renumbering columns is only advised on the first
         plan; the GUI warns about this like legacy PlanWin did.
         """
+
         def key_xy(p):
             x, y = p
             return (-round(y, 2), round(x, 2)) if order == "lr_tb" else (round(x, 2), -round(y, 2))
@@ -353,7 +376,7 @@ class Project:
     schema: int = SCHEMA_VERSION
 
     # ------------------------------------------------------------ helpers
-    def plan(self, name: str) -> Optional[Plan]:
+    def plan(self, name: str) -> Plan | None:
         for p in self.plans:
             if p.name == name:
                 return p
@@ -383,7 +406,7 @@ class Project:
     def set_column_size(self, mark: str, level_index: int, b: float, d: float, angle: float) -> None:
         self.column_sizes.setdefault(mark, {})[str(level_index)] = [round(b, 3), round(d, 3), angle]
 
-    def clone(self) -> "Project":
+    def clone(self) -> Project:
         return copy.deepcopy(self)
 
     # ------------------------------------------------------------ serialisation
@@ -393,7 +416,7 @@ class Project:
         return d
 
     @staticmethod
-    def from_dict(d: dict) -> "Project":
+    def from_dict(d: dict) -> Project:
         return _build(Project, d)
 
     def summary(self) -> dict:
@@ -420,7 +443,11 @@ _NESTED = {
     ("Beam", "point_loads"): "PointLoad",
     ("Beam", "part_loads"): "PartLoad",
 }
-_SINGLE = {("Project", "seismic"): "SeismicParams", ("Project", "wind"): "WindParams", ("Project", "design"): "DesignSettings"}
+_SINGLE = {
+    ("Project", "seismic"): "SeismicParams",
+    ("Project", "wind"): "WindParams",
+    ("Project", "design"): "DesignSettings",
+}
 
 
 def _build(cls, data: dict):

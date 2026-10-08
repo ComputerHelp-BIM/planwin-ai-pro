@@ -76,17 +76,17 @@ class FMember:
 
     @property
     def Iy(self):
-        return self.i_factor * self.b * self.d ** 3 / 12.0
+        return self.i_factor * self.b * self.d**3 / 12.0
 
     @property
     def Iz(self):
-        return self.i_factor * self.d * self.b ** 3 / 12.0
+        return self.i_factor * self.d * self.b**3 / 12.0
 
     @property
     def J(self):
         a, c = max(self.b, self.d), min(self.b, self.d)
         beta = 1 / 3 - 0.21 * (c / a) * (1 - (c / a) ** 4 / 12)
-        return beta * a * c ** 3 * self.torsion_factor
+        return beta * a * c**3 * self.torsion_factor
 
 
 class FrameSolveError(RuntimeError):
@@ -127,14 +127,34 @@ def local_k(m: FMember, L: float) -> np.ndarray:
     k[3, 3] = k[9, 9] = gj
     k[3, 9] = k[9, 3] = -gj
     # bending in x-y plane (v, rz) about local z
-    a1, a2, a3, a4 = 12 * E * Iz / L ** 3, 6 * E * Iz / L ** 2, 4 * E * Iz / L, 2 * E * Iz / L
-    for (i, j, v) in ((1, 1, a1), (1, 5, a2), (1, 7, -a1), (1, 11, a2), (5, 5, a3), (5, 7, -a2), (5, 11, a4),
-                      (7, 7, a1), (7, 11, -a2), (11, 11, a3)):
+    a1, a2, a3, a4 = 12 * E * Iz / L**3, 6 * E * Iz / L**2, 4 * E * Iz / L, 2 * E * Iz / L
+    for i, j, v in (
+        (1, 1, a1),
+        (1, 5, a2),
+        (1, 7, -a1),
+        (1, 11, a2),
+        (5, 5, a3),
+        (5, 7, -a2),
+        (5, 11, a4),
+        (7, 7, a1),
+        (7, 11, -a2),
+        (11, 11, a3),
+    ):
         k[i, j] = k[j, i] = v
     # bending in x-z plane (w, ry) about local y  (ry = -dw/dx)
-    b1, b2, b3, b4 = 12 * E * Iy / L ** 3, 6 * E * Iy / L ** 2, 4 * E * Iy / L, 2 * E * Iy / L
-    for (i, j, v) in ((2, 2, b1), (2, 4, -b2), (2, 8, -b1), (2, 10, -b2), (4, 4, b3), (4, 8, b2), (4, 10, b4),
-                      (8, 8, b1), (8, 10, b2), (10, 10, b3)):
+    b1, b2, b3, b4 = 12 * E * Iy / L**3, 6 * E * Iy / L**2, 4 * E * Iy / L, 2 * E * Iy / L
+    for i, j, v in (
+        (2, 2, b1),
+        (2, 4, -b2),
+        (2, 8, -b1),
+        (2, 10, -b2),
+        (4, 4, b3),
+        (4, 8, b2),
+        (4, 10, b4),
+        (8, 8, b1),
+        (8, 10, b2),
+        (10, 10, b3),
+    ):
         k[i, j] = k[j, i] = v
     return k
 
@@ -143,7 +163,7 @@ _GX, _GW = np.polynomial.legendre.leggauss(4)
 
 
 def _hermite(xi: np.ndarray, L: float):
-    return (1 - 3 * xi ** 2 + 2 * xi ** 3, L * (xi - 2 * xi ** 2 + xi ** 3), 3 * xi ** 2 - 2 * xi ** 3, L * (-xi ** 2 + xi ** 3))
+    return (1 - 3 * xi**2 + 2 * xi**3, L * (xi - 2 * xi**2 + xi**3), 3 * xi**2 - 2 * xi**3, L * (-(xi**2) + xi**3))
 
 
 def equivalent_loads(loads: list, lam: np.ndarray, L: float) -> np.ndarray:
@@ -154,9 +174,16 @@ def equivalent_loads(loads: list, lam: np.ndarray, L: float) -> np.ndarray:
             q = lam @ np.array(ld.P)
             xi = np.array([min(max(ld.x / L, 0.0), 1.0)])
             N1, N2, N3, N4 = _hermite(xi, L)
-            f[0] += q[0] * (1 - xi[0]); f[6] += q[0] * xi[0]
-            f[1] += q[1] * N1[0]; f[5] += q[1] * N2[0]; f[7] += q[1] * N3[0]; f[11] += q[1] * N4[0]
-            f[2] += q[2] * N1[0]; f[4] -= q[2] * N2[0]; f[8] += q[2] * N3[0]; f[10] -= q[2] * N4[0]
+            f[0] += q[0] * (1 - xi[0])
+            f[6] += q[0] * xi[0]
+            f[1] += q[1] * N1[0]
+            f[5] += q[1] * N2[0]
+            f[7] += q[1] * N3[0]
+            f[11] += q[1] * N4[0]
+            f[2] += q[2] * N1[0]
+            f[4] -= q[2] * N2[0]
+            f[8] += q[2] * N3[0]
+            f[10] -= q[2] * N4[0]
             continue
         a, b = max(ld.a, 0.0), min(ld.b, L)
         if b - a < 1e-12:
@@ -170,11 +197,16 @@ def equivalent_loads(loads: list, lam: np.ndarray, L: float) -> np.ndarray:
         qx = q1[:, None] * (1 - t) + q2[:, None] * t  # 3 x ng
         xi = xs / L
         N1, N2, N3, N4 = _hermite(xi, L)
-        f[0] += np.sum(ws * qx[0] * (1 - xi)); f[6] += np.sum(ws * qx[0] * xi)
-        f[1] += np.sum(ws * qx[1] * N1); f[5] += np.sum(ws * qx[1] * N2)
-        f[7] += np.sum(ws * qx[1] * N3); f[11] += np.sum(ws * qx[1] * N4)
-        f[2] += np.sum(ws * qx[2] * N1); f[4] -= np.sum(ws * qx[2] * N2)
-        f[8] += np.sum(ws * qx[2] * N3); f[10] -= np.sum(ws * qx[2] * N4)
+        f[0] += np.sum(ws * qx[0] * (1 - xi))
+        f[6] += np.sum(ws * qx[0] * xi)
+        f[1] += np.sum(ws * qx[1] * N1)
+        f[5] += np.sum(ws * qx[1] * N2)
+        f[7] += np.sum(ws * qx[1] * N3)
+        f[11] += np.sum(ws * qx[1] * N4)
+        f[2] += np.sum(ws * qx[2] * N1)
+        f[4] -= np.sum(ws * qx[2] * N2)
+        f[8] += np.sum(ws * qx[2] * N3)
+        f[10] -= np.sum(ws * qx[2] * N4)
     return f
 
 
@@ -188,8 +220,12 @@ class FrameResults:
 
 
 class FrameSolver:
-    def __init__(self, nodes: dict[int, FNode], members: dict[int, FMember],
-                 nodal_loads: dict[str, dict[int, np.ndarray]] | None = None):
+    def __init__(
+        self,
+        nodes: dict[int, FNode],
+        members: dict[int, FMember],
+        nodal_loads: dict[str, dict[int, np.ndarray]] | None = None,
+    ):
         self.nodes = nodes
         self.members = members
         self.nodal = nodal_loads or {}
@@ -205,12 +241,14 @@ class FrameSolver:
             lam, L = rotation(m, nodes)
             T = np.zeros((12, 12))
             for k in range(4):
-                T[3 * k:3 * k + 3, 3 * k:3 * k + 3] = lam
+                T[3 * k : 3 * k + 3, 3 * k : 3 * k + 3] = lam
             kl = local_k(m, L)
             kg = T.T @ kl @ T
-            dofs = np.r_[6 * idx[m.n1]:6 * idx[m.n1] + 6, 6 * idx[m.n2]:6 * idx[m.n2] + 6]
+            dofs = np.r_[6 * idx[m.n1] : 6 * idx[m.n1] + 6, 6 * idx[m.n2] : 6 * idx[m.n2] + 6]
             r, c = np.meshgrid(dofs, dofs, indexing="ij")
-            rows.append(r.ravel()); cols.append(c.ravel()); vals.append(kg.ravel())
+            rows.append(r.ravel())
+            cols.append(c.ravel())
+            vals.append(kg.ravel())
             feq = {}
             for ci, case in enumerate(cases):
                 f = equivalent_loads(m.loads.get(case, []), lam, L)
@@ -220,7 +258,7 @@ class FrameSolver:
         K = sp.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))), shape=(n, n))
         for ci, case in enumerate(cases):
             for nid, vec in self.nodal.get(case, {}).items():
-                F[6 * idx[nid]:6 * idx[nid] + 6, ci] += vec
+                F[6 * idx[nid] : 6 * idx[nid] + 6, ci] += vec
         fixed = []
         for nid, nd in nodes.items():
             if nd.support == "fixed":
@@ -242,14 +280,18 @@ class FrameSolver:
             try:
                 lu = spla.splu(Kff)
             except RuntimeError as exc:  # exactly singular
-                raise FrameSolveError("Stiffness matrix is singular – check for unsupported or disconnected members") from exc
+                raise FrameSolveError(
+                    "Stiffness matrix is singular – check for unsupported or disconnected members"
+                ) from exc
             U[free] = lu.solve(F[free])
         if not np.all(np.isfinite(U)):
             raise FrameSolveError("Solution is not finite – the structure may be a mechanism")
         trans = np.abs(U.reshape(-1, 6, len(cases))[:, :3, :])
         if trans.size and float(trans.max()) > 5.0:
-            raise FrameSolveError(f"Displacement of {float(trans.max()):.1f} m – the structure is unstable "
-                                  "(check supports, floating columns and missing beams)")
+            raise FrameSolveError(
+                f"Displacement of {float(trans.max()):.1f} m – the structure is unstable "
+                "(check supports, floating columns and missing beams)"
+            )
         res = FrameResults(cases, {}, {}, {}, idx)
         R = K @ U - F
         for ci, case in enumerate(cases):
@@ -259,11 +301,15 @@ class FrameSolver:
                 ue = T @ U[dofs, ci]
                 ef[mid] = kl @ ue - feq[case]
             res.end_forces[case] = ef
-            res.reactions[case] = {nid: R[6 * idx[nid]:6 * idx[nid] + 6, ci] for nid, nd in nodes.items() if nd.support}
+            res.reactions[case] = {
+                nid: R[6 * idx[nid] : 6 * idx[nid] + 6, ci] for nid, nd in nodes.items() if nd.support
+            }
         return res
 
 
-def section_forces(m: FMember, nodes: dict[int, FNode], f_end: np.ndarray, loads: list, xs: np.ndarray) -> dict[str, np.ndarray]:
+def section_forces(
+    m: FMember, nodes: dict[int, FNode], f_end: np.ndarray, loads: list, xs: np.ndarray
+) -> dict[str, np.ndarray]:
     """Internal forces at stations ``xs`` (local axes).
 
     Returns N (tension +), Vy, Vz, T, My, Mz with the left-segment
