@@ -44,6 +44,16 @@ def cmd_init(a):
     print("PUBLIC_KEY_B64 =", base64.b64encode(pub).decode())
 
 
+def _expiry(text: str) -> str:
+    """'' (perpetual) or a valid date in the ISO form the application reads (YYYY-MM-DD)."""
+    if not text:
+        return ""
+    try:
+        return dt.date.fromisoformat(text.strip()).isoformat()
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid date {text!r} – use YYYY-MM-DD") from None
+
+
 def cmd_issue(a):
     key = serialization.load_pem_private_key(Path(a.key).read_bytes(), password=None)
     lic = {
@@ -74,7 +84,7 @@ def main(argv=None):
     s.add_argument("--name", required=True)
     s.add_argument("--company", default="")
     s.add_argument("--email", default="")
-    s.add_argument("--expires", default="")
+    s.add_argument("--expires", default="", type=_expiry, help="YYYY-MM-DD; omit for a perpetual licence")
     s.add_argument("--seats", default=1)
     s.add_argument("--machine", default="", help="bind to this machine code (XXXX-XXXX-XXXX); omit for any computer")
     s.add_argument("--out", required=True)

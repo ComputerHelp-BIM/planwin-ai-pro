@@ -198,8 +198,9 @@ def template_names() -> list[tuple[str, str, str]]:
 
 
 def _find(key: str) -> Template:
+    k = str(key).strip().lower()  # "Bungalow", " office_g5 " (LLM / CLI input)
     for t in TEMPLATES:
-        if t.key == key or t.title.lower() == key.lower():
+        if t.key == k or t.title.lower() == k:
             return t
     raise KeyError(f"Unknown template '{key}'")
 

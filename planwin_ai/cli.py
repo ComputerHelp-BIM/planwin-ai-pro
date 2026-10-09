@@ -91,8 +91,12 @@ def _run(args: argparse.Namespace) -> int:
                 exports_allowed=lic.exports_allowed,
             )
         )
-        reply, res = asst.ask(args.prompt)
+        reply, actions = asst.plan(args.prompt)
+        reply, res = asst.apply(reply, actions)
         print(reply)
+        if not actions:  # nothing understood: fail, so scripts do not carry on with an unchanged model
+            print("error: the prompt was not understood – nothing was changed", file=sys.stderr)
+            return 1
         project_io.save_project(asst.session.project, args.out)
         return 1 if res.errors else 0
     if args.cmd == "import-plw":

@@ -7,6 +7,7 @@ against a :class:`Session` so the GUI and the CLI behave identically.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -145,24 +146,86 @@ def _spec_from(project: Project) -> GridSpec:
     return spec
 
 
+#: accepted range (m) of storey dimensions; larger numbers are read as millimetres first (3300 → 3.3)
+_SPEC_RANGES = {
+    "floor_height": (1.5, 20.0),
+    "ground_height": (1.5, 20.0),
+    "foundation_depth": (0.3, 10.0),
+}
+
+
+def _grade(v: Any, what: str = "grade") -> str:
+    """``"M30"``, ``"m 30"`` or ``30`` → ``"M30"`` (IS 456 Table 2: M15 … M80)."""
+    g = str(v).strip().upper().replace(" ", "")
+    g = g[1:] if g.startswith("M") else g
+    try:
+        n = float(g)
+    except ValueError:
+        raise ValueError(f"{what} '{v}' – give a concrete grade such as M25") from None
+    if not 15 <= n <= 80:
+        raise ValueError(f"{what} '{v}' – concrete grade must be M15 … M80")
+    return f"M{n:g}"
+
+
+def _balcony(v: Any) -> dict | None:
+    """``null``/``false`` removes the balcony; ``true``, a side or a depth gets the defaults for the rest."""
+    if v is None or v is False or (isinstance(v, str) and v.strip().lower() in ("", "none", "no", "false", "off")):
+        return None
+    if v is True or (isinstance(v, str) and v.strip().lower() in ("yes", "true", "on")):
+        v = {}
+    elif isinstance(v, str):
+        v = {"side": v}
+    elif isinstance(v, (int, float)):
+        v = {"depth": v}
+    if not isinstance(v, dict):
+        raise ValueError('balcony must be {"side": "south|north", "depth": m} or null')
+    side = str(v.get("side") or "south").strip().lower()
+    if side not in ("south", "north"):
+        raise ValueError(f"balcony side '{v.get('side')}' – use south or north")
+    depth = _metres(_num(v, "depth", 1.2), 5.0)
+    if not 0 < depth <= 3.0:
+        raise ValueError(f"balcony depth {depth:g} m – use 0 … 3 m")
+    return {"side": side, "depth": round(depth, 4)}
+
+
 def _clean_spec(params: dict, base: GridSpec | None = None) -> GridSpec:
     spec = base or GridSpec()
     valid = set(asdict(spec))
     for k, v in params.items():
-        if k not in valid or v is None:
+        if k not in valid or (v is None and k != "balcony"):
             continue
         if k in ("bays_x", "bays_y"):
             v = [float(x) for x in (v if isinstance(v, (list, tuple)) else [v])]
             if not v or any(x <= 0.5 or x > 30 for x in v):
                 raise ValueError(f"{k} must be bay widths between 0.5 and 30 m")
         elif k in ("column", "beam_int", "beam_ext"):
-            v = tuple(float(x) for x in v)[:2]
+            if not isinstance(v, (list, tuple)) or len(v) != 2:
+                raise ValueError(f"{k} must be [b, d] in m, e.g. [0.3, 0.45]")
+            v = tuple(_metres(_num({k: x}, k), 3.0) for x in v)
+            if not all(0.1 <= x <= 3.0 for x in v):
+                raise ValueError(f"{k} {list(v)} – each dimension must be 0.1 … 3 m")
         elif k == "upper_floors":
-            v = int(v)
-            if not 0 <= v <= 60:
-                raise ValueError("upper_floors must be 0..60")
-        elif k in ("floor_height", "ground_height", "foundation_depth", "slab_thickness", "parapet"):
-            v = float(v)
+            n = _num(params, k)
+            if n != int(n) or not 0 <= n <= 60:
+                raise ValueError(f"upper_floors must be a whole number 0..60, got {v!r}")
+            v = int(n)
+        elif k in _SPEC_RANGES:
+            lo, hi = _SPEC_RANGES[k]
+            v = _metres(_num(params, k), 20.0)
+            if not lo <= v <= hi:
+                raise ValueError(f"{k} {v:g} m is outside {lo:g} … {hi:g} m")
+        elif k == "slab_thickness":
+            v = _metres(_num(params, k), 2.0)
+            if v and not 0.075 <= v <= 1.0:
+                raise ValueError(f"slab_thickness {v:g} m – use 0.075 … 1 m (0 = automatic)")
+        elif k == "parapet":
+            v = _num(params, k)
+            if not 0 <= v <= 3:
+                raise ValueError(f"parapet {v:g} m – use 0 … 3 m")
+        elif k == "balcony":
+            v = _balcony(v)
+        elif k == "grade":
+            v = _grade(v)
         elif k == "occupancy" and v not in OCCUPANCY:
             v = "residential"
         elif k == "mumty":
@@ -192,9 +255,10 @@ def execute(session: Session, actions: list[dict]) -> ActionResult:
 # ------------------------------------------------------------------ handlers
 def _new_building(s: Session, p: dict, r: ActionResult):
     spec = _clean_spec(p)
+    known = bool(p.get("city")) and bool(lookup_city(str(p["city"])))
     if not p.get("name"):
         spec.name = f"{spec.occupancy.replace('_', ' ').title()} G+{spec.upper_floors}" + (
-            f" – {spec.city}" if p.get("city") else ""
+            f" – {spec.city}" if known else ""
         )
     s.project = grid_building(spec)
     s.last.clear()
@@ -205,12 +269,19 @@ def _new_building(s: Session, p: dict, r: ActionResult):
         f"({sum(spec.bays_x):.1f} × {sum(spec.bays_y):.1f} m), {spec.occupancy}, "
         f"{s.project.wind.city} (zone {s.project.seismic.zone}, Vb {s.project.wind.basic_speed} m/s)."
     )
+    if p.get("city") and not known:
+        r.messages.append(
+            f"⚠ City '{p['city']}' is not in the database – {s.project.wind.city} values are used; "
+            "set the wind speed and seismic zone manually."
+        )
 
 
 def _modify(s: Session, p: dict, r: ActionResult):
     if not s.project.meta.get("grid_spec"):
         raise ValueError("this model was not created parametrically – edit it on the canvas instead")
     keep = s.project
+    if "city" in p and not lookup_city(str(p["city"])):  # check before the model is replaced
+        raise ValueError(f"city '{p['city']}' not in the database – set wind speed and zone manually")
     spec = _clean_spec(p, _spec_from(keep))
     s.project = grid_building(spec)
     s.project.seismic, s.project.wind, s.project.design = keep.seismic, keep.wind, keep.design
@@ -232,6 +303,16 @@ def _template(s: Session, p: dict, r: ActionResult):
 
 def _set_loads(s: Session, p: dict, r: ActionResult):
     target = str(p.get("plan", "all"))
+    new: dict[str, float] = {}  # validate everything before touching the model
+    for k in ("live", "floor_finish", "other"):
+        if k in p:
+            new[k] = _num(p, k)
+            if new[k] < 0:
+                raise ValueError(f"{k} load cannot be negative")
+    if "thickness" in p:
+        new["thickness"] = _metres(_num(p, "thickness"), 2.0)
+        if not 0.05 <= new["thickness"] <= 1.0:
+            raise ValueError(f"slab thickness {new['thickness']:g} m – use 0.05 … 1 m")
     n = 0
     for plan in s.project.plans:
         if target != "all" and plan.name.lower() != target.lower():
@@ -239,14 +320,8 @@ def _set_loads(s: Session, p: dict, r: ActionResult):
         for sl in plan.slabs:
             if sl.distribution == "on_grade":
                 continue
-            if "live" in p:
-                sl.live = float(p["live"])
-            if "floor_finish" in p:
-                sl.floor_finish = float(p["floor_finish"])
-            if "other" in p:
-                sl.other = float(p["other"])
-            if "thickness" in p:
-                sl.thickness = float(p["thickness"])
+            for k, v in new.items():
+                setattr(sl, k, v)
             n += 1
     if not n:
         raise ValueError(f"no slabs found for plan '{target}'")
@@ -274,27 +349,32 @@ def _set_location(s: Session, p: dict, r: ActionResult):
 
 def _set_seismic(s: Session, p: dict, r: ActionResult):
     sm = s.project.seismic
+    new: dict[str, Any] = {}  # validate everything before touching the model
     if "zone" in p:
         z = str(p["zone"]).upper().replace("ZONE", "").strip()
         z = {"2": "II", "3": "III", "4": "IV", "5": "V"}.get(z, z)
         if z not in ("II", "III", "IV", "V"):
             raise ValueError("zone must be II, III, IV or V")
-        sm.zone = z
+        new["zone"] = z
     if "soil" in p:
         soil = str(p["soil"]).lower().replace("soil", "").strip()
         soil = {"rock": "hard", "i": "hard", "ii": "medium", "iii": "soft"}.get(soil, soil)
         if soil not in ("hard", "medium", "soft"):
             raise ValueError("soil must be hard, medium or soft")
-        sm.soil = soil
+        new["soil"] = soil
     for k in ("importance", "response_reduction"):
         if k in p:
-            setattr(sm, k, float(p[k]))
+            new[k] = _num(p, k)
+            if new[k] <= 0:
+                raise ValueError(f"{k} must be positive")
     if "enabled" in p:
-        sm.enabled = _to_bool(p["enabled"])
+        new["enabled"] = _to_bool(p["enabled"])
     if "method" in p:
-        sm.method = _seismic_method(p["method"])
+        new["method"] = _seismic_method(p["method"])
     if "rigid_diaphragm" in p:
-        sm.rigid_diaphragm = _to_bool(p["rigid_diaphragm"])
+        new["rigid_diaphragm"] = _to_bool(p["rigid_diaphragm"])
+    for k, v in new.items():
+        setattr(sm, k, v)
     s.last.clear()
     r.changed = True
     r.messages.append(
@@ -325,12 +405,17 @@ def _seismic_method(v: Any) -> str:
 
 def _set_wind(s: Session, p: dict, r: ActionResult):
     w = s.project.wind
+    new: dict[str, Any] = {}  # validate everything before touching the model
     if "basic_speed" in p:
-        w.basic_speed = float(p["basic_speed"])
+        new["basic_speed"] = _num(p, "basic_speed")
+        if new["basic_speed"] <= 0:
+            raise ValueError("basic_speed must be positive (IS 875-3 Fig 1: 33 … 55 m/s)")
     if "terrain" in p:
-        w.terrain = min(max(int(p["terrain"]), 1), 4)
+        new["terrain"] = min(max(int(_num(p, "terrain")), 1), 4)
     if "enabled" in p:
-        w.enabled = _to_bool(p["enabled"])
+        new["enabled"] = _to_bool(p["enabled"])
+    for k, v in new.items():
+        setattr(w, k, v)
     s.last.clear()
     r.changed = True
     r.messages.append(
@@ -340,16 +425,22 @@ def _set_wind(s: Session, p: dict, r: ActionResult):
 
 def _set_materials(s: Session, p: dict, r: ActionResult):
     pr = s.project
-    if "concrete" in p:
-        g = str(p["concrete"]).upper()
-        g = g if g.startswith("M") else f"M{g}"
+    g = _grade(p["concrete"], "concrete") if "concrete" in p else None  # validate before changing anything
+    fy = None
+    if "steel" in p:
+        try:
+            fy = float(str(p["steel"]).upper().replace("FE", "").strip())
+        except ValueError:
+            raise ValueError(f"steel '{p['steel']}' – use 415, 500 or 550") from None
+        if not 250 <= fy <= 600:
+            raise ValueError(f"steel Fe{fy:g} – use Fe250 … Fe600")
+    if g:
         for lv in pr.levels:
             lv.grade = g
         for plan in pr.plans:
             for o in plan.slabs + plan.beams + plan.columns:
                 o.grade = g
-    if "steel" in p:
-        fy = float(str(p["steel"]).upper().replace("FE", ""))
+    if fy is not None:
         pr.design.fy_main = pr.design.fy_shear = fy
     s.last.clear()
     r.changed = True
@@ -359,7 +450,10 @@ def _set_materials(s: Session, p: dict, r: ActionResult):
 
 
 def _set_sbc(s: Session, p: dict, r: ActionResult):
-    s.project.design.sbc = float(p["sbc"])
+    sbc = _num(p, "sbc")
+    if sbc <= 0:
+        raise ValueError("sbc (safe bearing capacity) must be positive, in kN/m²")
+    s.project.design.sbc = sbc
     s.last.clear()
     r.changed = True
     r.messages.append(f"Safe bearing capacity set to {s.project.design.sbc:.0f} kN/m².")
@@ -368,9 +462,10 @@ def _set_sbc(s: Session, p: dict, r: ActionResult):
 def _autosize(s: Session, p: dict, r: ActionResult):
     from ..design.runner import autosize_columns
 
-    out = autosize_columns(
-        s.project, steel_pct=float(p.get("steel_pct", 1.0)), same_size=_to_bool(p.get("same_size", True))
-    )
+    pct = _num(p, "steel_pct", 1.0)
+    if not 0 < pct <= 6:
+        raise ValueError("steel_pct must be above 0 and at most 6 % (IS 456 cl 26.5.3.1)")
+    out = autosize_columns(s.project, steel_pct=pct, same_size=_to_bool(p.get("same_size", True)))
     s.last.clear()
     r.changed = True
     big = sorted(out.items(), key=lambda kv: -max(kv[1]))[:3]
@@ -458,9 +553,22 @@ def _export(s: Session, p: dict, r: ActionResult):
     ctx = exports.ExportContext(
         s.project, s.out_dir, s.watermark, params, ensure_frame, ensure_design, lambda: s.last.get("plan_results", {})
     )
-    out = exports.run(fmt, ctx, p.get("path"))
+    out = exports.run(fmt, ctx, _export_path(s, fmt, ctx, p.get("path")))
     r.files.append(out)
     r.messages.append(f"Exported {fmt.label} → {out}")
+
+
+def _export_path(s: Session, fmt: exports.ExportFormat, ctx: exports.ExportContext, path: Any) -> str | None:
+    """A relative path is relative to the session's output folder (not the process' working folder,
+    which for the installed GUI is the read-only program folder); a folder gets the default file name."""
+    if path in (None, ""):
+        return None
+    path = os.path.expanduser(str(path))
+    if not os.path.isabs(path):
+        path = os.path.join(s.out_dir, path)
+    if os.path.isdir(path) or path.endswith(("/", "\\")):
+        path = os.path.join(path, os.path.basename(fmt.default_path(ctx)))
+    return path
 
 
 # ------------------------------------------------------------ v1.1 handlers

@@ -243,6 +243,14 @@ def install_license(text: str) -> LicenseState:
         raise ValueError("Invalid licence signature")
     if not license_machine_ok(lic):
         raise ValueError(f"This licence is registered to another computer (this computer's code is {machine_code()})")
+    exp = lic.get("expires")
+    if exp:  # never replace the installed licence with one that current_state() would ignore
+        try:
+            exp_date = _dt.date.fromisoformat(exp)
+        except (TypeError, ValueError):
+            raise ValueError(f"This licence has an unreadable expiry date {exp!r} – please contact support") from None
+        if exp_date < _dt.date.today():
+            raise ValueError(f"This licence expired on {exp_date.isoformat()}")
     with open(_license_path(), "w", encoding="utf-8") as f:
         json.dump(lic, f, indent=1)
     return current_state()

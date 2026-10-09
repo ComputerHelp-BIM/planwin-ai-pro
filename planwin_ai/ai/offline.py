@@ -18,6 +18,11 @@ from ..io.cities import city_names
 from .templates import TEMPLATES
 
 _NUM = r"(\d+(?:\.\d+)?)"
+#: "floor height 3.2", "… of / = / is / to / : 3.2"
+_IS = r"\s*(?:(?:of|=|is|to|:)\s*)?"
+#: optional length unit after a number (its own group)
+_UNIT = r"\s*(mm|cm|m)?\b"
+_NEG = r"\b(?:no|without|remove|delete|drop)\s+(?:the\s+|a\s+|any\s+)?"
 
 _OCC = [
     (r"\b(residential|apartment|flat|house|bungalow|villa|hostel)\b", "residential"),
@@ -48,6 +53,18 @@ HELP = (
 
 def _bays(count: int, span: float) -> list[float]:
     return [round(span, 3)] * max(count, 1)
+
+
+def _len(value: str, unit: str | None, mm_above: float) -> float:
+    """A length in metres: explicit mm/cm/m, else values above ``mm_above`` are millimetres."""
+    v = float(value)
+    if unit == "mm":
+        return v / 1000.0
+    if unit == "cm":
+        return v / 100.0
+    if unit == "m":
+        return v
+    return v / 1000.0 if v > mm_above else v
 
 
 _SNUM = r"(-?\d+(?:\.\d+)?)"
@@ -260,23 +277,35 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
                     return f"Loading template {tpl.title}.", [{"action": "load_template", "key": tpl.key}]
 
     spec: dict = {}
-    m = re.search(r"\bg\s*\+\s*(\d+)", t)
+    m = re.search(r"\b(?:g|ground)\s*(?:\+|plus)\s*(\d+)", t)
     if m:
         spec["upper_floors"] = int(m.group(1))
     m = re.search(r"(\d+)\s*(?:storey|storeys|story|stories|floor building|floors? building)", t)
     if m and "upper_floors" not in spec:
         spec["upper_floors"] = max(int(m.group(1)) - 1, 0)
-    m = re.search(r"(\d+)\s*(?:x|by)\s*(\d+)\s*bays?", t)
+    m = re.search(r"(\d+)\s*(?:bays?\s*)?(?:x|by)\s*(\d+)\s*bays?", t)
     nx = ny = None
     if m:
         nx, ny = int(m.group(1)), int(m.group(2))
-    m = re.search(r"bays?\s*(?:of|@|=)?\s*" + _NUM + r"\s*m?\s*(?:x|by)\s*" + _NUM, t)
-    m1 = re.search(r"(?:bays?|spans?|grid)\s*(?:of|@|=)?\s*" + _NUM + r"\s*m\b", t)
     sx = sy = None
-    if m:
-        sx, sy = float(m.group(1)), float(m.group(2))
+    # "3 bays of 5 m by 2 bays of 4 m"
+    each = r"(\d+)\s*bays?\s*(?:of|@)\s*" + _NUM + _UNIT
+    mb = re.search(each + r"\s*(?:x|by|and)\s*" + each, t)
+    # "bays of 5 x 4 m" (the second number is not a bay count: "… by 2 bays")
+    not_count = r"(?![\d.])(?!\s*bays?\b)"
+    m = re.search(r"bays?\s*(?:of|@|=)?\s*" + _NUM + _UNIT + r"\s*(?:x|by)\s*" + _NUM + not_count + _UNIT, t)
+    m1 = re.search(r"(?:bays?|spans?|grid)\s*(?:of|@|=)?\s*" + _NUM + r"\s*(mm|cm|m)\b", t)
+    m2 = re.search(r"(?<![\d.])" + _NUM + r"\s*(mm|cm|m)\s*(?:wide\s+)?(?:bays?|spans?)\b", t)  # "5 m bays"
+    if mb:
+        nx, ny = int(mb.group(1)), int(mb.group(4))
+        sx, sy = _len(mb.group(2), mb.group(3), 30), _len(mb.group(5), mb.group(6), 30)
+    elif m:
+        unit = m.group(4) or m.group(2)
+        sx, sy = _len(m.group(1), m.group(2) or unit, 30), _len(m.group(3), unit, 30)
     elif m1:
-        sx = sy = float(m1.group(1))
+        sx = sy = _len(m1.group(1), m1.group(2), 30)
+    elif m2:
+        sx = sy = _len(m2.group(1), m2.group(2), 30)
     m = re.search(r"(?:plot|building|footprint|size)\s*(?:of|is|=)?\s*" + _NUM + r"\s*m?\s*(?:x|by)\s*" + _NUM, t)
     if m and not (nx or sx):
         L, B = float(m.group(1)), float(m.group(2))
@@ -290,22 +319,27 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
         if re.search(pat, t):
             spec["occupancy"] = occ
             break
-    m = re.search(r"(?:typical\s*)?floor\s*height\s*(?:of|=|is)?\s*" + _NUM, t) or re.search(
-        r"storey\s*height\s*" + _NUM, t
-    )
+    mg = re.search(r"ground\s*(?:floor|storey|story)?\s*height" + _IS + _NUM + _UNIT, t)
+    if mg:
+        spec["ground_height"] = _len(mg.group(1), mg.group(2), 20)
+    tf = t[: mg.start()] + " " + t[mg.end() :] if mg else t  # "ground floor height" is not the typical one
+    m = re.search(r"(?:typical\s*)?(?:floor|storey|story)\s*height" + _IS + _NUM + _UNIT, tf)
     if m:
-        spec["floor_height"] = float(m.group(1))
-    m = re.search(r"ground\s*(?:floor|storey)?\s*height\s*(?:of|=|is)?\s*" + _NUM, t)
+        spec["floor_height"] = _len(m.group(1), m.group(2), 20)
+    m = re.search(r"(?:foundation|footing)\s*depth" + _IS + _NUM + _UNIT, t)
     if m:
-        spec["ground_height"] = float(m.group(1))
-    m = re.search(r"(?:foundation|footing)\s*depth\s*(?:of|=|is)?\s*" + _NUM, t)
-    if m:
-        spec["foundation_depth"] = float(m.group(1))
-    if re.search(r"\bbalcon(y|ies)\b", t):
-        m = re.search(_NUM + r"\s*m\s*(?:wide\s*)?balcon", t) or re.search(r"balcon\w*\s*(?:of)?\s*" + _NUM, t)
+        spec["foundation_depth"] = _len(m.group(1), m.group(2), 20)
+    if re.search(_NEG + r"balcon(?:y|ies)\b", t):
+        spec["balcony"] = None
+    elif re.search(r"\bbalcon(y|ies)\b", t):
+        m = re.search(_NUM + r"\s*(mm|cm|m)\s*(?:wide\s*)?balcon", t) or re.search(
+            r"balcon\w*\s*(?:of)?\s*" + _NUM + _UNIT, t
+        )
         side = "north" if "north" in t else "south"
-        spec["balcony"] = {"side": side, "depth": float(m.group(1)) if m else 1.2}
-    if re.search(r"\b(mumty|mumti|stair ?cabin|head ?room)\b", t):
+        spec["balcony"] = {"side": side, "depth": _len(m.group(1), m.group(2), 5) if m else 1.2}
+    if re.search(_NEG + r"(mumty|mumti|stair ?cabin|head ?room)\b", t):
+        spec["mumty"] = False
+    elif re.search(r"\b(mumty|mumti|stair ?cabin|head ?room)\b", t):
         spec["mumty"] = True
     m = re.search(r"\bm\s?(15|20|25|30|35|40|45|50)\b", t)
     if m and spec:
@@ -320,7 +354,7 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
 
     building_words = re.search(
         r"\b(building|bungalow|block|tower|apartment|g\s*\+|storey|bays?|create|make|generate|design a)\b", t
-    )
+    ) or re.search(r"\b(?:g|ground)\s*(?:\+|plus)\s*\d", t)
     structural_spec = {
         k
         for k in spec
@@ -337,7 +371,9 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
             "occupancy",
         )
     }
-    modify = re.search(r"\b(make it|change|increase|decrease|modify|add|set|update)\b", t) and has_model
+    modify = (
+        re.search(r"\b(make it|change|increase|decrease|modify|add|set|update|remove|delete|drop)\b", t) and has_model
+    )
     if structural_spec and (building_words or modify):
         if modify and not re.search(r"\b(create|new|generate)\b", t):
             actions.append({"action": "modify_building", **spec})
@@ -349,16 +385,15 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
     wall, stair, tank = _wall(t), _staircase(t), _water_tank(t)
     # loads
     ld = {}
-    m = re.search(r"live\s*load\s*(?:of|=|is)?\s*" + _NUM, t)
+    m = re.search(r"live\s*load" + _IS + _NUM, t)
     if m:
         ld["live"] = float(m.group(1))
-    m = re.search(r"floor\s*finish\w*\s*(?:of|=|is)?\s*" + _NUM, t)
+    m = re.search(r"floor\s*finish\w*" + _IS + _NUM, t)
     if m:
         ld["floor_finish"] = float(m.group(1))
-    m = re.search(r"slab\s*(?:thickness|thk|depth)\s*(?:of|=|is)?\s*" + _NUM, t)
+    m = re.search(r"slab\s*(?:thickness|thk|depth)" + _IS + _NUM + _UNIT, t)
     if m:
-        v = float(m.group(1))
-        ld["thickness"] = v / 1000 if v > 2 else v
+        ld["thickness"] = _len(m.group(1), m.group(2), 2)
     if stair:  # "staircase … live load 5" is the stair's own load, not the slabs'
         for k, sk in (("live", "live"), ("floor_finish", "finish")):
             if k in ld:
@@ -388,7 +423,7 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
     if sz:
         actions.append({"action": "set_seismic", **sz})
     wd = {}
-    m = re.search(r"(?:wind\s*speed|vb)\s*(?:of|=|is)?\s*" + _NUM, t)
+    m = re.search(r"(?:wind\s*speed|vb)" + _IS + _NUM, t)
     if m:
         wd["basic_speed"] = float(m.group(1))
     m = re.search(r"terrain\s*(?:category)?\s*(\d)", t)
@@ -407,7 +442,7 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
         mat["steel"] = m.group(1)
     if mat:
         actions.append({"action": "set_materials", **mat})
-    m = re.search(r"\bsbc\s*(?:of|=|is)?\s*" + _NUM, t)
+    m = re.search(r"\bsbc" + _IS + _NUM, t)
     if m:
         actions.append({"action": "set_sbc", "sbc": float(m.group(1))})
     actions += [a for a in (wall, stair, tank) if a]
