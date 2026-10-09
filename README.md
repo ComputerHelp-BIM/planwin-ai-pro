@@ -153,6 +153,9 @@ PlanWinAIPro.exe cli boq model.pwai --by floor
 PlanWinAIPro.exe cli import-plw OLD.plw --out converted.pwai
 ```
 
+The exe is a windowed program: it prints into the console it was started from. In `cmd`, use
+`start /wait PlanWinAIPro.exe cli …` so the prompt waits for the command to finish.
+
 ## Build from source
 
 ```bash
