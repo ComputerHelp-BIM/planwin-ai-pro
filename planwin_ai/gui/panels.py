@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
@@ -22,16 +21,19 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QScrollArea,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from .. import units
 from ..core.model import Beam, Column, Level, PartLoad, Plan, PointLoad, Slab, Wall
+from . import theme
+from .widgets import CollapsibleSection, FlowLayout, ScrollPanel
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
@@ -49,73 +51,224 @@ def _spin(v: float, lo=-1e6, hi=1e6, dec=3, step=0.05) -> QDoubleSpinBox:
     return s
 
 
+def _settings(main) -> Any:
+    """The main window's QSettings (remembers which panel sections are open); fakes may have none."""
+    return getattr(main, "settings", None)
+
+
+def _tool_button(text: str, tip: str, fn, icon: str | None = None) -> QToolButton:
+    b = QToolButton()
+    b.setText(text)
+    b.setToolTip(tip)
+    b.setAutoRaise(False)
+    if icon:
+        b.setIcon(theme.icon(icon, theme.ACCENT, 16))
+        b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+    else:
+        b.setToolButtonStyle(Qt.ToolButtonTextOnly)
+    b.clicked.connect(fn)
+    return b
+
+
+def _button_row(*buttons: QWidget) -> FlowLayout:
+    """Buttons left to right, wrapping onto a second line in a narrow dock."""
+    row = FlowLayout(spacing=4)
+    for b in buttons:
+        row.addWidget(b)
+    return row
+
+
+def _form() -> QFormLayout:
+    f = QFormLayout()
+    f.setContentsMargins(0, 0, 0, 0)
+    f.setRowWrapPolicy(QFormLayout.DontWrapRows)
+    f.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+    f.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    f.setHorizontalSpacing(8)
+    f.setVerticalSpacing(5)
+    return f
+
+
+def _add_row(form: QFormLayout, text: str, field: QWidget, tip: str) -> QLabel:
+    """Form row with a word-wrapping label; label and field share the one-line tooltip."""
+    lab = QLabel(text)
+    lab.setWordWrap(True)
+    lab.setBuddy(field)
+    lab.setToolTip(tip)
+    if not field.toolTip():
+        field.setToolTip(tip)
+    form.addRow(lab, field)
+    return lab
+
+
+def _clear_layout(lay) -> None:
+    while lay.count():
+        it = lay.takeAt(0)
+        w = it.widget()
+        if w is not None:
+            w.hide()
+            w.deleteLater()
+        elif it.layout() is not None:
+            _clear_layout(it.layout())
+
+
 # =========================================================================== project
+class _PlanList(QListWidget):
+    """Plan list that prefers its minimum height (about five rows); a growing section gives it any spare
+    height, and a short dock scrolls the panel instead of squeezing the levels below it out of view."""
+
+    def sizeHint(self) -> QSize:  # Qt API
+        return QSize(super().sizeHint().width(), self.minimumHeight())
+
+
+LEVEL_HEADERS = ("Level", "Plan", "Ht (m)", "Grade", "LL red%")
+LEVEL_TIPS = (
+    "Level name",
+    "Plan (PlanWin floor) used at this level",
+    "Storey height below this level (m)",
+    "Concrete grade of the columns at this level",
+    "LL red%: live-load reduction for columns per IS 875-2 cl 3.2.1",
+)
+
+
 class ProjectPanel(QWidget):
     planChanged = Signal(str)
 
     def __init__(self, main: MainWindow):
         super().__init__()
         self.main = main
+        st = _settings(main)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(6, 6, 6, 6)
-        g1 = QGroupBox("Plans (PlanWin)")
-        v1 = QVBoxLayout(g1)
-        self.plans = QListWidget()
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.scroll = ScrollPanel()
+        lay.addWidget(self.scroll)
+
+        # ---- plans
+        self.plans_section = self.scroll.add_section("Plans (PlanWin)", "project_plans", True, st, grow=True)
+        self.plans_section.header.setToolTip("Floor plans of the project (PlanWin)")
+        v1 = self.plans_section.body_layout
+        self.plans = _PlanList()
+        self.plans.setToolTip("Floor plans – click one to edit it on the canvas")
+        self.plans.setMinimumHeight(self._list_height(5))
+        self.plans.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.plans.currentTextChanged.connect(self._plan_selected)
-        v1.addWidget(self.plans)
-        row = QHBoxLayout()
-        for txt, fn, tip in (
-            ("New", self._new_plan, "Create an empty plan"),
-            ("Copy", self._copy_plan, "Save current plan under a new name (PlanWin Save As)"),
-            ("Rename", self._rename_plan, "Rename plan (levels are updated)"),
-            ("Delete", self._delete_plan, "Delete plan"),
-        ):
-            b = QPushButton(txt)
-            b.setToolTip(tip)
-            b.clicked.connect(fn)
-            row.addWidget(b)
-        v1.addLayout(row)
-        form = QFormLayout()
+        v1.addWidget(self.plans, 1)
+        v1.addLayout(
+            _button_row(
+                _tool_button("New", "Create a new empty plan", self._new_plan, "new"),
+                _tool_button(
+                    "Copy", "Copy the current plan under a new name (PlanWin Save As)", self._copy_plan, "copyfloor"
+                ),
+                _tool_button("Rename", "Rename the current plan (levels using it follow)", self._rename_plan, "design"),
+                _tool_button(
+                    "Delete", "Delete the current plan and the levels that use it", self._delete_plan, "delete"
+                ),
+            )
+        )
+        form = _form()
         self.ftype = QComboBox()
         self.ftype.addItems(["typical", "ground", "roof"])
+        self.ftype.setToolTip("Floor type of the current plan (roof beams carry no storey walls)")
         self.ftype.activated.connect(self._plan_props)
         self.fha = _spin(3.0, 0, 50, 3, 0.1)
+        self.fha.setToolTip("Storey height above this plan, used for wall loads on its beams (m)")
         self.fha.editingFinished.connect(self._plan_props)
-        form.addRow("Floor type", self.ftype)
-        form.addRow("Floor height above (m)", self.fha)
+        _add_row(form, "Floor type", self.ftype, self.ftype.toolTip())
+        _add_row(form, "Floor height (m)", self.fha, self.fha.toolTip())
         v1.addLayout(form)
-        lay.addWidget(g1, 2)
 
-        g2 = QGroupBox("Levels (FrameWin) – bottom to top")
-        v2 = QVBoxLayout(g2)
-        self.levels = QTableWidget(0, 5)
-        self.levels.setHorizontalHeaderLabels(["Level", "Plan", "Ht (m)", "Grade", "LL red%"])
+        # ---- levels
+        self.levels_section = self.scroll.add_section("Levels (FrameWin)", "project_levels", True, st, grow=True)
+        self.levels_section.header.setToolTip("Storeys of the 3-D frame, listed bottom to top")
+        v2 = self.levels_section.body_layout
+        hint = QLabel("Bottom to top")
+        hint.setObjectName("PanelHint")
+        hint.setToolTip("The first row is the lowest level")
+        v2.addWidget(hint)
+        self.levels = QTableWidget(0, len(LEVEL_HEADERS))
+        self.levels.setHorizontalHeaderLabels(list(LEVEL_HEADERS))
+        for c, tip in enumerate(LEVEL_TIPS):
+            self.levels.horizontalHeaderItem(c).setToolTip(tip)
         self.levels.setToolTip(
             "Ht = storey height below this level. LL red% = IS 875-2 live load reduction for column sizing."
         )
-        self.levels.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        hh = self.levels.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.Interactive)
+        hh.setStretchLastSection(True)
+        hh.setMinimumSectionSize(44)
         self.levels.verticalHeader().setVisible(False)
+        self.levels.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.levels.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.levels.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.levels.setSelectionBehavior(QAbstractItemView.SelectItems)
+        self.levels.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.levels.itemChanged.connect(self._level_item_changed)
-        v2.addWidget(self.levels)
-        row2 = QHBoxLayout()
-        for txt, fn in (
-            ("+ Level", self._add_level),
-            ("− Level", self._del_level),
-            ("▲", lambda: self._move(-1)),
-            ("▼", lambda: self._move(1)),
-            ("Fill ↑", self._fill_up),
-        ):
-            b = QPushButton(txt)
-            b.clicked.connect(fn)
-            row2.addWidget(b)
-        v2.addLayout(row2)
+        self._row_h = self._level_row_height()
+        self.levels.verticalHeader().setDefaultSectionSize(self._row_h)
+        self.levels.setMinimumHeight(self._table_height(6))
+        v2.addWidget(self.levels, 1)
+        v2.addLayout(
+            _button_row(
+                _tool_button("+ Level", "Insert a level above the selected row", self._add_level),
+                _tool_button("− Level", "Delete the selected level", self._del_level),
+                _tool_button("▲", "Move the selected level one row up (one storey lower)", lambda: self._move(-1)),
+                _tool_button("▼", "Move the selected level one row down (one storey higher)", lambda: self._move(1)),
+                _tool_button("Fill ↑", "Copy the selected cell to every level above it", self._fill_up),
+            )
+        )
         self.height_lbl = QLabel()
+        self.height_lbl.setToolTip("Total building height above the base and number of levels")
         v2.addWidget(self.height_lbl)
+
+        # ---- stairs and tanks
+        self.extras_section = self.scroll.add_section("Stairs & tanks", "project_extras", True, st)
+        self.extras_section.header.setToolTip("Staircases and water tanks added with the wizards")
         self.extras_lbl = QLabel()  # staircases and water tanks from the wizards
         self.extras_lbl.setWordWrap(True)
-        v2.addWidget(self.extras_lbl)
-        lay.addWidget(g2, 3)
+        self.extras_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.extras_lbl.setToolTip("Staircase loads go to their support beams, tank loads to the columns")
+        self.extras_empty = QLabel("None yet – use the Staircase and Water tank wizards")
+        self.extras_empty.setObjectName("PanelHint")
+        self.extras_empty.setWordWrap(True)
+        self.extras_empty.setToolTip("Staircases and water tanks added with the wizards appear here")
+        self.extras_section.body_layout.addWidget(self.extras_lbl)
+        self.extras_section.body_layout.addWidget(self.extras_empty)
         self._loading = False
+
+    # ----------------------------------------------------------- sizing
+    def _list_height(self, rows: int) -> int:
+        return rows * (self.plans.fontMetrics().height() + 8) + 8
+
+    def _level_row_height(self, combos=()) -> int:
+        """Row height that fits the plan / grade combo boxes (as styled by the current style sheet)."""
+        if not combos:
+            probe = QComboBox()
+            probe.addItem("M25")
+            combos = [probe]
+        hint = 0
+        for cb in combos:
+            cb.ensurePolished()
+            hint = max(hint, cb.sizeHint().height())
+        return max(hint + 2, self.fontMetrics().height() + 10)
+
+    def _table_height(self, rows: int) -> int:
+        t = self.levels
+        header = t.horizontalHeader().sizeHint().height()
+        scrollbar = t.horizontalScrollBar().sizeHint().height()
+        return header + rows * self._row_h + scrollbar + 2 * t.frameWidth() + 2
+
+    def _fit_level_columns(self) -> None:
+        """Columns wide enough for their contents; the plan column fits the longest plan name."""
+        t = self.levels
+        combos = [t.cellWidget(r, c) for r in range(t.rowCount()) for c in (1, 3)]
+        self._row_h = self._level_row_height(combos)
+        t.verticalHeader().setDefaultSectionSize(self._row_h)
+        t.setMinimumHeight(self._table_height(6))
+        t.resizeColumnsToContents()
+        for c in (1, 3):
+            widest = max((t.cellWidget(r, c).sizeHint().width() for r in range(t.rowCount())), default=0)
+            header = t.horizontalHeader().sectionSizeFromContents(c).width()
+            t.setColumnWidth(c, max(widest + 4, header, t.columnWidth(c)))
 
     # ----------------------------------------------------------- refresh
     def refresh(self):
@@ -134,6 +287,7 @@ class ProjectPanel(QWidget):
             if p.name == cur:
                 self.plans.setCurrentItem(it)
         self.plans.blockSignals(False)
+        self.plans_section.set_badge(str(len(pr.plans)))
         plan = self.main.current_plan()
         if plan:
             self.ftype.setCurrentText(plan.floor_type)
@@ -144,20 +298,32 @@ class ProjectPanel(QWidget):
         self.levels.setRowCount(len(pr.levels))
         names = [p.name for p in pr.plans]
         for r, lv in enumerate(pr.levels):
-            self.levels.setItem(r, 0, QTableWidgetItem(lv.name))
+            it = QTableWidgetItem(lv.name)
+            it.setToolTip(LEVEL_TIPS[0])
+            self.levels.setItem(r, 0, it)
             cb = QComboBox()
+            cb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
             cb.addItems(names)
             cb.setCurrentText(lv.plan)
+            cb.setToolTip(LEVEL_TIPS[1])
             cb.currentTextChanged.connect(lambda t, row=r: self._level_plan(row, t))
             self.levels.setCellWidget(r, 1, cb)
-            self.levels.setItem(r, 2, QTableWidgetItem(f"{lv.height:g}"))
+            it = QTableWidgetItem(f"{lv.height:g}")
+            it.setToolTip(LEVEL_TIPS[2])
+            self.levels.setItem(r, 2, it)
             gcb = QComboBox()
+            gcb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
             gcb.addItems(GRADES)
             gcb.setCurrentText(lv.grade)
+            gcb.setToolTip(LEVEL_TIPS[3])
             gcb.currentTextChanged.connect(lambda t, row=r: self._level_grade(row, t))
             self.levels.setCellWidget(r, 3, gcb)
-            self.levels.setItem(r, 4, QTableWidgetItem(f"{lv.live_reduction:g}"))
+            it = QTableWidgetItem(f"{lv.live_reduction:g}")
+            it.setToolTip(LEVEL_TIPS[4])
+            self.levels.setItem(r, 4, it)
         self._loading = False
+        self._fit_level_columns()
+        self.levels_section.set_badge(str(len(pr.levels)))
         self.height_lbl.setText(f"Total height {pr.elevations()[-1]:.2f} m · {len(pr.levels)} levels")
         extras = []
         if pr.stairs:
@@ -165,8 +331,10 @@ class ProjectPanel(QWidget):
         if pr.water_tanks:
             tanks = (f"{t.get('name')} ({t.get('capacity_l', 0):g} L)" for t in pr.water_tanks)
             extras.append("Tanks: " + ", ".join(tanks))
-        self.extras_lbl.setText(" · ".join(extras))
+        self.extras_lbl.setText("\n".join(extras))
         self.extras_lbl.setVisible(bool(extras))
+        self.extras_empty.setVisible(not extras)
+        self.extras_section.set_badge(str(len(pr.stairs) + len(pr.water_tanks)))
 
     # ----------------------------------------------------------- plans
     def _plan_selected(self, _t):
@@ -397,60 +565,227 @@ FIELD_QTY = {
 }
 _ENGINE, _SHOWN = Qt.UserRole, Qt.UserRole + 1
 
+#: properties sections in display order: (title, settings key)
+PROP_SECTIONS = (
+    ("General", "props_general"),
+    ("Geometry", "props_geometry"),
+    ("Loads", "props_loads"),
+    ("Point loads", "props_point_loads"),
+    ("Part loads", "props_part_loads"),
+    ("Info", "props_info"),
+)
+#: section of each field (anything not listed is "General")
+FIELD_SECTION = {
+    **dict.fromkeys(("x", "y", "x1", "y1", "x2", "y2", "angle", "length"), "Geometry"),
+    **dict.fromkeys(
+        (
+            "live",
+            "floor_finish",
+            "other",
+            "density",
+            "distribution",
+            "cant_edge",
+            "wall_thk",
+            "wall_height",
+            "wall_density",
+            "plaster_thk",
+            "parapet",
+            "include_self",
+            "include_wall",
+            "include_plaster",
+        ),
+        "Loads",
+    ),
+}
+#: one-line tooltip per field; "<Kind>.<field>" overrides the plain field name ("{kind}" = slab, beam …)
+FIELD_TIPS = {
+    "mark": "{Kind} mark shown on the plan and in the reports",
+    "grade": "Concrete grade (IS 456), e.g. M25",
+    "Slab.thickness": "Slab thickness (m)",
+    "Wall.thickness": "Shear wall thickness (m)",
+    "live": "Live load on the slab (kN/m², IS 875-2)",
+    "floor_finish": "Floor finish load on the slab (kN/m²)",
+    "other": "Other superimposed dead load, e.g. partitions (kN/m²)",
+    "density": "Unit weight of concrete for the slab self weight (kN/m³)",
+    "distribution": "How the slab load goes to its beams: auto, two-way, one-way, cantilever …",
+    "cant_edge": "Edge number fixed to the support of a cantilever slab (blank = auto)",
+    "room": "Room name or use, for reference only",
+    "x": "X coordinate of the column centre (m)",
+    "y": "Y coordinate of the column centre (m)",
+    "Column.b": "Column breadth b, the shorter side (m)",
+    "Column.d": "Column depth d, the longer side (m)",
+    "angle": "Rotation of the column on plan (degrees)",
+    "Beam.b": "Beam width (m)",
+    "Beam.d": "Overall beam depth (m)",
+    "role": "Primary beams carry secondary beams; auto decides from the supports",
+    "cantilever": "Beam is a cantilever (fixed at one end only)",
+    "external": "Beam on the outer edge of the building",
+    "wall_thk": "Thickness of the masonry wall on the beam (m)",
+    "wall_height": "Height of the wall on the beam (m); blank = storey height minus beam depth",
+    "wall_density": "Unit weight of the wall masonry (kN/m³)",
+    "plaster_thk": "Total plaster thickness on both wall faces (m)",
+    "parapet": "Parapet height on a roof beam (m); blank = none",
+    "include_self": "Add the beam self weight to its load",
+    "include_wall": "Add the wall load on the beam",
+    "include_plaster": "Add the plaster load on the wall",
+    "x1": "Start point X coordinate (m)",
+    "y1": "Start point Y coordinate (m)",
+    "x2": "End point X coordinate (m)",
+    "y2": "End point Y coordinate (m)",
+    "length": "Wall length on plan (m, read only)",
+}
+POINT_LOAD_TIPS = (
+    "Distance of the load from the beam start (m)",
+    "Dead load (kN)",
+    "Live load (kN)",
+    "Description",
+)
+PART_LOAD_TIPS = (
+    "Start of the part load from the beam start (m)",
+    "Loaded length (m)",
+    "Intensity at the start (kN/m)",
+    "Intensity at the end (kN/m)",
+    "Load case: D = dead, L = live",
+    "Description (wizard tags such as 'Stair ST1' are kept)",
+)
+EMPTY_HINT = (
+    "Select a slab, beam, column or wall on the plan. Multi-select (Shift / window) to set values "
+    "for many elements at once – like PlanWin 'Set Value'."
+)
+
+
+def field_tip(kind: str, name: str) -> str:
+    """One-line tooltip for property ``name`` of a ``kind`` ("Slab", "Beam" …) in the display units."""
+    tip = FIELD_TIPS.get(f"{kind}.{name}") or FIELD_TIPS.get(name) or name.replace("_", " ").capitalize()
+    return units.current.text(tip.format(Kind=kind, kind=kind.lower()))
+
+
+class _SectionForms:
+    """The per-section form layouts seen as the single form the panel used to have."""
+
+    def __init__(self, forms: dict[str, QFormLayout]):
+        self._forms = forms
+
+    def labelForField(self, field: QWidget):  # mirrors QFormLayout
+        for f in self._forms.values():
+            lab = f.labelForField(field)
+            if lab is not None:
+                return lab
+        return None
+
+    def rowCount(self) -> int:  # mirrors QFormLayout
+        return sum(f.rowCount() for f in self._forms.values())
+
 
 class PropertiesPanel(QWidget):
     def __init__(self, main: MainWindow):
         super().__init__()
         self.main = main
+        st = _settings(main)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(6, 6, 6, 6)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
         self.title = QLabel("Nothing selected")
+        self.title.setObjectName("PanelTitle")
         self.title.setStyleSheet("font-weight:600; font-size:11pt")
+        self.title.setWordWrap(True)
+        self.title.setContentsMargins(10, 8, 10, 4)
         outer.addWidget(self.title)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        self.inner = QWidget()
-        self.form = QFormLayout(self.inner)
-        scroll.setWidget(self.inner)
-        outer.addWidget(scroll, 1)
+
+        self.scroll = ScrollPanel()
+        self.inner = self.scroll.inner
+        self.empty_lbl = QLabel(EMPTY_HINT)
+        self.empty_lbl.setObjectName("PanelHint")
+        self.empty_lbl.setWordWrap(True)
+        self.empty_lbl.setAlignment(Qt.AlignCenter)
+        self.empty_lbl.setContentsMargins(16, 24, 16, 24)
+        self.scroll.add_widget(self.empty_lbl)
+        self.sections: dict[str, CollapsibleSection] = {}
+        self._forms: dict[str, QFormLayout] = {}
+        for name, key in PROP_SECTIONS:
+            sec = self.scroll.add_section(name, key, True, st)
+            self.sections[name] = sec
+            if name in ("General", "Geometry", "Loads"):
+                f = _form()
+                sec.body_layout.addLayout(f)
+                self._forms[name] = f
+            sec.hide()
+        self.sections["General"].header.setToolTip("Mark, grade and size")
+        self.sections["Geometry"].header.setToolTip("Position on the plan (m)")
+        self.sections["Loads"].header.setToolTip("Loads carried by the member")
+        self.sections["Point loads"].header.setToolTip("Concentrated loads on the beam (up to 20)")
+        self.sections["Part loads"].header.setToolTip("Wedge / trapezoidal part loads on the beam")
+        self.sections["Info"].header.setToolTip("Computed values for the selection")
+        self.form = _SectionForms(self._forms)
         self.info = QLabel()
         self.info.setWordWrap(True)
         self.info.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        outer.addWidget(self.info)
+        self.info.setToolTip("Computed from the current model (read only)")
+        self.sections["Info"].body_layout.addWidget(self.info)
+        outer.addWidget(self.scroll, 1)
+
+        bar = QWidget()
+        bar.setObjectName("PanelButtons")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(8, 6, 8, 8)
+        row.addStretch(1)
+        self.revert_btn = QPushButton("Revert")
+        self.revert_btn.setToolTip("Discard the edits and show the stored values again")
+        self.revert_btn.clicked.connect(self._revert)
+        row.addWidget(self.revert_btn)
         self.apply_btn = QPushButton("Apply")
         self.apply_btn.setObjectName("primary")
+        self.apply_btn.setToolTip("Apply the changed fields to the selection (Enter in a field does the same)")
         self.apply_btn.clicked.connect(self._apply)
-        outer.addWidget(self.apply_btn)
+        row.addWidget(self.apply_btn)
+        outer.addWidget(bar)
         self.widgets: dict[str, tuple[Any, str]] = {}
         self.initial: dict[str, Any] = {}  # value of each field (display units) when the selection was shown
         self.objs: list = []
         self.loads_tbl: QTableWidget | None = None
         self.wedge_tbl: QTableWidget | None = None
-        self.apply_btn.setEnabled(False)
+        self._set_editable(False)
+        self._show_message("Nothing selected", EMPTY_HINT)
+
+    # ----------------------------------------------------------- states
+    def _set_editable(self, on: bool) -> None:
+        self.apply_btn.setEnabled(on)
+        self.revert_btn.setEnabled(on)
+
+    def _show_message(self, title: str, text: str) -> None:
+        """Empty / not editable state: a centred hint instead of the sections."""
+        self.title.setText(title)
+        self.info.setText(text)
+        self.empty_lbl.setText(text)
+        self.empty_lbl.show()
+        for sec in self.sections.values():
+            sec.hide()
+        self._set_editable(False)
+
+    def _clear(self) -> None:
+        for f in self._forms.values():
+            while f.rowCount():
+                f.removeRow(0)
+        for name in ("Point loads", "Part loads"):
+            _clear_layout(self.sections[name].body_layout)
+        self.widgets.clear()
+        self.initial.clear()
+        self.loads_tbl = self.wedge_tbl = None
 
     def show_selection(self, ids: list[str]):
         plan = self.main.current_plan()
         u = units.current
-        while self.form.rowCount():
-            self.form.removeRow(0)
-        self.widgets.clear()
-        self.initial.clear()
-        self.loads_tbl = self.wedge_tbl = None
+        self._clear()
         self.objs = [plan.find(i) for i in ids] if plan else []
         self.objs = [o for o in self.objs if o is not None]
         if not self.objs:
-            self.title.setText("Nothing selected")
-            self.info.setText(
-                "Select a slab, beam, column or wall on the plan. Multi-select (Shift / window) to set values "
-                "for many elements at once – like PlanWin 'Set Value'."
-            )
-            self.apply_btn.setEnabled(False)
+            self._show_message("Nothing selected", EMPTY_HINT)
             return
         kinds = {type(o) for o in self.objs}
         if len(kinds) > 1:
-            self.title.setText(f"{len(self.objs)} mixed objects selected")
-            self.info.setText("Select objects of one type to edit them together.")
-            self.apply_btn.setEnabled(False)
+            self._show_message(
+                f"{len(self.objs)} mixed objects selected", "Select objects of one type to edit them together."
+            )
             return
         o = self.objs[0]
         spec = {Slab: SLAB_FIELDS, Column: COLUMN_FIELDS, Beam: BEAM_FIELDS, Wall: WALL_FIELDS}[type(o)]
@@ -466,8 +801,10 @@ class PropertiesPanel(QWidget):
                 continue
             v = getattr(o, name)
             label = u.text(label)
+            tip = field_tip(kind, name)
+            form = self._forms[FIELD_SECTION.get(name, "General")]
             if typ == "ro":
-                self.form.addRow(label, QLabel(f"{v:.3f}"))
+                _add_row(form, label, QLabel(f"{v:.3f}"), tip)
                 continue
             q = FIELD_QTY.get(name)
             if isinstance(typ, list):
@@ -485,10 +822,12 @@ class PropertiesPanel(QWidget):
                 w = _spin(u.show(v, q) if q else v, -1e5, 1e5, 4 if conv else 3, 0.05)
             else:
                 w = QLineEdit(str(v))
+            w.setToolTip(tip)
             if multi and any(getattr(x, name) != v for x in self.objs[1:]):
                 label += " *"
-                w.setToolTip("Values differ in the selection (showing the first one). Change it to set all.")
-            self.form.addRow(label, w)
+                w.setToolTip(f"{tip} – values differ in the selection (showing the first); change it to set all")
+            _add_row(form, label, w, w.toolTip())
+            self._enter_applies(w)
             self.widgets[name] = (w, typ if not isinstance(typ, list) else "choice")
             self.initial[name] = self._read(name)
         if isinstance(o, Beam) and len(self.objs) == 1:
@@ -496,28 +835,57 @@ class PropertiesPanel(QWidget):
                 [u.text(h) for h in ("Dist (m)", "Dead (kN)", "Live (kN)", "Desc")],
                 [[p.dist, p.dead, p.live, p.desc] for p in o.point_loads],
                 [None, "force", "force", None],
+                POINT_LOAD_TIPS,
             )
-            self.form.addRow(QLabel("Point loads (up to 20)"))
-            self.form.addRow(self.loads_tbl)
-            self.form.addRow(self._tbl_buttons(self.loads_tbl, [0, 0, 0, "P"]))
+            self._load_section("Point loads", self.loads_tbl, [0, 0, 0, "P"], "point load")
             self.wedge_tbl = self._table(
                 [u.text(h) for h in ("Start (m)", "Length (m)", "w1 (kN/m)", "w2 (kN/m)", "Case D/L", "Desc")],
                 [[w.start, w.length, w.w1, w.w2, w.case, w.desc] for w in o.part_loads],
                 [None, None, "line", "line", None, None],
+                PART_LOAD_TIPS,
             )
-            self.form.addRow(QLabel("Wedge / part loads"))
-            self.form.addRow(self.wedge_tbl)
-            self.form.addRow(self._tbl_buttons(self.wedge_tbl, [0, 1, 0, 0, "D", "W"]))
-        self.apply_btn.setEnabled(True)
+            self._load_section("Part loads", self.wedge_tbl, [0, 1, 0, 0, "D", "W"], "part load")
+        self.empty_lbl.hide()
+        for name, sec in self.sections.items():
+            if name in self._forms:
+                sec.setVisible(self._forms[name].rowCount() > 0)
+            elif name in ("Point loads", "Part loads"):
+                sec.setVisible(self.loads_tbl is not None)
+            else:
+                sec.show()
+        self._set_editable(True)
         self._update_info()
 
-    def _table(self, headers, rows, qtys):
+    def _enter_applies(self, w: QWidget) -> None:
+        """Enter in a text or number field applies the edits (deferred: applying rebuilds the fields)."""
+        edit = w.lineEdit() if isinstance(w, QDoubleSpinBox) else w if isinstance(w, QLineEdit) else None
+        if edit is not None:
+            edit.returnPressed.connect(lambda: QTimer.singleShot(0, self._apply))
+
+    def _revert(self) -> None:
+        self.show_selection([o.id for o in self.objs])
+
+    def _load_section(self, name: str, t: QTableWidget, default: list, what: str) -> None:
+        sec = self.sections[name]
+        sec.body_layout.addWidget(t)
+        sec.body_layout.addWidget(self._tbl_buttons(t, default, what, lambda: sec.set_badge(str(t.rowCount()))))
+        sec.set_badge(str(t.rowCount()))
+
+    def _table(self, headers, rows, qtys, tips=None):
         """Load table; kN based cells keep their engine value so an unedited cell is never re-converted."""
         u = units.current
         t = QTableWidget(len(rows), len(headers))
         t.setHorizontalHeaderLabels(headers)
-        t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        t.setMinimumHeight(110)
+        for c, tip in enumerate(tips or ()):
+            t.horizontalHeaderItem(c).setToolTip(u.text(tip))
+        t.verticalHeader().setVisible(False)
+        hh = t.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.Interactive)
+        hh.setStretchLastSection(True)
+        hh.setMinimumSectionSize(40)
+        t.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        row_h = t.verticalHeader().defaultSectionSize()
+        t.setMinimumHeight(hh.sizeHint().height() + 3 * row_h + t.horizontalScrollBar().sizeHint().height() + 4)
         for r, row in enumerate(rows):
             for c, v in enumerate(row):
                 if isinstance(v, (int, float)):
@@ -528,6 +896,7 @@ class PropertiesPanel(QWidget):
                 else:
                     it = QTableWidgetItem(str(v))
                 t.setItem(r, c, it)
+        t.resizeColumnsToContents()
         return t
 
     @staticmethod
@@ -545,23 +914,28 @@ class PropertiesPanel(QWidget):
         it = t.item(r, c)
         return (it.text().strip() if it else "") or default
 
-    def _tbl_buttons(self, t, default):
+    def _tbl_buttons(self, t, default, what: str = "row", changed=None):
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
-        a = QPushButton("+ Row")
-        d = QPushButton("− Row")
+        h.setSpacing(4)
 
         def add():
             r = t.rowCount()
             t.insertRow(r)
             for c, v in enumerate(default):
                 t.setItem(r, c, QTableWidgetItem(str(v)))
+            if changed:
+                changed()
 
-        a.clicked.connect(add)
-        d.clicked.connect(lambda: t.removeRow(t.currentRow()) if t.currentRow() >= 0 else None)
-        h.addWidget(a)
-        h.addWidget(d)
+        def remove():
+            if t.currentRow() >= 0:
+                t.removeRow(t.currentRow())
+                if changed:
+                    changed()
+
+        h.addWidget(_tool_button("+ Row", f"Add a {what} (applied with Apply)", add))
+        h.addWidget(_tool_button("− Row", f"Remove the selected {what}", remove))
         h.addStretch(1)
         return w
 
