@@ -48,6 +48,8 @@ Detailing rules (IS 456:2000, SP 34:1987)
 
 Not included: wastage, chairs/spacers, IS 13920 confining links, slab corner torsion steel
 (Annex D-1.8), nominal top steel at discontinuous slab edges and anchorage of floating columns.
+Shear walls and combined footings are not scheduled; each one is listed in the warnings
+(column bars still get their foot in a combined footing).
 
 Shape codes
 -----------
@@ -458,6 +460,9 @@ class _Builder:
     # ------------------------------------------------------------ columns
     def columns(self):
         foot = {f.mark: f for f in self.rep.footings}
+        for cf in self.rep.combined_footings:  # only the depth D is used for the column foot
+            for m in cf.marks:
+                foot.setdefault(m, cf)
         c = self.ds.column_cover * 1000
         for cd in sorted(self.rep.columns, key=lambda x: (x.level_index, _natural(x.mark))):
             mem = self.fm.members.get(cd.member_id)
@@ -498,6 +503,11 @@ class _Builder:
             else:
                 cnt = _ceil_count(H, cd.tie.spacing)
                 self._add_links("Column", cd.mark, cd.level, prefix, "Tie", cd.tie, cnt, cd.b * 1000, cd.d * 1000, c)
+        for w in self.rep.walls:
+            self.bbs.warnings.append(
+                f"Wall {w.mark} ({w.level}): shear wall bars not scheduled – see the wall design "
+                f"(vertical {w.vertical}; horizontal {w.horizontal})"
+            )
 
     # ------------------------------------------------------------ footings
     def footings(self):
@@ -521,6 +531,11 @@ class _Builder:
                 lap = lap_length(mesh.dia, fck, self.fy)
                 desc = f"Bottom bars along {name} (ends bent up)"
                 self._add("Footing", member, "Foundation", prefix, desc, mesh.dia, cnt, cut, shape, dims, len(fs), lap)
+        for cf in self.rep.combined_footings:
+            self.bbs.warnings.append(
+                f"Combined footing {' + '.join(cf.marks)}: bars not scheduled – see the design "
+                f"(bottom {cf.bottom}; top {cf.top})"
+            )
 
     # ------------------------------------------------------------ slabs
     def slabs(self):

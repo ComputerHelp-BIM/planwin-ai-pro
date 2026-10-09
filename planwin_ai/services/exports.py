@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 def safe_filename(name: str, default: str = "project") -> str:
     """File-system-safe base name (Windows forbids <>:"/\\|?*, trailing dots/spaces and device names)."""
-    out = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", str(name or "")).replace(" ", "_").strip("._ ")[:120]
+    out = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", str(name or "")).replace(" ", "_").strip("._ ")[:120].rstrip("._ ")
     if re.fullmatch(r"(?i)(con|prn|aux|nul|com\d|lpt\d)(\..*)?", out):
         out = "_" + out
     return out or default
@@ -50,13 +50,17 @@ class ExportContext:
         return self.ensure_design()
 
     def plan(self) -> Plan:
-        """The plan named in ``params['plan']`` (default: the first plan)."""
+        """The plan named in ``params['plan']`` (any case; default: the first plan)."""
         pr = self.project
-        tgt = self.params.get("plan")
-        plan = (pr.plan(tgt) if tgt else None) or (pr.plans[0] if pr.plans else None)
-        if plan is None:
+        tgt = str(self.params.get("plan") or "").strip()
+        if tgt:
+            plan = pr.plan(tgt) or next((p for p in pr.plans if p.name.lower() == tgt.lower()), None)
+            if plan is None:  # never export a different plan than the one asked for
+                raise ValueError(f"plan '{tgt}' not found – plans: {', '.join(p.name for p in pr.plans) or 'none'}")
+            return plan
+        if not pr.plans:
             raise ValueError("no plan to export")
-        return plan
+        return pr.plans[0]
 
     def default_path(self, suffix: str) -> str:
         return os.path.join(self.out_dir, safe_filename(self.project.name) + suffix)

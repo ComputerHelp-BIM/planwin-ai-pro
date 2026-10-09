@@ -136,7 +136,7 @@ def write_pdf(
         """Sub-heading kept on the same page as the start of its table."""
         story.append(KeepTogether([Paragraph(title, styles["Heading3"]), flowable]))
 
-    story.append(Paragraph(f"<b>{_esc(project.name)}</b>", styles["Title"]))
+    story.append(Paragraph(f"<b>{_esc(_plain(project.name))}</b>", styles["Title"]))
     story.append(
         Paragraph(
             f"Structural pre-processing, analysis &amp; design report – {APP_NAME} {__version__}", styles["Normal"]

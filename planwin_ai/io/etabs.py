@@ -40,6 +40,7 @@ def _f(v: float) -> str:
 
 def write_etabs(fm: FrameModel, path: str, watermark: str = "") -> str:
     p = fm.p
+    title = p.name.replace('"', "'")[:40]  # a double quote would end the e2k string
     story_names = ["Base"] + [lv.name.replace('"', "'") for lv in p.levels]
     # ETABS story names must be unique
     seen = {}
@@ -55,7 +56,7 @@ def write_etabs(fm: FrameModel, path: str, watermark: str = "") -> str:
         "",
         "$ CONTROLS",
         '  UNITS  "KN"  "M"  "C"',
-        f'  TITLE2  "{p.name[:40]}"',
+        f'  TITLE2  "{title}"',
         "",
         "$ STORIES - IN SEQUENCE FROM TOP",
     ]
