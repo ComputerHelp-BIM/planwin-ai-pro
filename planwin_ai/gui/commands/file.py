@@ -116,8 +116,12 @@ class FileCommands:
         )
         if not fn:
             return False
-        self.path = fn if fn.lower().endswith(".pwai") else fn + ".pwai"
-        return self.save()
+        old, self.path = self.path, fn if fn.lower().endswith(".pwai") else fn + ".pwai"
+        if self.save():
+            return True
+        self.path = old  # not written: Save keeps going to the file the project came from
+        self.refresh_all()
+        return False
 
     # ------------------------------------------------------------------ imports
     def import_plw(self):
@@ -234,7 +238,8 @@ class FileCommands:
         self.recent_menu.clear()
         rec = self._recent()
         for r in rec:
-            self.recent_menu.addAction(r, lambda f=r: self.maybe_save() and self.open_path(f))
+            # "&&": a '&' in a path ("R&D") would otherwise be a mnemonic and vanish from the menu
+            self.recent_menu.addAction(r.replace("&", "&&"), lambda f=r: self.maybe_save() and self.open_path(f))
         self.recent_menu.setEnabled(bool(rec))
 
     def _open_path(self, path):

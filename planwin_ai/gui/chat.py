@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import html
+import threading
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QDockWidget,
     QHBoxLayout,
     QLabel,
@@ -174,16 +176,20 @@ class ChatDock(QDockWidget):
         self._add("user", text)
         self._busy = True
         self._add("assistant", "thinking…")
-        self._thread = QThread(self)
         self._worker = _Worker(self.main.assistant, text, self.main.assistant.context())
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.done.connect(self._done)
-        self._worker.done.connect(self._thread.quit)
+        self._worker.done.connect(self._done)  # queued: emitted from the worker thread
+        # a daemon thread, not a QThread: quitting while the provider is still answering must not
+        # abort the process ("QThread: Destroyed while thread is still running")
+        self._thread = threading.Thread(target=self._worker.run, name="planwin-assistant", daemon=True)
         self._thread.start()
 
     def _done(self, reply: str, actions):
         """Back on the GUI thread: execute the actions and refresh."""
+        if actions and (QApplication.activeModalWidget() or QApplication.activePopupWidget()):
+            # A dialog or menu is open on the model (settings, a wizard, "Save changes?", the canvas context
+            # menu): act once it has closed, or its OK would edit a project the assistant has just replaced.
+            QTimer.singleShot(250, self, lambda: self._done(reply, actions))
+            return
         if self._msgs and self._msgs[-1][1] == "thinking…":
             self._msgs.pop()
         if actions:

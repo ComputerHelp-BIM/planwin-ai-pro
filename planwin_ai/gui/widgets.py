@@ -8,9 +8,10 @@ The look comes from the application style sheet (``theme.qss``) through object n
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QPointF, QRect, QSettings, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QSettings, QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QPainter, QPalette, QPen, QPolygonF
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -24,6 +25,35 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+class _TypeToEdit(QObject):
+    """Typing a letter into an editable table cell starts editing it, even when the letter is also a
+    window shortcut (the drawing tools use S, H, R, P, C, B, W, D, A and F)."""
+
+    def eventFilter(self, view, ev):  # noqa: N802 (Qt API)
+        if ev.type() != QEvent.ShortcutOverride or not isinstance(view, QAbstractItemView):
+            return False
+        text = ev.text()
+        commands = Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier  # Ctrl+Z etc. stay shortcuts
+        if not text or not text.isprintable() or ev.modifiers() & commands:
+            return False
+        idx = view.currentIndex()
+        if (
+            view.editTriggers() & QAbstractItemView.AnyKeyPressed
+            and idx.isValid()
+            and idx.flags() & Qt.ItemIsEditable
+            and view.indexWidget(idx) is None  # a combo box in the cell keeps the shortcut
+        ):
+            ev.accept()  # deliver the key to the table, not to the shortcut
+            return True
+        return False
+
+
+def type_to_edit(view: QAbstractItemView) -> QAbstractItemView:
+    """Let typing into ``view``'s editable cells win over single-key window shortcuts."""
+    view.installEventFilter(_TypeToEdit(view))
+    return view
 
 
 def _as_bool(v, default: bool) -> bool:

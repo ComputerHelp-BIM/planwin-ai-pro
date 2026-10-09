@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QTableWidget,
@@ -125,17 +126,35 @@ class ColumnSizesDialog(QDialog):
             if self.t.item(k, c).text() != "–":
                 self.t.item(k, c).setText(v)
 
-    def apply(self):
+    def sizes(self) -> list[tuple[str, int, float, float]]:
+        """(mark, level index, b, d) of every size cell; ValueError names a cell that is not 'b x d'."""
+        out = []
         for r, mk in enumerate(self.marks):
             for c in range(self.t.columnCount()):
                 txt = self.t.item(r, c).text().lower().replace("×", "x")
-                col = self.default.get((mk, c + 1))
-                if col is None or "x" not in txt:
+                if (mk, c + 1) not in self.default or "x" not in txt:
                     continue
-                b, d = (float(v) for v in txt.split("x")[:2])
+                try:
+                    b, d = (float(v) for v in txt.split("x")[:2])
+                except ValueError:
+                    cell = self.t.item(r, c).text()
+                    raise ValueError(f"{mk} at {self.p.levels[c].name}: '{cell}' is not 'b x d'") from None
                 if b > 0 and d > 0:
-                    _, _, ang = self.p.column_size(mk, c + 1, col)
-                    self.p.set_column_size(mk, c + 1, b, d, ang)
+                    out.append((mk, c + 1, b, d))
+        return out
+
+    def accept(self):
+        try:
+            self.sizes()  # a typo keeps the dialog open instead of losing every edit after OK
+        except ValueError as exc:
+            QMessageBox.warning(self, self.windowTitle(), str(exc))
+            return
+        super().accept()
+
+    def apply(self):
+        for mk, i, b, d in self.sizes():
+            _, _, ang = self.p.column_size(mk, i, self.default[(mk, i)])
+            self.p.set_column_size(mk, i, b, d, ang)
 
 
 # =========================================================================== joint loads
@@ -153,6 +172,7 @@ class JointLoadDialog(QDialog):
         for r, jl in enumerate(project.joint_loads):
             for c, k in enumerate(("level", "mark", "fz", "case")):
                 self.t.setItem(r, c, QTableWidgetItem(str(jl.get(k, ""))))
+            self.t.item(r, 0).setData(Qt.UserRole, r)  # its other keys (a wizard's "source" tag) are kept
         lay = QVBoxLayout(self)
         lay.addWidget(
             QLabel(f"Level # counts from 1 (= {project.levels[0].name if project.levels else 'first level'}).")
@@ -173,21 +193,36 @@ class JointLoadDialog(QDialog):
         r = self.t.rowCount()
         self.t.insertRow(r)
         for c, v in enumerate((len(self.p.levels), "C1", "150", "D")):
-            self.t.setItem(r, c, QTableWidgetItem(v))
+            self.t.setItem(r, c, QTableWidgetItem(str(v)))  # QTableWidgetItem(int) is an item *type*, no text
+
+    def _row(self, r: int) -> dict:
+        """The joint load of table row ``r`` (ValueError when a cell does not parse)."""
+        cells = [self.t.item(r, c).text().strip() if self.t.item(r, c) else "" for c in range(4)]
+        try:
+            jl = {"level": int(cells[0]), "mark": cells[1], "fz": float(cells[2]), "case": cells[3] or "D"}
+        except ValueError:
+            raise ValueError(f"Row {r + 1}: the level must be a whole number and Fz a number.") from None
+        src = self.t.item(r, 0).data(Qt.UserRole) if self.t.item(r, 0) else None
+        if src is not None and 0 <= src < len(self.p.joint_loads):
+            # keep the other keys: the tank wizard finds (and replaces) its loads by their "source" tag
+            return {**self.p.joint_loads[src], **jl}
+        return jl
+
+    def accept(self):
+        try:
+            for r in range(self.t.rowCount()):
+                self._row(r)  # a typo keeps the dialog open instead of silently dropping the load
+        except ValueError as exc:
+            QMessageBox.warning(self, self.windowTitle(), str(exc))
+            return
+        super().accept()
 
     def apply(self):
         out = []
         for r in range(self.t.rowCount()):
             try:
-                out.append(
-                    {
-                        "level": int(self.t.item(r, 0).text()),
-                        "mark": self.t.item(r, 1).text().strip(),
-                        "fz": float(self.t.item(r, 2).text()),
-                        "case": self.t.item(r, 3).text().strip() or "D",
-                    }
-                )
-            except (ValueError, AttributeError):
+                out.append(self._row(r))
+            except ValueError:
                 continue
         self.p.joint_loads = out
 

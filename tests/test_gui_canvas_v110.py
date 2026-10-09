@@ -49,7 +49,7 @@ class FakeMain:
     def current_plan(self):
         return self.project.plans[0] if self.project.plans else None
 
-    def mutate(self, desc, fn):
+    def mutate(self, desc, fn, analysis=True):
         self.edits.append(desc)
         fn()
         if self.canvas is not None:

@@ -220,6 +220,7 @@ class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWi
         except Exception as exc:
             log.exception("edit failed")
             self.project_from_json(self.undo_stack.pop())
+            self.refresh_all()  # the panels still point at objects of the discarded model
             QMessageBox.warning(self, desc, f"Could not complete '{desc}': {exc}")
             return
         if analysis:

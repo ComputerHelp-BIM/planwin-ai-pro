@@ -206,6 +206,9 @@ class PlanCanvas(QWidget):
     def s2w(self, p: QPointF) -> Pt:
         return ((p.x() - self.ox) / self.scale, (self.oy - p.y()) / self.scale)
 
+    def _tool_cursor(self) -> Qt.CursorShape:
+        return {"pan": Qt.OpenHandCursor, "select": Qt.ArrowCursor}.get(self.tool, Qt.CrossCursor)
+
     def set_tool(self, tool: str):
         self.tool = tool
         self._poly.clear()
@@ -214,7 +217,7 @@ class PlanCanvas(QWidget):
         self._area_pts.clear()
         self._area_closed = None
         self._dim_pts.clear()
-        self.setCursor(Qt.OpenHandCursor if tool == "pan" else (Qt.ArrowCursor if tool == "select" else Qt.CrossCursor))
+        self.setCursor(self._tool_cursor())
         hints = {
             "select": "Click to select (Shift adds), drag a window, right-click for options, Del to delete",
             "pan": "Drag to pan, wheel to zoom",
@@ -880,7 +883,7 @@ class PlanCanvas(QWidget):
     def mouseReleaseEvent(self, ev: QMouseEvent):
         if self._panning:
             self._panning = False
-            self.setCursor(Qt.OpenHandCursor if self.tool == "pan" else Qt.ArrowCursor)
+            self.setCursor(self._tool_cursor())  # a drawing tool keeps its cross after a middle-button pan
             return
         if ev.button() != Qt.LeftButton or self.plan is None:
             return
@@ -1076,7 +1079,8 @@ class PlanCanvas(QWidget):
             "y2": round(b[1], 4),
             "offset": round(dim_offset(a, b, at), 4),
         }
-        self.main.mutate("Add dimension", lambda: plan.dimensions.append(dm))
+        # dimensions are drawing annotations: the analysis and design results stay valid
+        self.main.mutate("Add dimension", lambda: plan.dimensions.append(dm), analysis=False)
 
     # ----------------------------------------------------------- context menu
     def _context_menu(self, ev: QMouseEvent):
@@ -1130,10 +1134,13 @@ class PlanCanvas(QWidget):
         if plan is not None and plan.dimensions:
             m.addSeparator()
             if di is not None:
-                m.addAction("Delete dimension", lambda: self.main.mutate("Delete dimension", lambda: self._del_dim(di)))
+                m.addAction(
+                    "Delete dimension",
+                    lambda: self.main.mutate("Delete dimension", lambda: self._del_dim(di), analysis=False),
+                )
             m.addAction(
                 "Clear all dimensions on this plan",
-                lambda: self.main.mutate("Clear dimensions", lambda: plan.dimensions.clear()),
+                lambda: self.main.mutate("Clear dimensions", lambda: plan.dimensions.clear(), analysis=False),
             )
         m.addSeparator()
         m.addAction("Zoom extents (F)", self.zoom_extents)

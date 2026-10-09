@@ -146,6 +146,10 @@ class CommandSearch(QLineEdit):
 
     def eventFilter(self, obj, ev) -> bool:  # noqa: N802 (Qt API)
         """The popup grabs the keyboard while shown: forward typing to the search box."""
+        if obj is self.popup and ev.type() == QEvent.ShortcutOverride:
+            # the box decides as if it had the focus: typed letters (tool shortcuts S, W, A …) stay text
+            self.event(ev)
+            return ev.isAccepted()
         if obj is self.popup and ev.type() == QEvent.KeyPress:
             if not self._nav(ev):
                 self.event(ev)  # editing keys go to the box; textEdited refreshes the list

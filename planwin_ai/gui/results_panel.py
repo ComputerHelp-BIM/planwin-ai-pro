@@ -474,6 +474,11 @@ class ResultsPanel(QWidget):
         f.setBold(bool(text))
         it.setFont(1, f)
 
+    def restyle(self) -> None:
+        """Recolour the navigator after a theme switch (its colours are set per item, not by the style sheet)."""
+        for name in self._items:
+            self._update_item(name)
+
     def _after_change(self, name: str) -> None:
         self._update_item(name)
         if name == self._current:
