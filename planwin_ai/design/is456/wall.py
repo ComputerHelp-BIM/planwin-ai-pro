@@ -153,6 +153,11 @@ def design_wall(
     s_max = min(Lw / 5, 3 * t, 450.0)  # cl 10.1.9
     dv, sv = _mesh(rho_v, t, curtains, s_max)
     dh, shz = _mesh(rho_h, t, curtains, s_max)
+    for what, rho, dia, s in (("vertical", rho_v, dv, sv), ("horizontal", rho_h, dh, shz)):
+        if curtains * 1000 * math.pi * dia**2 / 4 / s < rho * t * 1000 * (1 - 1e-9):
+            # _mesh caps the bar at t/10 (cl 10.1.8) and the spacing at 100 mm
+            notes.append(f"{what} steel ρ = {100 * rho:.2f} % exceeds T{dia} @ {int(s)} c/c – thicken the wall")
+            ok = False
     face = "each face" if curtains == 2 else "single curtain"
     # ---- boundary elements (cl 10.4.1): σ = P/A + M/Z > 0.2 fck under factored loads
     Ag, Z = t * Lw, t * Lw**2 / 6

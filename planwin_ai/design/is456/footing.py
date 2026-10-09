@@ -76,6 +76,8 @@ def design_footing(
     for _ in range(80):
         ok_size = True
         for P, Mx, My, allow, _f in cases:
+            if P <= 0:
+                continue  # net uplift: no plan size gives full contact – reported below
             qmax, qmin = pressures(max(P, 0.0), Mx, My, L, B)
             if qmax > allow * sbc * 1.0001 or qmin < -1e-6:
                 ok_size = False
@@ -86,7 +88,8 @@ def design_footing(
         B = math.ceil(round(B + 0.1 * (cb / cd if cd else 1), 3) / 0.05) * 0.05
     else:
         notes.append("could not satisfy SBC / full contact – consider raft or combined footing")
-    if any(P < 0 for P, *_ in cases):
+    uplift = any(P < 0 for P, *_ in cases)
+    if uplift:
         notes.append("net uplift in a lateral case – provide anchorage / check tension in column")
     q_service = P_service * sw / (L * B)
     # governing factored net upward pressure (self weight of footing excluded)
@@ -135,7 +138,7 @@ def design_footing(
         bar_str(mesh_L),
         bar_str(mesh_B),
         round(q_service, 1),
-        ok and not any("could not" in n for n in notes),
+        ok and not uplift and not any("could not" in n for n in notes),
         notes,
         mesh_L=mesh_L,
         mesh_B=mesh_B,
@@ -179,10 +182,12 @@ def design_combined_footing(
     footing is proportioned so that the resultant of the service loads coincides with its
     centroid (uniform pressure ≤ SBC).  Longitudinally it is a beam loaded by the factored
     net upward pressure and supported by the columns; transversely each column is spread by a
-    band of width c + 2d·… (taken as c + d each side, SP 34).  Depth from punching shear at
-    d/2 around each column (cl 31.6.3) and one-way shear at d from the column faces
-    (cl 34.2.4.1 a); flexure with 0.12 % minimum steel.  Moments from lateral load cases are
-    not included – check them for footings resisting significant moments.
+    band of width c + 2d (c + d each side, SP 34).  Depth from punching shear at d/2 around
+    each column (cl 31.6.3; sides beyond the footing edge do not count, overlapping sections
+    are combined), one-way shear at d from the column faces (cl 34.2.4.1 a, τc for the
+    tension steel there) and flexure with 0.12 % minimum steel that the bar meshes can carry.
+    Moments from lateral load cases are not included – check them for footings resisting
+    significant moments.
     """
     from ...core.beamcalc import LinLoad, PtLoad, diagrams
 
@@ -208,44 +213,78 @@ def design_combined_footing(
     M_bot = max(float(dia["M"].max()), 0.0)
     V = dia["V"]
     xs = dia["x"]
+    Ms = dia["M"]
+    dias_l, dias_t = (12, 16, 20, 25), (12, 16, 20)
+
+    def fits(a: float, dias) -> bool:
+        """Steel ``a`` (mm²/m) can be provided by the bar mesh (finite, not past T-max @ 100)."""
+        return a <= 0 or (math.isfinite(a) and not mesh_for(a, dias, 300.0).check)
+
+    def punching_ok(d: float) -> bool:
+        """cl 31.6.1 / 31.6.3.1: critical section d/2 from the column faces.  Sides beyond a
+        free edge of the footing do not count and no upward pressure is deducted outside it
+        (Fig 13); overlapping sections of close columns are checked as one section."""
+        secs = [
+            [xc - (c[0] + d) / 2, xc + (c[0] + d) / 2, c[1] + d, Pu, min(c) / max(c)]
+            for xc, Pu, c in ((x1, Pu1, c1), (x2, Pu2, c2))
+        ]
+        if secs[0][1] >= secs[1][0]:
+            a, b_ = secs
+            secs = [[a[0], b_[1], max(a[2], b_[2]), a[3] + b_[3], min(a[4], b_[4])]]
+        for lo, hi, w, P, beta in secs:
+            lo_c, hi_c, w_c = max(lo, 0.0), min(hi, L), min(w, B)
+            bo = (2 * (hi_c - lo_c) if w < B else 0.0) + w_c * ((lo > 0) + (hi < L))
+            if bo <= 0:
+                continue
+            Vp = P - qu * (hi_c - lo_c) * w_c
+            if Vp * 1e3 / (bo * 1e3 * d * 1e3) > min(0.5 + beta, 1.0) * 0.25 * math.sqrt(fck):
+                return False
+        return True
+
     D = 0.4
     ok = True
-    ast_min = 0.0012 * 1000 * D * 1000
     while True:
         d = D - cover - 0.016
-        ok_shear = True
-        for xc, Pu, c in ((x1, Pu1, c1), (x2, Pu2, c2)):
-            bo = 2 * ((c[0] + d) + (c[1] + d))
-            Vp = Pu - qu * (c[0] + d) * (c[1] + d)
-            beta = min(c) / max(c)
-            tp = min(0.5 + beta, 1.0) * 0.25 * math.sqrt(fck)
-            if Vp * 1e3 / (bo * 1e3 * d * 1e3) > tp:
-                ok_shear = False
+        ast_min = 0.0012 * 1000 * D * 1000
+        a_top = ast_singly(M_top * 1e6 / B, fck, fy, 1000, d * 1000)
+        a_bot = ast_singly(M_bot * 1e6 / B, fck, fy, 1000, d * 1000)
+        ok_shear = punching_ok(d)
+        for xc, c in ((x1, c1), (x2, c2)):
             for xf in (xc - c[0] / 2 - d, xc + c[0] / 2 + d):
                 if 0 < xf < L:
                     v1 = abs(float(np.interp(xf, xs, V)))
-                    if v1 * 1e3 / (B * 1e3 * d * 1e3) > tau_c(0.25, fck):
+                    # Table 19: τc for the tension steel at the section (bottom under sagging)
+                    a = a_bot if float(np.interp(xf, xs, Ms)) >= 0 else a_top
+                    pt = 100 * max(a, ast_min) / (1000 * d * 1000)
+                    if v1 * 1e3 / (B * 1e3 * d * 1e3) > tau_c(pt, fck):
                         ok_shear = False
-        a_top = ast_singly(M_top * 1e6 / B, fck, fy, 1000, d * 1000)
-        a_bot = ast_singly(M_bot * 1e6 / B, fck, fy, 1000, d * 1000)
-        if ok_shear and math.isfinite(a_top) and math.isfinite(a_bot):
+        # transverse bands (SP 34): column load spread across B over a band c + d each side,
+        # cut at the footing ends; overlapping bands of close columns carry both loads
+        bands = [
+            [max(xc - c[0] / 2 - d, 0.0), min(xc + c[0] / 2 + d, L), Pu, c[1]]
+            for xc, Pu, c in ((x1, Pu1, c1), (x2, Pu2, c2))
+        ]
+        if bands[0][1] > bands[1][0]:
+            lo, hi = bands[0][0], bands[1][1]
+            bands = [[lo, hi, Pu1 + Pu2, max(c1[1], c2[1])]] * 2
+        trans = []
+        for name, (lo, hi, Pu, cw) in zip(("column 1", "column 2"), bands):
+            band = hi - lo
+            mt = Pu / (B * band) * ((B - cw) / 2) ** 2 / 2  # kN·m per metre of band
+            trans.append((name, band, max(ast_singly(mt * 1e6, fck, fy, 1000, d * 1000), ast_min)))
+        if ok_shear and fits(a_top, dias_l) and fits(a_bot, dias_l) and all(fits(a, dias_t) for *_, a in trans):
             break
         D = round(D + 0.05, 3)
         if D > 2.5:
             ok = False
             notes.append("depth > 2.5 m – use a raft or piles")
             break
-    ast_min = 0.0012 * 1000 * D * 1000
-    top = mesh_for(max(a_top, ast_min) if math.isfinite(a_top) else ast_min, (12, 16, 20, 25), 300.0)
-    bottom = mesh_for(max(a_bot, ast_min) if math.isfinite(a_bot) else ast_min, (12, 16, 20, 25), 300.0)
+    top = mesh_for(max(a_top, ast_min) if math.isfinite(a_top) else ast_min, dias_l, 300.0)
+    bottom = mesh_for(max(a_bot, ast_min) if math.isfinite(a_bot) else ast_min, dias_l, 300.0)
     transverse = []
-    d = D - cover - 0.016
-    for name, Pu, c in (("column 1", Pu1, c1), ("column 2", Pu2, c2)):
-        band = c[0] + 2 * d  # SP 34: column width + d on each side
-        mt = Pu / B * ((B - c[1]) / 2) ** 2 / 2  # kN·m per metre of band… per unit length of the band
-        a_t = max(ast_singly(mt * 1e6, fck, fy, 1000, d * 1000), 0.0012 * 1000 * D * 1000)
-        mesh = mesh_for(a_t, (12, 16, 20), 300.0)
-        transverse.append(f"{name}: {mesh} over a {band:.2f} m band")
+    for name, band, a_t in trans:
+        mesh = mesh_for(a_t, dias_t, 300.0) if math.isfinite(a_t) else None
+        transverse.append(f"{name}: {mesh or 'section inadequate'} over a {band:.2f} m band")
     return CombinedFootingResult(
         round(L, 3),
         round(B, 3),

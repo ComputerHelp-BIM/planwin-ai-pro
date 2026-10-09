@@ -101,16 +101,22 @@ def apply_staircase(project: Project, st: Staircase) -> StairDesign:
     missing = [m for m in st.support_beams if m not in beams]
     if missing:
         raise ValueError(f"support beam(s) {', '.join(missing)} not found in plan '{st.plan}'")
-    des = design_staircase(st, project.design.fy_main)
-    tag = f"Stair {st.name}"
-    for b in plan.beams:  # remove this staircase's previous loads everywhere on the plan
-        b.part_loads = [pl for pl in b.part_loads if pl.desc != tag]
-    for mark in st.support_beams:
+    spans = {}
+    for mark in st.support_beams:  # validate everything before touching the project
         b = beams[mark]
         a0 = min(max(st.start, 0.0), b.length)
         ln = min(st.width, b.length - a0)
         if ln <= 0:
             raise ValueError(f"flight does not fit on beam {mark} (length {b.length:.2f} m)")
+        spans[mark] = (a0, ln)
+    des = design_staircase(st, project.design.fy_main)
+    tag = f"Stair {st.name}"
+    for p in project.plans:  # remove this staircase's previous loads (it may have moved plan)
+        for b in p.beams:
+            b.part_loads = [pl for pl in b.part_loads if pl.desc != tag]
+    for mark in st.support_beams:
+        b = beams[mark]
+        a0, ln = spans[mark]
         b.part_loads.append(PartLoad(a0, ln, des.reaction_dead, des.reaction_dead, "D", tag))
         b.part_loads.append(PartLoad(a0, ln, des.reaction_live, des.reaction_live, "L", tag))
     project.stairs = [s for s in project.stairs if s.get("name") != st.name] + [asdict(st)]

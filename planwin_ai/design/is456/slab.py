@@ -52,12 +52,15 @@ def design_slab(
     kind: str,
     continuous_edges: int,
     cover: float = 0.02,
+    span: float | None = None,
 ) -> SlabResult:
     """Slab design by IS 456 coefficient methods.
 
     two-way: Table 27 for positive moments (conservative) and a Table-26
     envelope for negative moments; one-way: Table 12 coefficients;
-    cantilever: wl²/2.
+    cantilever: wl²/2.  ``span`` (m) overrides the short side as the span of a one-way slab
+    or cantilever (one-way slabs spanning the long way, cantilevers projecting further than
+    their width).
     """
     wu = 1.5 * (w_dead + w_live)
     D = D_m * 1000
@@ -65,8 +68,9 @@ def design_slab(
     notes = []
     lx, ly = min(lx, ly), max(lx, ly)
     r = ly / lx if lx else 1.0
+    L = lx if span is None or kind == "two_way" and r <= 2.0 else span  # span for M and L/d
     if kind == "cantilever":
-        Mx = wu * lx**2 / 2
+        Mx = wu * L**2 / 2
         My = 0.0
         Mneg = Mx
         basic = 7
@@ -77,11 +81,11 @@ def design_slab(
         basic = 20 if continuous_edges == 0 else 26
     else:  # one-way
         if continuous_edges:
-            Mx = (1.5 * w_dead * lx**2 / 12) + (1.5 * w_live * lx**2 / 10)
-            Mneg = (1.5 * w_dead * lx**2 / 10) + (1.5 * w_live * lx**2 / 9)
+            Mx = (1.5 * w_dead * L**2 / 12) + (1.5 * w_live * L**2 / 10)
+            Mneg = (1.5 * w_dead * L**2 / 10) + (1.5 * w_live * L**2 / 9)
             basic = 26
         else:
-            Mx = wu * lx**2 / 8
+            Mx = wu * L**2 / 8
             Mneg = 0.0
             basic = 20
         My = 0.0
@@ -112,7 +116,7 @@ def design_slab(
     fs = 0.58 * fy
     pt = 100 * ax / (1000 * d) if math.isfinite(ax) else 1.0
     allowed = basic * deflection_mf(pt, fs)
-    actual = lx * 1000 / d
+    actual = L * 1000 / d
     dok = actual <= allowed
     if kind == "two_way" and lx <= 3.5 and w_live <= 3.0:
         # IS 456 cl 24.1 note 2: span/overall depth 35 (SS) / 40 (continuous) x 0.8 for HYSD

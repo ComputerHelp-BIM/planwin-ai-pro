@@ -162,7 +162,7 @@ def torsion_design(
     if D_mm > 450:
         a_side = 0.001 * b_mm * (D_mm - 2 * cover_mm) / 2  # each face (cl 26.5.1.3: 0.1 % of web area)
         n = max(2, math.ceil((D_mm - 2 * cover_mm - 100) / 300))  # ≤ 300 mm apart
-        dia_s = 10 if a_side / n <= 78.5 else 12
+        dia_s = next((x for x in (10, 12, 16, 20) if math.pi * x * x / 4 >= a_side / n), 20)
         side = f"{n}-T{dia_s} each face (side-face, cl 26.5.1.3)"
     if tve > tau_c_max(fck):
         return TorsionResult(
@@ -183,8 +183,8 @@ def torsion_design(
         )
     x1 = b_mm - 2 * cover_mm  # stirrup outer dimensions
     y1 = D_mm - 2 * cover_mm
-    b1 = x1 - 8 - long_dia  # centre-to-centre of corner bars
-    d1 = y1 - 8 - long_dia
+    b1 = x1 - 2 * 8 - long_dia  # centre-to-centre of corner bars (inside T8 stirrups on both faces)
+    d1 = y1 - 2 * 8 - long_dia
     s_max = min(x1, (x1 + y1) / 4, 300.0)
     for dia in (8, 10, 12):
         asv = 2 * math.pi * dia * dia / 4  # two legs of a closed stirrup
