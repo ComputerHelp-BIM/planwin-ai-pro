@@ -75,7 +75,7 @@ from ..core.frame import FrameModel
 from ..core.model import Project, grade_fck
 from ..design.is456.common import BarMesh, BarSet, Links
 from ..design.report import BeamDesign, DesignReport
-from .report_common import DISCLAIMER
+from .report_common import DISCLAIMER, literal_text
 
 STOCK_LENGTH = 12000.0  # mm
 CUT_NOTE = "Verify against approved structural drawings before cutting"
@@ -780,5 +780,6 @@ def write_bbs_excel(path: str, bbs: BBS, project: Project, watermark: str = "") 
             ws.column_dimensions[get_column_letter(i)].width = min(width + 2, 48)
         ws.freeze_panes = "A2"
         footer(ws)
+    literal_text(wb)  # names/marks starting with '=' stay text
     wb.save(path)
     return path

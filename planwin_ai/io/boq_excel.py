@@ -26,7 +26,7 @@ from .. import APP_NAME, __version__
 from ..core.model import Project
 from ..design.quantities import _Ledger, compare_revisions
 from ..design.report import DesignReport
-from .report_common import DISCLAIMER
+from .report_common import DISCLAIMER, literal_text
 
 NAVY = "1F3A5F"
 INPUT_FILL = "FFF2CC"  # light yellow: cells meant to be edited
@@ -63,6 +63,8 @@ def header_block(ws, title: str, project: Project, watermark: str = "") -> int:
             continue
         ws.append([k, v])
         ws.cell(ws.max_row, 1).font = Font(bold=True)
+        if ws.cell(ws.max_row, 2).data_type == "f":  # a project name like "=Tower" stays text
+            ws.cell(ws.max_row, 2).data_type = "s"
     return ws.max_row + 2  # one blank row before the table
 
 
@@ -334,5 +336,6 @@ def write_boq_excel(path: str, project: Project, rep: DesignReport, watermark: s
     if revs:
         _revisions_sheet(wb, project, revs, watermark)
     wb.active = 0
+    literal_text(wb, {1})  # level names / revision labels; our formulas are never in column A
     wb.save(path)
     return path

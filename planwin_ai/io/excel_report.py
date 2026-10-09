@@ -11,7 +11,7 @@ from ..core.model import Project
 from ..core.plan_engine import PlanResult
 from ..design.report import DesignReport
 from ..units import Units
-from .report_common import DISCLAIMER
+from .report_common import DISCLAIMER, literal_text
 
 #: kN based unit symbols in report headers, most specific first
 _HEADER_UNITS = (
@@ -725,5 +725,6 @@ def write_excel(
                 for g, item, va, vb, ch, pct in compare_revisions(a, b)
             ],
         )
+    literal_text(wb)  # names/marks starting with '=' stay text
     wb.save(path)
     return path

@@ -24,6 +24,7 @@ from ..core.model import Project
 from ..design.report import BeamDesign, DesignReport
 from .boq_excel import footnote, header_block, page_setup, table_header
 from .detail_dxf import ColumnCell, column_schedule, footing_types, levels_label, natural_key
+from .report_common import literal_text
 
 _SLAB_KIND = {"two_way": "Two-way", "one_way": "One-way", "cantilever": "Cantilever"}
 NOTE = "Read with the structural drawings and general notes. Bar marks: n-16Ø = n bars of 16 mm; 8Ø@150 = links."
@@ -279,5 +280,6 @@ def write_schedules_excel(path: str, project: Project, rep: DesignReport, waterm
     )
     if not wb.sheetnames:
         raise ValueError("nothing to schedule – run the design first")
+    literal_text(wb)  # names/marks starting with '=' stay text
     wb.save(path)
     return path

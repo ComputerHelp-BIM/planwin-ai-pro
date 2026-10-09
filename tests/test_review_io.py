@@ -459,3 +459,45 @@ def test_every_export_runs_on_walls_and_combined_footings(walled, combined, tmp_
             assert os.path.getsize(path) > 200, key
             if path.endswith(".dxf"):
                 assert not ezdxf.readfile(path).audit().has_errors, key
+
+
+def test_names_starting_with_equals_stay_text_in_every_workbook(tmp_path):
+    """openpyxl stores any '=…' string as a formula: a project or level named '=Tower' gave Excel
+    a broken formula (a 'repair this file' prompt, or formula injection from imported text)."""
+    from openpyxl import load_workbook
+
+    from planwin_ai.ai.actions import Session, execute
+    from planwin_ai.ai.templates import build_template
+
+    prj = build_template("bungalow")
+    prj.name = "=Tower"
+    prj.client = "=HYPERLINK(\"http://x\",\"y\")"
+    prj.levels[0].name = "=L0"
+    prj.meta["revisions"] = []
+    s = Session(prj, out_dir=str(tmp_path))
+    for key in ("excel", "bbs", "boq", "schedules"):
+        res = execute(s, [{"action": "export", "format": key, "path": str(tmp_path / f"{key}.xlsx")}])
+        assert not res.errors, res.errors
+        wb = load_workbook(tmp_path / f"{key}.xlsx")
+        bad = [
+            (ws.title, c.coordinate, c.value)
+            for ws in wb.worksheets
+            for row in ws.iter_rows()
+            for c in row
+            if c.data_type == "f" and str(c.value).startswith(("=Tower", "=HYPERLINK", "=L0"))
+        ]
+        assert not bad, (key, bad[:5])
+    # the BOQ keeps its real formulas
+    boq = load_workbook(tmp_path / "boq.xlsx")
+    assert any(c.data_type == "f" for ws in boq.worksheets for row in ws.iter_rows() for c in row)
+
+
+def test_results_table_excel_keeps_equals_text(tmp_path):
+    from openpyxl import load_workbook
+
+    from planwin_ai.gui.results_panel import write_tables_xlsx
+
+    p = tmp_path / "t.xlsx"
+    write_tables_xlsx(str(p), {"Beams": (["Mark", "Note"], [["=B1", "=1+1"]])})
+    ws = load_workbook(p).active
+    assert ws["A2"].data_type == "s" and ws["A2"].value == "=B1"

@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import units
+from ..io.report_common import literal_text
 from ..services.exports import safe_filename
 from . import theme
 
@@ -190,6 +191,7 @@ def write_tables_xlsx(path: str, tables: dict[str, tuple[list[str], list[list]]]
             ws.column_dimensions[get_column_letter(c)].width = min(max(w + 2, 6), 60)
     if not wb.sheetnames:
         wb.create_sheet("Results")
+    literal_text(wb)  # cell text such as "=B1" stays text
     wb.save(path)
     return path
 
