@@ -5,6 +5,7 @@ This is the Python successor to Computer Help's PlanWin / FrameWin (VB6). It kee
 slab → beam → column load take-down, level-wise plans and FrameWin stacking. On top of that it adds a built-in 3-D solver,
 IS 456 design, STAAD/ETABS export and an AI assistant that builds and edits models from plain-English prompts.
 
+![Start page with AI prompt, recent projects and templates](assets/screenshots/start_page.png)
 ![Plan editor with AI assistant](assets/screenshots/plan_and_ai.png)
 ![3-D frame coloured by design utilisation](assets/screenshots/frame_3d_design.png)
 
@@ -26,8 +27,10 @@ The exe is not code-signed yet, so Windows SmartScreen may warn on first run (*M
 
 ## Quick start
 
-1. **File ▸ New from template** (10 ready buildings, all pre-optimised and passing design), or press **Ctrl+K** and type, for example:
-   *"G+4 residential in Pune, 3x2 bays of 4.5 m with mumty and 1.2 m balcony"*.
+1. The **start page** opens on launch: pick one of the 10 templates (all pre-optimised and passing design), a recent
+   project, or type a description into the AI box, for example
+   *"G+4 residential in Pune, 3x2 bays of 4.5 m with mumty and 1.2 m balcony"*. Lost? Press **Ctrl+Q** and type
+   what you want to do.
 2. **Plan tab:** draw slabs (`R` rectangle, `P` polygon), place columns (`C` or *Auto columns*) and shear walls (`W`),
    then use *Auto beams*. *Grid lines* adds grids (or generates them from the columns).
    Press **F5** to run the load take-down. Applied load must equal the column reactions (≈ 0 % difference).
@@ -38,11 +41,12 @@ The exe is not code-signed yet, so Windows SmartScreen may warn on first run (*M
 5. **F6** builds and analyses the 3-D frame. **F7** designs all members. **Design ▸ Optimise sizes** fixes any
    failures automatically. Check **IS 13920**, **Irregularity** and **Modal / RS** in the results panel.
 6. **Output tab:** **STAAD (.std)**, **ETABS (.e2k)**, **DXF 2-D/3-D**, **Excel**, **PDF**, **calculation sheets**,
-   **bar bending schedule** and **reinforcement detail drawings**. *Design ▸ Revisions* saves and compares BOQs.
+   **bar bending schedule**, **BOQ & cost estimate (Excel)**, **member schedules (Excel)** and **reinforcement detail
+   drawings**. *Design ▸ Revisions* saves and compares BOQs. Every results table has *Copy* and *Excel* buttons.
 
 Shortcuts: `S` select · `H` pan · `R` rectangle slab · `P` polygon slab · `C` column · `B` beam · `W` shear wall ·
 `D` measure · `A` area · `Shift+D` dimension · `F8` ortho · `F` zoom extents · `Del` delete · `Ctrl+Z / Y` undo/redo ·
-`F5 / F6 / F7` analyse plan / frame / design · `Ctrl+K` AI panel · `F1` help.
+`F5 / F6 / F7` analyse plan / frame / design · `Ctrl+K` AI panel · `Ctrl+Q` command search · `F1` help.
 Double-click a beam to see its BM/SF diagrams; double-click a ribbon tab to collapse the ribbon.
 View ▸ Units switches the display between kN and tonnes.
 
@@ -111,6 +115,15 @@ View ▸ Units switches the display between kN and tonnes.
 54. **Ribbon interface** and **kN / tonnes display units**
 55. Tamper-resistant trial and optional machine-bound licences
 
+### New in 1.2
+56. **Modern Fluent interface** (light and dark), with hover help on every command and field
+57. **Start page:** create with AI, recent projects, template gallery with plan thumbnails
+58. **Command search** (Ctrl+Q) for every command, results table and plan
+59. **Results navigator** grouped by Plan / Analysis / Design / Code checks / Quantities, with failure badges, filter, Copy and Excel export
+60. **Collapsible, scrolling Project and Properties panels**
+61. **BOQ & cost estimate (Excel)** with editable rates and live formulas, and **member schedules (Excel)** for columns, beams, footings, slabs and walls
+62. Plan labels placed without overlaps
+
 ---
 
 ## AI assistant
@@ -145,7 +158,7 @@ PlanWinAIPro.exe cli import-plw OLD.plw --out converted.pwai
 ```bash
 python -m venv .venv && .venv\Scripts\activate          # Python 3.12, 64-bit
 pip install -r requirements-dev.txt
-python -m pytest -q                                      # 343 tests
+python -m pytest -q                                      # 420 tests
 python -m planwin_ai                                     # run the app
 scripts\build_windows.bat                                # exe + portable + installer (needs Inno Setup 6)
 ```
@@ -156,6 +169,7 @@ GitHub Actions tests, builds, self-tests and publishes the release (the manual r
 Versioning follows **Semantic Versioning** (MAJOR.MINOR.PATCH).
 
 After changing the generator or design code, rebuild the template library with `python tools/build_templates.py`.
+After interface changes, refresh the README screenshots with `python tools/screenshots.py`.
 
 ## Project structure
 
@@ -167,17 +181,18 @@ planwin_ai/
   design/    is456/ (beam, column, footing, slab, wall) · is13920.py · runner.py (design all) · sizing.py
              (autosize, optimise) · quantities.py (BOQ, revisions) · wizards.py (stairs, tanks) · report.py
   io/        project_io (.pwai) · legacy_plw · staad · etabs · dxf_io · excel_report · pdf_report · calc_sheets
-             bbs · detail_dxf · cities
+             bbs · detail_dxf · boq_excel · schedules · cities
   services/  exports.py (one registry of every export, used by GUI, AI and CLI)
   ai/        actions (schema + executor) · offline parser · providers (Claude/OpenAI/Ollama) · assistant · templates
-  gui/       main_window · ribbon · ribbon_layout · commands/ (file, plan, frame, app) · canvas (plan editor)
-             view3d · panels · chat (AI dock) · dialogs/ · theme
+  gui/       main_window · ribbon · ribbon_layout · commands/ (file, plan, frame, app) · start_page
+             command_search · canvas (plan editor) · view3d · panels · results_panel · widgets · chat (AI dock)
+             dialogs/ · theme (Fluent style sheets, palettes, icons)
   licensing/ license.py (Ed25519 verify, tamper-resistant trial, machine codes)
   units.py   display units (kN / tonnes)
   data/      cities.csv · legacy_samples/*.plw · templates/*.pwai
 tools/       keygen.py (issue licences – internal) · build_templates.py
 packaging/   PyInstaller spec · Inno Setup script · version info
-tests/       343 tests: closed-form solver/dynamics checks, IS-code values, legacy import, exports, AI, licensing, GUI
+tests/       420 tests: closed-form solver/dynamics checks, IS-code values, legacy import, exports, AI, licensing, GUI
 ```
 
 ## Licensing (Computer Help internal)

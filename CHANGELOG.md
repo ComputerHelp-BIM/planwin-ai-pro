@@ -2,6 +2,44 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] – 2026-10-09
+Interface release: a cleaner, modern look and two new Excel exports. Projects and results are
+unchanged from 1.1.0.
+
+### Added
+- **Start page** on launch: describe a building to create it with AI, blank / open / import,
+  recent projects, and the template gallery with a plan thumbnail of each building.
+  (View ▸ Start page brings it back; "Show this page at startup" turns it off.)
+- **Command search** (Ctrl+Q) on the title bar: type what you want to do ("stair", "export staad",
+  "drift") and press Enter – finds every ribbon command, results table and plan.
+- **BOQ & cost estimate (Excel):** standard BOQ layout (item, description, unit, quantity, rate,
+  amount) with live formulas – edit a rate on the *Rates* sheet and every amount and total updates.
+  Also by floor, by member type and revision comparison.
+- **Member schedules (Excel):** column schedule (by storey range) and column list, beam schedule
+  (identical beams grouped), footing schedule (types F1, F2 …), combined footings, slab and wall schedules.
+- **Results navigator:** results grouped as Plan / Analysis / Design / Code checks / Quantities with
+  failure badges (✖ n) and ticks, a filter box, *Copy* (paste into Excel) and *Excel* (this table or
+  all tables) buttons.
+- One-line **hover help** on every ribbon command, panel field, table and button.
+
+### Changed
+- **Modern Fluent look** in light and dark: layered surfaces, rounded cards, thin scrollbars,
+  consistent buttons, inputs, tables, menus and tooltips; ribbon toggles show as soft pills.
+- **Project and Properties panels** are scrolling, collapsible sections (open/closed state is
+  remembered); the plan list and levels table show their full contents; Enter applies a property,
+  *Revert* discards edits.
+- **Plan labels no longer overlap:** column labels sit in the free corner on a small pill, beam
+  labels shorten or hide when there is no room, slab text only shows when it fits.
+- Ribbon: captions for the snap-step and units boxes; the Results panel opens at a quarter of the
+  window height so the plan stays the main view.
+- AI assistant and command line: "export boq", "cost estimate", "column schedule", "export schedules" …
+
+### Fixed
+- Properties panel showed a large black box on Windows (system dark palette leaking through).
+- Plan names were cut off in the levels table ("Typica", "Mumty"), and the plan list showed two rows.
+- Results tabs overflowed behind scroll arrows.
+- Menus could show black corners on Windows.
+
 ## [1.1.0] – 2026-10-08
 Feature release. Projects saved by 1.0.x open unchanged: they keep the equivalent static method
 and no diaphragm until you switch them on (Frame ▸ Seismic), so their results do not move.

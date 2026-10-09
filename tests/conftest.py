@@ -31,3 +31,24 @@ def _isolated_appdata(monkeypatch, tmp_path):
 def tmpdir_path():
     with tempfile.TemporaryDirectory() as d:
         yield d
+
+
+@pytest.fixture(autouse=True)
+def _delete_leftover_windows():
+    """Delete the top-level windows a GUI test leaves behind. Closed windows otherwise stay alive
+    for the whole session, and every later QApplication.setStyleSheet re-styles all of them."""
+    yield
+    if "PySide6.QtWidgets" not in sys.modules:
+        return
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        return
+    for w in app.topLevelWidgets():
+        if getattr(w, "dirty", None) is not None:
+            w.dirty = False  # no "save changes?" on close
+        w.close()
+        w.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)

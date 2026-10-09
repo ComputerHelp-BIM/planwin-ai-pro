@@ -134,7 +134,7 @@ def test_badges_count_failures_and_issues(app, designed):
     rp = ResultsPanel(FakeMain(p, fm, fa, bad))
     rp.refresh()
     item = rp._items["Columns"]
-    assert item.text(1) == "✖ 2" and item.foreground(1).color().name().upper() == "#DC2626"
+    assert item.text(1) == "✖ 2" and item.foreground(1).color().name().upper() == theme.BADGE["error"].upper()
     beams = rp._items["Beams"]
     assert all(b.ok for b in rep.beams) and beams.text(1) == "✓"
     n = rp.tables["Issues"].rowCount()

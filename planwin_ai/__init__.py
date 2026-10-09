@@ -6,6 +6,6 @@ Versioning follows Semantic Versioning: MAJOR.MINOR.PATCH.
 
 __all__ = ["__version__", "APP_NAME", "COMPANY"]
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 APP_NAME = "PlanWin AI Pro"
 COMPANY = "Computer Help"
