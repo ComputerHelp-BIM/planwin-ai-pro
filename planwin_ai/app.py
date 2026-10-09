@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
 import traceback
 from logging.handlers import RotatingFileHandler
 
@@ -83,11 +84,24 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     sys.excepthook = excepthook
+
+    def thread_excepthook(args):  # errors in worker threads (e.g. the AI request) are logged too
+        if args.exc_type is not SystemExit:
+            logging.getLogger("planwin").error(
+                "Unhandled exception in thread %s:\n%s",
+                getattr(args.thread, "name", "?"),
+                "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)),
+            )
+
+    threading.excepthook = thread_excepthook
     path = next((a for a in argv[1:] if a.lower().endswith((".pwai", ".plw"))), None)
     win = MainWindow()
-    if path and os.path.exists(path):
-        win.open_path(path)
     win.show()
+    if path:
+        if os.path.exists(path):
+            win.open_path(path)
+        else:  # e.g. a recent-file shortcut to a project that was moved or deleted
+            QMessageBox.warning(win, APP_NAME, f"The file could not be found:\n{path}")
     return app.exec()
 
 

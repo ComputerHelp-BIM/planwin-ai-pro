@@ -430,3 +430,22 @@ def test_keygen_licence_installs(tmp_path, capsys, monkeypatch):
     lic = json.loads(open(out, encoding="utf-8").read())
     assert lic["expires"] == "2099-03-31"
     assert L.install_license(json.dumps(lic)).mode == "pro"
+
+
+def test_console_attach_is_a_no_op_off_windows_or_with_working_output(monkeypatch):
+    """The windowed exe attaches to the parent console for `cli`; elsewhere nothing changes."""
+    import sys
+
+    from planwin_ai import console
+
+    out = sys.stdout
+    assert console.attach_parent_console() is False and sys.stdout is out
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert console.attach_parent_console() is False  # stdout already works (pytest captures it)
+
+
+def test_launcher_attaches_the_console_before_running_the_cli():
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "packaging" / "launcher.py").read_text(encoding="utf-8")
+    assert src.index("attach_parent_console()") < src.index("cli_main(")
