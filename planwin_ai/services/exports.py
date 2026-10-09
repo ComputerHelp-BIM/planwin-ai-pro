@@ -166,6 +166,18 @@ def _bbs(ctx: ExportContext, path: str) -> str:
     return write_bbs_excel(path, build_bbs(ctx.project, fm, rep), ctx.project, ctx.watermark)
 
 
+def _boq(ctx: ExportContext, path: str) -> str:
+    from ..io.boq_excel import write_boq_excel
+
+    return write_boq_excel(path, ctx.project, ctx.design(), ctx.watermark)
+
+
+def _schedules(ctx: ExportContext, path: str) -> str:
+    from ..io.schedules import write_schedules_excel
+
+    return write_schedules_excel(path, ctx.project, ctx.design(), ctx.watermark)
+
+
 def _details(ctx: ExportContext, path: str) -> str:
     from ..io.detail_dxf import write_detail_drawings
 
@@ -228,6 +240,28 @@ register(
         "Excel (*.xlsx)",
         _bbs,
         ("bar bending schedule",),
+        group="Reports",
+    )
+)
+register(
+    ExportFormat(
+        "boq",
+        "BOQ & cost estimate (Excel)",
+        "_BOQ.xlsx",
+        "Excel (*.xlsx)",
+        _boq,
+        ("bill of quantities", "estimate", "cost"),
+        group="Reports",
+    )
+)
+register(
+    ExportFormat(
+        "schedules",
+        "Member schedules (Excel)",
+        "_schedules.xlsx",
+        "Excel (*.xlsx)",
+        _schedules,
+        ("schedule", "column schedule", "beam schedule"),
         group="Reports",
     )
 )

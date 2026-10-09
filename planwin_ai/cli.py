@@ -7,6 +7,7 @@ Examples::
     planwin-ai cli ask "G+4 residential in Pune, 3x2 bays of 4.5 m" --out model.pwai
     planwin-ai cli run model.pwai --design --export staad etabs excel pdf --out-dir results/
     planwin-ai cli run model.pwai --method rsa --no-diaphragm --units MKS --export calc bbs details
+    planwin-ai cli run model.pwai --design --export boq schedules
     planwin-ai cli boq model.pwai --by type
     planwin-ai cli import-plw old.plw --out converted.pwai
 """
