@@ -705,12 +705,17 @@ def _footing_block(cv: Canvas, x0: float, y0: float, t: FootingType, cover: floa
     return right - x0, y0 - min(plan_bottom, sec_bottom)
 
 
-def _footing_pages(s: float, project, types: list[FootingType]) -> list[Canvas]:
+def _footing_pages(s: float, project, types: list[FootingType], combined=()) -> list[Canvas]:
     cover = project.design.footing_cover
     notes = [
         f"Clear cover {cover * 1000:.0f} mm. Bottom bars bent up at the ends; L is along the column depth.",
         "Footings are founded on PCC M10 100 thick projecting 100 mm. Dimensions in mm.",
     ]
+    for c in combined:  # not drawn: listed so that no footing is missing from the set
+        notes.append(
+            f"Combined footing {' + '.join(c.marks)}: {c.L * 1000:.0f} x {c.B * 1000:.0f} x {c.D * 1000:.0f}, "
+            f"bottom {c.bottom}, top {c.top}, transverse {'; '.join(c.transverse)} - detail as per the design."
+        )
 
     def head(cv: Canvas, top: float) -> float:
         rows = [
@@ -730,7 +735,8 @@ def _footing_pages(s: float, project, types: list[FootingType]) -> list[Canvas]:
         return table(cv, 0, top, hdr, rows)[1]
 
     blocks = [lambda cv, x, y, t=t: _footing_block(cv, x, y, t, cover) for t in types]
-    return _flow_pages(s, "FOOTING SCHEDULE", blocks, notes, head if types else None, "No footing designs available.")
+    empty = "No isolated footings - see the combined footings below." if combined else "No footing designs available."
+    return _flow_pages(s, "FOOTING SCHEDULE", blocks, notes, head if types else None, empty)
 
 
 def _flow_pages(s, title, blocks, notes, head=None, empty="") -> list[Canvas]:
@@ -1394,7 +1400,12 @@ def build_detail_doc(project, fm, rep, watermark: str = ""):
     col_title = "COLUMN AND WALL SCHEDULE" if walls else "COLUMN SCHEDULE"
     sheets = [
         ("columns", col_title, single(_column_sheet, ranges, col_rows, walls), SCALES),
-        ("footings", "FOOTING SCHEDULE", lambda s: _footing_pages(s, project, ftypes), SCALES[: SCALES.index(50) + 1]),
+        (
+            "footings",
+            "FOOTING SCHEDULE",
+            lambda s: _footing_pages(s, project, ftypes, getattr(rep, "combined_footings", [])),
+            SCALES[: SCALES.index(50) + 1],
+        ),
         ("beams", "BEAM DETAILS", lambda s: _beam_pages(s, project, bgroups), SCALES[2 : SCALES.index(75) + 1]),
         ("slabs", "SLAB SCHEDULE", single(_slab_sheet, sgroups), SCALES),
     ]

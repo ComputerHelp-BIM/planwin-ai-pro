@@ -2,8 +2,9 @@
 
 Export layers follow legacy PlanWin so existing CAD standards keep working:
 SLAB, SLAB_TEXT, SLAB_LOAD, BEAM, BEAM_TEXT, BEAM_LOAD, COLUMN, COLUMN_TEXT,
-COLUMN_LOAD.  Import reads closed polylines on layer SLAB, circles or closed
-polylines on layer COLUMN and lines on layer BEAM (all optional).
+COLUMN_LOAD, plus WALL and WALL_TEXT for shear walls.  Import reads closed
+polylines on layer SLAB, circles or closed polylines on layer COLUMN and lines
+on layer BEAM (all optional).
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ LAYERS = {
     "COLUMN": 4,
     "COLUMN_TEXT": 4,
     "COLUMN_LOAD": 5,
+    "WALL": 6,
+    "WALL_TEXT": 6,
     "GRID": 9,
     "TITLE": 7,
     "FRAME_BEAM": 1,
@@ -100,6 +103,15 @@ def export_plan_dxf(
                 msp.add_text(
                     f"D {cl.dead:.1f} L {cl.live:.1f} kN", height=text_h * 0.8, dxfattribs={"layer": "COLUMN_LOAD"}
                 ).set_placement((c.x + max(c.b, c.d) / 2 + 0.05, c.y - 0.05), align=TextEntityAlignment.TOP_LEFT)
+    for w in plan.walls:  # shear walls: footprint and mark (not read back by import_dxf)
+        msp.add_lwpolyline(w.corners(), close=True, dxfattribs={"layer": "WALL"})
+        cx, cy = w.centre
+        ang = w.angle % 180
+        if ang > 90:
+            ang -= 180
+        msp.add_text(w.mark, height=text_h, rotation=ang, dxfattribs={"layer": "WALL_TEXT"}).set_placement(
+            (cx, cy), align=TextEntityAlignment.MIDDLE_CENTER
+        )
     x0, y0, x1, y1 = plan.extents()
     tt = f"{title or plan.name}" + (f"  [{watermark}]" if watermark else "")
     msp.add_text(tt, height=text_h * 2.5, dxfattribs={"layer": "TITLE"}).set_placement(
@@ -117,7 +129,7 @@ def export_frame_dxf(fm: FrameModel, path: str) -> str:
         msp.add_line(
             (a.x, a.y, a.z),
             (b.x, b.y, b.z),
-            dxfattribs={"layer": "FRAME_COLUMN" if m.kind == "column" else "FRAME_BEAM"},
+            dxfattribs={"layer": "FRAME_COLUMN" if m.kind in ("column", "wall") else "FRAME_BEAM"},
         )
     doc.saveas(path)
     return path

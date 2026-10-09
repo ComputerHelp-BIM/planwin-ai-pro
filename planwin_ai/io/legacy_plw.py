@@ -109,7 +109,12 @@ def read_plw(path: str) -> tuple[Plan, ImportReport]:
     rep = ImportReport(version=version)
     name = os.path.splitext(os.path.basename(path))[0]
     major = int(version.split(".")[0]) if version[:1].isdigit() else 3
-    plan = _read_v5(lines, name, rep) if major >= 5 else _read_v1_3(lines, name, rep)
+    try:
+        plan = _read_v5(lines, name, rep) if major >= 5 else _read_v1_3(lines, name, rep)
+    except (IndexError, ValueError) as exc:  # truncated / malformed record
+        if isinstance(exc, LegacyFormatError):
+            raise
+        raise LegacyFormatError(f"Damaged PlanWin {version} file: {exc}") from exc
     rep.slabs, rep.columns, rep.beams = len(plan.slabs), len(plan.columns), len(plan.beams)
     return plan, rep
 
