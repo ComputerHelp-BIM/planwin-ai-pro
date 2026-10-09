@@ -9,11 +9,13 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QFontMetricsF,
     QKeyEvent,
     QMouseEvent,
     QPainter,
     QPen,
     QPolygonF,
+    QTransform,
     QWheelEvent,
 )
 from PySide6.QtWidgets import QMenu, QWidget
@@ -62,6 +64,73 @@ def dim_line(dm) -> tuple[Pt, Pt]:
     return (x1 + nx, y1 + ny), (x2 + nx, y2 + ny)
 
 
+# ------------------------------------------------------------------ label layout
+Rect = tuple[float, float, float, float]  # screen x, y, width, height
+#: beam / wall labels longer than this share of the member's on-screen length are shortened, then hidden
+LABEL_FILL = 0.85
+#: diagonal quadrants around a column, in default order of preference
+QUADRANTS = ("NE", "NW", "SE", "SW")
+
+
+def rects_overlap(a: Rect, b: Rect, pad: float = 0.0) -> bool:
+    """True when the two rectangles (grown by ``pad`` px) intersect; touching edges do not count."""
+    return (
+        a[0] < b[0] + b[2] + pad and b[0] < a[0] + a[2] + pad and a[1] < b[1] + b[3] + pad and b[1] < a[1] + a[3] + pad
+    )
+
+
+class LabelPlacer:
+    """Greedy label collision avoidance: the first label to claim a piece of screen keeps it.
+
+    Labels are offered in priority order, each with alternative positions; ``place`` takes the first
+    alternative that overlaps nothing already placed (nor any obstacle) and returns its index, or None.
+    """
+
+    def __init__(self, obstacles=(), pad: float = 1.0):
+        self.pad = pad
+        self.taken: list[Rect] = [tuple(r) for r in obstacles]
+
+    def free(self, r: Rect) -> bool:
+        return not any(rects_overlap(r, t, self.pad) for t in self.taken)
+
+    def place(self, options) -> int | None:
+        for i, r in enumerate(options):
+            if self.free(r):
+                self.taken.append(tuple(r))
+                return i
+        return None
+
+
+def place_labels(options_per_label, obstacles=(), pad: float = 1.0) -> list[int | None]:
+    """Index of the chosen alternative for each label (priority order), None when every alternative collides."""
+    placer = LabelPlacer(obstacles, pad)
+    return [placer.place(opts) for opts in options_per_label]
+
+
+def framing_dirs(at: Pt, segments, tol: float) -> set[str]:
+    """Compass directions (E W N S) in which the members ``segments`` [(p1, p2), ...] leave the point ``at``."""
+    out: set[str] = set()
+
+    def heading(dx: float, dy: float) -> str:
+        return ("E" if dx > 0 else "W") if abs(dx) >= abs(dy) else ("N" if dy > 0 else "S")
+
+    for a, b in segments:
+        da, db = G.dist(at, a), G.dist(at, b)
+        if da <= tol and db > tol:
+            out.add(heading(b[0] - a[0], b[1] - a[1]))
+        elif db <= tol and da > tol:
+            out.add(heading(a[0] - b[0], a[1] - b[1]))
+        elif da > tol and db > tol and G.point_segment_distance(at, a, b) <= tol:  # runs through the point
+            out.add(heading(b[0] - a[0], b[1] - a[1]))
+            out.add(heading(a[0] - b[0], a[1] - b[1]))
+    return out
+
+
+def label_quadrants(dirs: set[str]) -> list[str]:
+    """Diagonal quadrants for a column label, the ones bordered by fewest framing members first."""
+    return sorted(QUADRANTS, key=lambda q: (sum(d in dirs for d in q), QUADRANTS.index(q)))
+
+
 class PlanCanvas(QWidget):
     selectionChanged = Signal(list)
     status = Signal(str)
@@ -104,6 +173,8 @@ class PlanCanvas(QWidget):
         self._panning = False
         self._last_pos: QPointF | None = None
         self.highlight_at: Pt | None = None
+        #: labels drawn by the last paint: (kind, object id, screen rect), in priority order
+        self.painted_labels: list[tuple[str, str, Rect]] = []
 
     # ----------------------------------------------------------- helpers
     @property
@@ -347,14 +418,6 @@ class PlanCanvas(QWidget):
                 a, b = s.pts[s.cant_edge], s.pts[(s.cant_edge + 1) % len(s.pts)]
                 p.setPen(QPen(QColor(pal["beam_cant"]), 3, Qt.DashLine))
                 p.drawLine(self.w2s(*a), self.w2s(*b))
-            if self.show_marks:
-                cx, cy = G.polygon_centroid(s.pts)
-                c = self.w2s(cx, cy)
-                p.setPen(QColor(pal["text_canvas"]))
-                txt = s.mark
-                if self.show_loads and self.scale > 18:
-                    txt += f"\n{s.dead:.1f}+{s.live_load:.1f}"
-                p.drawText(QRectF(c.x() - 60, c.y() - 18, 120, 36), Qt.AlignCenter, txt)
         # beams
         for b in plan.beams:
             w = max(b.b * self.scale, 2.0)
@@ -364,11 +427,6 @@ class PlanCanvas(QWidget):
                 pen.setStyle(Qt.DashLine)
             p.setPen(pen)
             p.drawLine(self.w2s(*b.p1), self.w2s(*b.p2))
-            if self.show_marks and self.scale > 12:
-                label = b.mark
-                if self.show_loads and res and b.id in res.beams:
-                    label += f"  {res.beams[b.id].equivalent_udl():.1f} kN/m"
-                self._paint_along(p, b.p1, b.p2, label, w / 2)
         # walls
         wcol = QColor(self.wall_colour)
         for wl in plan.walls:
@@ -376,24 +434,15 @@ class PlanCanvas(QWidget):
             p.setBrush(col)
             p.setPen(QPen(col.darker(140), 1))
             p.drawPolygon(QPolygonF([self.w2s(*pt) for pt in wl.corners()]))
-            if self.show_marks and self.scale > 12:
-                self._paint_along(p, wl.p1, wl.p2, wl.mark, wl.thickness * self.scale / 2, below=True)
         # columns
         for c in plan.columns:
             poly = QPolygonF([self.w2s(*pt) for pt in c.corners()])
             p.setBrush(QColor(pal["select"] if c.id in sel else pal["column"]))
             p.setPen(Qt.NoPen)
             p.drawPolygon(poly)
-            if self.show_marks:
-                pt = self.w2s(c.x, c.y)
-                off = max(c.b, c.d) * self.scale / 2 + 3
-                p.setPen(QColor(pal["text_canvas"]))
-                label = c.mark
-                if self.show_loads and res:
-                    cl = res.columns.get(c.id)
-                    if cl and cl.total > 0:
-                        label += f" {cl.total:.0f}kN"
-                p.drawText(QPointF(pt.x() + off, pt.y() - off), label)
+        self.painted_labels = []
+        if self.show_marks:
+            self._paint_labels(p, plan, res)
         if self.show_grids:
             self._paint_grid_bubbles(p, plan)
         if self.show_dims:
@@ -420,21 +469,132 @@ class PlanCanvas(QWidget):
         self._paint_tool(p)
         self._paint_scale(p)
 
-    def _paint_along(self, p: QPainter, a: Pt, b: Pt, label: str, half: float, below: bool = False):
-        """Label written along a member, beside its centre line (``half`` = half width in px)."""
-        mid = self.w2s((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
-        ang = -math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
-        if ang > 90 or ang < -90:
-            ang += 180
+    def _paint_labels(self, p: QPainter, plan: Plan, res):
+        """Member labels, decluttered: columns, then beams, slabs and walls claim screen space in that order.
+
+        A label that would overlap one already drawn tries its alternative positions, then a shorter text
+        (mark only), and is left out when nothing fits; labels never cover a column.
+        """
+        pal = self.pal
+        fm = QFontMetricsF(p.font())
+        th = fm.height()
+        text_col = QColor(pal["text_canvas"])
+        pill = QColor(pal["canvas"])
+        pill.setAlpha(200)
+        obstacles = []
+        for c in plan.columns:
+            r = QPolygonF([self.w2s(*q) for q in c.corners()]).boundingRect()
+            obstacles.append((r.x(), r.y(), r.width(), r.height()))
+        placer = LabelPlacer(obstacles)
+        view = QRectF(self.rect())
+        # columns: in the diagonal quadrant away from the members framing in, on a soft pill
+        segs = [(b.p1, b.p2) for b in plan.beams] + [(w.p1, w.p2) for w in plan.walls]
+        for c in plan.columns:
+            texts = [c.mark]
+            if self.show_loads and res:
+                cl = res.columns.get(c.id)
+                if cl and cl.total > 0:
+                    texts.insert(0, f"{c.mark}  {cl.total:.0f} kN")
+            pt = self.w2s(c.x, c.y)
+            off = max(c.b, c.d) * self.scale / 2 + 3
+            quads = label_quadrants(framing_dirs(c.pos, segs, max(c.b, c.d) / 2 + 0.05))
+            opts = []
+            for t in texts:
+                w, h = fm.horizontalAdvance(t) + 8, th + 2
+                for q in quads:
+                    x = pt.x() + off if q[1] == "E" else pt.x() - off - w
+                    y = pt.y() - off - h if q[0] == "N" else pt.y() + off
+                    opts.append((t, (x, y, w, h)))
+            # positions inside the view first (stable: keeps the quadrant and text order otherwise)
+            opts.sort(key=lambda o: not view.contains(QRectF(*o[1])))
+            i = placer.place([r for _, r in opts])
+            if i is None:
+                continue
+            t, r = opts[i]
+            rect = QRectF(*r)
+            p.setPen(Qt.NoPen)
+            p.setBrush(pill)
+            p.drawRoundedRect(rect, 4, 4)
+            p.setPen(text_col)
+            p.drawText(rect, Qt.AlignCenter, t)
+            self.painted_labels.append(("column", c.id, r))
+        # beams: centred on the span, beside the beam; shortened, then hidden, when longer than the beam
+        if self.scale > 12:
+            for b in plan.beams:
+                texts = [b.mark]
+                if self.show_loads and res and b.id in res.beams:
+                    texts.insert(0, f"{b.mark}  {res.beams[b.id].equivalent_udl():.1f} kN/m")
+                half = max(b.b * self.scale, 2.0) / 2
+                self._place_along(p, fm, placer, ("beam", b.id), b.p1, b.p2, texts, half)
+        # slabs: only when the text fits inside the slab
+        for s in plan.slabs:
+            if len(s.points) < 3:
+                continue
+            poly = QPolygonF([self.w2s(*q) for q in s.pts])
+            c = self.w2s(*G.polygon_centroid(s.pts))
+            texts = [s.mark]
+            if self.show_loads and self.scale > 18:
+                texts.insert(0, f"{s.mark}\n{s.dead:.1f}+{s.live_load:.1f}")
+            opts = []
+            for t in texts:
+                br = fm.boundingRect(QRectF(0, 0, 4000, 4000), Qt.AlignCenter, t)
+                w, h = br.width() + 4, br.height()
+                r = QRectF(c.x() - w / 2, c.y() - h / 2, w, h)
+                g = r.adjusted(-4, -4, 4, 4)
+                corners = (g.topLeft(), g.topRight(), g.bottomLeft(), g.bottomRight())
+                if all(poly.containsPoint(q, Qt.OddEvenFill) for q in corners):
+                    opts.append((t, r))
+            i = placer.place([(r.x(), r.y(), r.width(), r.height()) for _, r in opts])
+            if i is None:
+                continue
+            t, r = opts[i]
+            p.setPen(text_col)
+            p.drawText(r, Qt.AlignCenter, t)
+            self.painted_labels.append(("slab", s.id, (r.x(), r.y(), r.width(), r.height())))
+        # walls
+        if self.scale > 12:
+            for wl in plan.walls:
+                half = wl.thickness * self.scale / 2
+                self._place_along(p, fm, placer, ("wall", wl.id), wl.p1, wl.p2, [wl.mark], half, below=True)
+
+    def _place_along(
+        self, p: QPainter, fm: QFontMetricsF, placer: LabelPlacer, key, a: Pt, b: Pt, texts, half, below: bool = False
+    ):
+        """Label written along a member at mid-span, beside its centre line (``half`` = half width in px).
+
+        Tries each text (longest first) on the preferred side, then the other side; texts longer than
+        ``LABEL_FILL`` of the member's on-screen length are skipped.
+        """
+        A, B = self.w2s(*a), self.w2s(*b)
+        length = math.hypot(B.x() - A.x(), B.y() - A.y())
+        ang = math.degrees(math.atan2(B.y() - A.y(), B.x() - A.x()))
+        if ang >= 90 - 1e-6 or ang < -90 - 1e-6:  # keep text readable: left-to-right or bottom-to-top
+            ang += -180 if ang > 0 else 180
+        mid = (A + B) / 2
+        tf = QTransform()
+        tf.translate(mid.x(), mid.y())
+        tf.rotate(ang)
+        h, gap = fm.height(), 2.0
+        opts = []
+        for t in texts:
+            w = fm.horizontalAdvance(t)
+            if w > LABEL_FILL * length:
+                continue
+            above = QRectF(-w / 2, -half - gap - h, w, h)
+            under = QRectF(-w / 2, half + gap, w, h)
+            for local in (under, above) if below else (above, under):
+                br = tf.mapRect(local)
+                opts.append((t, local, (br.x(), br.y(), br.width(), br.height())))
+        i = placer.place([o[2] for o in opts])
+        if i is None:
+            return
+        t, local, r = opts[i]
         p.save()
-        p.translate(mid)
-        p.rotate(ang)
+        p.setTransform(tf, True)
         p.setPen(QColor(self.pal["text_canvas"]))
-        if below:
-            p.drawText(QRectF(-80, half + 2, 160, 14), Qt.AlignHCenter | Qt.AlignTop, label)
-        else:
-            p.drawText(QRectF(-80, -half - 16, 160, 14), Qt.AlignHCenter | Qt.AlignBottom, label)
+        p.drawText(local, Qt.AlignCenter, t)
         p.restore()
+        self.painted_labels.append((key[0], key[1], r))
 
     def _paint_dim(self, p: QPainter, a: Pt, b: Pt, off: float, col: QColor):
         """Dimension: extension lines, dimension line with oblique ticks and the length in m."""
