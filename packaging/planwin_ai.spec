@@ -24,7 +24,19 @@ a = Analysis([os.path.join(ROOT, "packaging", "launcher.py")], pathex=[ROOT], da
              excludes=excludes, noarchive=False)
 pyz = PYZ(a.pure)
 icon = os.path.join(ROOT, "assets", "planwin_ai.ico")
-version = os.path.join(ROOT, "packaging", "version_info.txt")
+
+# Windows version resource from the single version source (planwin_ai/__init__.py)
+_ns = {}
+with open(os.path.join(ROOT, "planwin_ai", "__init__.py"), encoding="utf-8") as _f:
+    exec(compile(_f.read(), "planwin_ai/__init__.py", "exec"), _ns)
+_v = _ns["__version__"]
+_major, _minor, _patch = (int(x) for x in _v.split("."))
+with open(os.path.join(ROOT, "packaging", "version_info.template.txt"), encoding="utf-8") as _f:
+    _info = _f.read().format(version=_v, major=_major, minor=_minor, patch=_patch)
+os.makedirs(os.path.join(ROOT, "build"), exist_ok=True)
+version = os.path.join(ROOT, "build", "version_info.txt")
+with open(version, "w", encoding="utf-8") as _f:
+    _f.write(_info)
 
 if ONEFILE:
     exe = EXE(pyz, a.scripts, a.binaries, a.datas, [], name="PlanWinAIPro", console=False, icon=icon,

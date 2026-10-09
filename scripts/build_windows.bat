@@ -10,11 +10,12 @@ pip install -r requirements-dev.txt || goto :err
 python -m pytest -q || goto :err
 pyinstaller packaging\planwin_ai.spec --noconfirm --clean || goto :err
 dist\PlanWinAIPro\PlanWinAIPro.exe --selftest || goto :err
+for /f %%v in ('python -c "import planwin_ai; print(planwin_ai.__version__)"') do set APPVER=%%v
 set PLANWIN_ONEFILE=1
 pyinstaller packaging\planwin_ai.spec --noconfirm || goto :err
 set PLANWIN_ONEFILE=
 if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" (
-  "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" packaging\installer.iss || goto :err
+  "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /DAppVersion=%APPVER% packaging\installer.iss || goto :err
 ) else (
   echo Inno Setup not found - skipping installer. Get it from https://jrsoftware.org/isdl.php
 )

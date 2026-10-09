@@ -1,14 +1,12 @@
 """Geometry, PlanWin load transfer and 3-D solver tests (closed-form checks)."""
 
-import math
-
 import numpy as np
 import pytest
 
 from planwin_ai.core import geometry as G
 from planwin_ai.core.beamcalc import LinLoad, PtLoad, continuous_beam, diagrams, simple_span_reactions
 from planwin_ai.core.model import Beam, Column, Plan, Slab
-from planwin_ai.core.plan_engine import PlanEngine, auto_beams, auto_columns, slab_edge_profiles, profile_integral
+from planwin_ai.core.plan_engine import PlanEngine, auto_beams, auto_columns, profile_integral, slab_edge_profiles
 from planwin_ai.core.solver import FMember, FNode, FrameSolver, MLoad, MPoint, section_forces
 
 
@@ -88,8 +86,10 @@ def test_diagram_simply_supported():
 # ----------------------------------------------------------------- plan engine
 def _two_by_one_plan():
     p = Plan(name="T", floor_height_above=3.0)
-    p.slabs = [Slab(mark="S1", points=[[0, 0], [5, 0], [5, 4], [0, 4]], live=3, floor_finish=1, other=0),
-               Slab(mark="S2", points=[[5, 0], [10, 0], [10, 4], [5, 4]], live=3, floor_finish=1, other=0)]
+    p.slabs = [
+        Slab(mark="S1", points=[[0, 0], [5, 0], [5, 4], [0, 4]], live=3, floor_finish=1, other=0),
+        Slab(mark="S2", points=[[5, 0], [10, 0], [10, 4], [5, 4]], live=3, floor_finish=1, other=0),
+    ]
     return p
 
 
@@ -160,7 +160,7 @@ def test_simply_supported_point_and_udl():
     assert r.reactions["D"][1][2] == pytest.approx(50)
 
 
-@pytest.mark.parametrize("angle,inertia", [(0, 0.6 * 0.3 ** 3 / 12), (90, 0.3 * 0.6 ** 3 / 12)])
+@pytest.mark.parametrize("angle,inertia", [(0, 0.6 * 0.3**3 / 12), (90, 0.3 * 0.6**3 / 12)])
 def test_cantilever_column_orientation(angle, inertia):
     nodes = {1: FNode(1, 0, 0, 0, support="fixed"), 2: FNode(2, 0, 0, 3)}
     c = FMember(1, 1, 2, "column", 0.3, 0.6, E, angle=angle)
@@ -169,10 +169,17 @@ def test_cantilever_column_orientation(angle, inertia):
 
 
 def test_portal_frame_lateral_equilibrium():
-    nodes = {1: FNode(1, 0, 0, 0, support="fixed"), 2: FNode(2, 6, 0, 0, support="fixed"),
-             3: FNode(3, 0, 0, 3), 4: FNode(4, 6, 0, 3)}
-    mem = {1: FMember(1, 1, 3, "column", 0.3, 0.3, E), 2: FMember(2, 2, 4, "column", 0.3, 0.3, E),
-           3: FMember(3, 3, 4, "beam", 0.3, 0.5, E)}
+    nodes = {
+        1: FNode(1, 0, 0, 0, support="fixed"),
+        2: FNode(2, 6, 0, 0, support="fixed"),
+        3: FNode(3, 0, 0, 3),
+        4: FNode(4, 6, 0, 3),
+    }
+    mem = {
+        1: FMember(1, 1, 3, "column", 0.3, 0.3, E),
+        2: FMember(2, 2, 4, "column", 0.3, 0.3, E),
+        3: FMember(3, 3, 4, "beam", 0.3, 0.5, E),
+    }
     r = FrameSolver(nodes, mem, {"H": {3: np.array([50.0, 0, 0, 0, 0, 0])}}).solve(["H"])
     assert sum(v[0] for v in r.reactions["H"].values()) == pytest.approx(-50)
     # symmetric columns share the shear almost equally

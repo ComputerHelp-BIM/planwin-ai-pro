@@ -13,20 +13,43 @@ Units: metres, kN, kN/m, kN/m^2, kN/m^3, MPa (N/mm^2) for material strengths.
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import hashlib
 import itertools
 import math
 import uuid
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, fields
-from typing import Any, Optional
+from typing import Any
 
 from . import geometry as G
 
-SCHEMA_VERSION = 1
+#: 2 (1.1.0): shear walls, grid lines, staircases, water tanks, rigid diaphragm and seismic method
+SCHEMA_VERSION = 2
+
+
+_id_seed: str | None = None
+_id_counter = itertools.count()
 
 
 def new_id() -> str:
-    return uuid.uuid4().hex[:10]
+    """Random 10-hex-digit object id (deterministic inside :func:`deterministic_ids`)."""
+    if _id_seed is None:
+        return uuid.uuid4().hex[:10]
+    return hashlib.sha1(f"{_id_seed}:{next(_id_counter)}".encode()).hexdigest()[:10]
+
+
+@contextlib.contextmanager
+def deterministic_ids(seed: str) -> Iterator[None]:
+    """Reproducible ids, e.g. for the bundled template library (stable files under git)."""
+    global _id_seed, _id_counter
+    saved = _id_seed, _id_counter
+    _id_seed, _id_counter = seed, itertools.count()
+    try:
+        yield
+    finally:
+        _id_seed, _id_counter = saved
 
 
 # --------------------------------------------------------------------- loads
@@ -66,7 +89,7 @@ class Slab:
     #: auto | two_way | one_way (spans short way) | one_way_long | cantilever | on_grade
     #: "uniform" distributes the load evenly to all supporting edges.
     distribution: str = "auto"
-    cant_edge: Optional[int] = None  # index i of fixed edge (points[i] -> points[i+1])
+    cant_edge: int | None = None  # index i of fixed edge (points[i] -> points[i+1])
     grade: str = "M25"
     room: str = ""
 
@@ -130,14 +153,14 @@ class Beam:
     external: bool = False
     # wall / plaster above the beam (PlanWin "double arrow" dialog)
     wall_thk: float = 0.23
-    wall_height: Optional[float] = None  # None -> floor height above - beam depth
+    wall_height: float | None = None  # None -> floor height above - beam depth
     wall_density: float = 20.0
     plaster_thk: float = 0.03  # both faces combined
     plaster_density: float = 20.0
     include_self: bool = True
     include_wall: bool = True
     include_plaster: bool = True
-    parapet: Optional[float] = None  # roof parapet height (m) overrides wall height
+    parapet: float | None = None  # roof parapet height (m) overrides wall height
     point_loads: list[PointLoad] = field(default_factory=list)
     part_loads: list[PartLoad] = field(default_factory=list)
 
@@ -176,6 +199,58 @@ class Beam:
 
 
 @dataclass
+class Wall:
+    """RC shear wall (structural wall) from (x1, y1) to (x2, y2), centred on that line.
+
+    Walls are stacked between levels by ``mark`` exactly like columns.  In the 3-D
+    model a wall is a wide column at its centre joined to its ends (and to any beam
+    framing into it) by rigid links – the classic "wide column frame" idealisation.
+    """
+
+    id: str = field(default_factory=new_id)
+    mark: str = "W1"
+    x1: float = 0.0
+    y1: float = 0.0
+    x2: float = 3.0
+    y2: float = 0.0
+    thickness: float = 0.2
+    grade: str = "M25"
+
+    @property
+    def p1(self) -> G.Point:
+        return (self.x1, self.y1)
+
+    @property
+    def p2(self) -> G.Point:
+        return (self.x2, self.y2)
+
+    @property
+    def length(self) -> float:
+        return G.dist(self.p1, self.p2)
+
+    @property
+    def centre(self) -> G.Point:
+        return ((self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2)
+
+    @property
+    def angle(self) -> float:
+        """Direction of the wall in plan (degrees from global X)."""
+        return math.degrees(math.atan2(self.y2 - self.y1, self.x2 - self.x1))
+
+    def corners(self) -> list[G.Point]:
+        cx, cy = self.centre
+        return G.rect_corners(cx, cy, self.length, self.thickness, self.angle)
+
+    def contains(self, p: G.Point, tol: float = 0.02) -> bool:
+        """True when ``p`` lies inside the wall footprint grown by ``tol``."""
+        L = self.length
+        if L < 1e-9:
+            return G.dist(p, self.p1) <= self.thickness / 2 + tol
+        t = G.project_param(p, self.p1, self.p2)
+        return -tol / L <= t <= 1 + tol / L and G.point_line_distance(p, self.p1, self.p2) <= self.thickness / 2 + tol
+
+
+@dataclass
 class Plan:
     """A PlanWin floor plan."""
 
@@ -186,11 +261,15 @@ class Plan:
     slabs: list[Slab] = field(default_factory=list)
     columns: list[Column] = field(default_factory=list)
     beams: list[Beam] = field(default_factory=list)
+    walls: list[Wall] = field(default_factory=list)
+    #: drawing dimensions [{"x1", "y1", "x2", "y2", "offset"}] in m; offset = perpendicular distance of the
+    #: dimension line from the measured points, positive to the left of (x1, y1) → (x2, y2)
+    dimensions: list[dict[str, Any]] = field(default_factory=list)
     notes: str = ""
 
     # ------------------------------------------------------------ lookups
     def find(self, obj_id: str):
-        for coll in (self.slabs, self.columns, self.beams):
+        for coll in (self.slabs, self.columns, self.beams, self.walls):
             for o in coll:
                 if o.id == obj_id:
                     return o
@@ -198,13 +277,17 @@ class Plan:
 
     def remove(self, obj_ids) -> int:
         ids = set(obj_ids)
-        n0 = len(self.slabs) + len(self.columns) + len(self.beams)
+        n0 = len(self.slabs) + len(self.columns) + len(self.beams) + len(self.walls)
         self.slabs = [s for s in self.slabs if s.id not in ids]
         self.columns = [c for c in self.columns if c.id not in ids]
         self.beams = [b for b in self.beams if b.id not in ids]
-        return n0 - (len(self.slabs) + len(self.columns) + len(self.beams))
+        self.walls = [w for w in self.walls if w.id not in ids]
+        return n0 - (len(self.slabs) + len(self.columns) + len(self.beams) + len(self.walls))
 
-    def column_at(self, p: G.Point, tol: float = 0.05) -> Optional[Column]:
+    def wall_at(self, p: G.Point, tol: float = 0.02) -> Wall | None:
+        return next((w for w in self.walls if w.contains(p, tol)), None)
+
+    def column_at(self, p: G.Point, tol: float = 0.05) -> Column | None:
         best, bd = None, tol
         for c in self.columns:
             d = G.dist(c.pos, p)
@@ -219,6 +302,8 @@ class Plan:
         pts.extend(c.pos for c in self.columns)
         for b in self.beams:
             pts.extend((b.p1, b.p2))
+        for w in self.walls:
+            pts.extend((w.p1, w.p2))
         return pts
 
     def extents(self):
@@ -226,7 +311,7 @@ class Plan:
 
     # ------------------------------------------------------------ numbering
     def next_mark(self, prefix: str) -> str:
-        coll = {"S": self.slabs, "C": self.columns, "B": self.beams}[prefix]
+        coll = {"S": self.slabs, "C": self.columns, "B": self.beams, "W": self.walls}[prefix]
         used = {o.mark for o in coll}
         for i in itertools.count(1):
             m = f"{prefix}{i}"
@@ -241,6 +326,7 @@ class Plan:
         columns by mark), so renumbering columns is only advised on the first
         plan; the GUI warns about this like legacy PlanWin did.
         """
+
         def key_xy(p):
             x, y = p
             return (-round(y, 2), round(x, 2)) if order == "lr_tb" else (round(x, 2), -round(y, 2))
@@ -280,6 +366,12 @@ class SeismicParams:
     infill: bool = True  # Ta = 0.09h/sqrt(d) when True
     base_level: int = 1  # level index from which height is measured (plinth)
     accidental_torsion: bool = True  # IS 1893-1:2016 cl 7.8.2 (±0.05 b)
+    #: "auto" – response spectrum where IS 1893-1:2016 cl 7.7.1 requires it, else equivalent static;
+    #: "static" – equivalent static only; "response_spectrum" – always (scaled to the static base shear)
+    method: str = "auto"
+    #: floors act as rigid diaphragms (cl 7.6.4): lateral forces at the centre of mass,
+    #: one translation pair + rotation per floor
+    rigid_diaphragm: bool = True
 
 
 @dataclass
@@ -348,12 +440,18 @@ class Project:
     joint_loads: list[dict[str, Any]] = field(default_factory=list)
     #: support conditions per column mark: "fixed" | "pinned"
     supports: dict[str, str] = field(default_factory=dict)
+    #: grid lines shown on every plan: [{"name": "A", "axis": "x", "pos": 0.0}, …] (axis "x" = line x = pos)
+    grids: list[dict[str, Any]] = field(default_factory=list)
+    #: staircase definitions from the stair wizard (recomputed loads are applied to beams)
+    stairs: list[dict[str, Any]] = field(default_factory=list)
+    #: overhead water tanks from the tank wizard (applied as joint loads)
+    water_tanks: list[dict[str, Any]] = field(default_factory=list)
     #: free-form metadata, e.g. {"grid_spec": {...}} for AI regeneration
     meta: dict[str, Any] = field(default_factory=dict)
     schema: int = SCHEMA_VERSION
 
     # ------------------------------------------------------------ helpers
-    def plan(self, name: str) -> Optional[Plan]:
+    def plan(self, name: str) -> Plan | None:
         for p in self.plans:
             if p.name == name:
                 return p
@@ -383,7 +481,7 @@ class Project:
     def set_column_size(self, mark: str, level_index: int, b: float, d: float, angle: float) -> None:
         self.column_sizes.setdefault(mark, {})[str(level_index)] = [round(b, 3), round(d, 3), angle]
 
-    def clone(self) -> "Project":
+    def clone(self) -> Project:
         return copy.deepcopy(self)
 
     # ------------------------------------------------------------ serialisation
@@ -393,7 +491,7 @@ class Project:
         return d
 
     @staticmethod
-    def from_dict(d: dict) -> "Project":
+    def from_dict(d: dict) -> Project:
         return _build(Project, d)
 
     def summary(self) -> dict:
@@ -417,10 +515,15 @@ _NESTED = {
     ("Plan", "slabs"): "Slab",
     ("Plan", "columns"): "Column",
     ("Plan", "beams"): "Beam",
+    ("Plan", "walls"): "Wall",
     ("Beam", "point_loads"): "PointLoad",
     ("Beam", "part_loads"): "PartLoad",
 }
-_SINGLE = {("Project", "seismic"): "SeismicParams", ("Project", "wind"): "WindParams", ("Project", "design"): "DesignSettings"}
+_SINGLE = {
+    ("Project", "seismic"): "SeismicParams",
+    ("Project", "wind"): "WindParams",
+    ("Project", "design"): "DesignSettings",
+}
 
 
 def _build(cls, data: dict):

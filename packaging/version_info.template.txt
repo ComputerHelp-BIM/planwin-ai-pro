@@ -1,17 +1,18 @@
-# UTF-8 – Windows version resource for PyInstaller (keep in sync with planwin_ai/__init__.py)
+# UTF-8 – Windows version resource template; packaging/planwin_ai.spec fills in the version
+# from planwin_ai/__init__.py (the single version source).
 VSVersionInfo(
-  ffi=FixedFileInfo(filevers=(1, 0, 0, 0), prodvers=(1, 0, 0, 0), mask=0x3f, flags=0x0, OS=0x40004,
+  ffi=FixedFileInfo(filevers=({major}, {minor}, {patch}, 0), prodvers=({major}, {minor}, {patch}, 0), mask=0x3f, flags=0x0, OS=0x40004,
                     fileType=0x1, subtype=0x0, date=(0, 0)),
   kids=[
     StringFileInfo([StringTable('040904B0', [
       StringStruct('CompanyName', 'Computer Help'),
       StringStruct('FileDescription', 'PlanWin AI Pro – structural pre-processor, analysis and design'),
-      StringStruct('FileVersion', '1.0.0'),
+      StringStruct('FileVersion', '{version}'),
       StringStruct('InternalName', 'PlanWinAIPro'),
       StringStruct('LegalCopyright', '© Computer Help / Building Software'),
       StringStruct('OriginalFilename', 'PlanWinAIPro.exe'),
       StringStruct('ProductName', 'PlanWin AI Pro'),
-      StringStruct('ProductVersion', '1.0.0')])]),
+      StringStruct('ProductVersion', '{version}')])]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
 )

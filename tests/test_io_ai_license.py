@@ -64,7 +64,8 @@ def test_exports(tmp_path):
     assert n_ult == 37 and txt.count("LOAD COMB") == n_ult
     assert "MEMBER RELEASE" not in txt and "PRIS AX" in txt
     njoints = txt.split("JOINT COORDINATES")[1].split("MEMBER INCIDENCES")[0].count(";")
-    assert njoints == len(fm.nodes)
+    masters = {lv.master for lv in fm.levels if lv.master is not None}  # virtual centre-of-mass joints
+    assert njoints == len(fm.nodes) - len(masters)
     e2k = open(etabs.write_etabs(fm, str(tmp_path / "m.e2k"))).read()
     assert "$ STORIES - IN SEQUENCE FROM TOP" in e2k and e2k.count("LINEASSIGN") == len(fm.members)
     plan = prj.plan("Typical")
@@ -109,7 +110,11 @@ def test_llm_provider_json(monkeypatch):
         status_code = 200
 
         def json(self):
-            return {"content": [{"type": "text", "text": '```json\n{"reply": "ok", "actions": [{"action": "analyze"}]}\n```'}]}
+            return {
+                "content": [
+                    {"type": "text", "text": '```json\n{"reply": "ok", "actions": [{"action": "analyze"}]}\n```'}
+                ]
+            }
 
     monkeypatch.setattr(providers, "get_key", lambda p: "sk-test")
     monkeypatch.setattr(providers.requests, "post", lambda *a, **k: R())
@@ -147,8 +152,18 @@ def test_license_sign_verify_and_trial(tmp_path, monkeypatch):
     from planwin_ai.licensing import license as L
 
     key = Ed25519PrivateKey.generate()
-    pub = base64.b64encode(key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
-    lic = {"name": "A", "company": "B", "email": "c@d", "edition": "pro", "issued": "2026-01-01", "expires": "2099-01-01", "seats": 1}
+    pub = base64.b64encode(
+        key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    ).decode()
+    lic = {
+        "name": "A",
+        "company": "B",
+        "email": "c@d",
+        "edition": "pro",
+        "issued": "2026-01-01",
+        "expires": "2099-01-01",
+        "seats": 1,
+    }
     lic["sig"] = base64.b64encode(key.sign(L.canonical(lic))).decode()
     assert L.verify(lic, pub)
     tampered = dict(lic, expires="2199-01-01")

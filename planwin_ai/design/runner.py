@@ -1,101 +1,39 @@
 """Design orchestration: frame analysis results -> member designs -> BOQ.
 
-The runner keeps the engineering routines (is456.py) independent of the
-model so they can be tested in isolation.
+The runner keeps the engineering routines (``is456``) independent of the model so they
+can be tested in isolation.  Result containers live in :mod:`.report`, quantities in
+:mod:`.quantities` and sizing in :mod:`.sizing`; they are re-exported here so existing
+``from planwin_ai.design.runner import ...`` imports keep working.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import replace
 
 import numpy as np
 
 from ..core import geometry as G
 from ..core.frame import FrameAnalysis, FrameModel
 from ..core.model import Project, grade_fck
-from ..core.plan_engine import PlanEngine
-from . import is456
+from . import is456, is13920
+from .quantities import STEEL_DENSITY, quantities
+from .report import BeamDesign, ColumnDesign, CombinedFootingDesign, DesignReport, FootingDesign, WallDesign
+from .sizing import autosize_columns, default_moment_factor, optimize_sizes
 
-STEEL_DENSITY = 7850.0  # kg/m^3
-
-
-@dataclass
-class BeamDesign:
-    member_id: int
-    mark: str
-    level: str
-    b: float
-    d: float
-    span: float
-    M_sag: float
-    M_hog_l: float
-    M_hog_r: float
-    V_max: float
-    bottom: str
-    top_l: str
-    top_r: str
-    stirrups: str
-    ast_bot: float
-    ast_top_l: float
-    ast_top_r: float
-    deflection_ok: bool
-    ok: bool
-    utilisation: float
-    notes: list[str] = field(default_factory=list)
-
-
-@dataclass
-class ColumnDesign:
-    member_id: int
-    mark: str
-    level: str
-    b: float
-    d: float
-    Pu: float
-    Mux: float
-    Muy: float
-    steel_pct: float
-    bars: str
-    ties: str
-    governing: str
-    ok: bool
-    utilisation: float
-    As: float
-    notes: list[str] = field(default_factory=list)
-
-
-@dataclass
-class FootingDesign:
-    mark: str
-    P_service: float
-    L: float
-    B: float
-    D: float
-    bars_L: str
-    bars_B: str
-    q: float
-    ok: bool
-    ast_L: float
-    ast_B: float
-    notes: list[str] = field(default_factory=list)
-
-
-@dataclass
-class DesignReport:
-    beams: list[BeamDesign] = field(default_factory=list)
-    columns: list[ColumnDesign] = field(default_factory=list)
-    footings: list[FootingDesign] = field(default_factory=list)
-    slabs: list[tuple[str, is456.SlabResult]] = field(default_factory=list)  # (plan, result)
-    boq: dict = field(default_factory=dict)
-    drifts: list[dict] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-
-    @property
-    def failures(self) -> int:
-        return (sum(not b.ok for b in self.beams) + sum(not c.ok for c in self.columns)
-                + sum(not f.ok for f in self.footings) + sum(not s.ok for _, s in self.slabs))
+__all__ = [
+    "BeamDesign",
+    "ColumnDesign",
+    "DesignReport",
+    "FootingDesign",
+    "STEEL_DENSITY",
+    "autosize_columns",
+    "default_moment_factor",
+    "design_all",
+    "optimize_sizes",
+    "quantities",
+    "run_full",
+]
 
 
 def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
@@ -106,48 +44,13 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
     ult = fa.ultimate
     levels = {lv.index: lv.name for lv in m.levels}
     # ------------------------------------------------------------- beams
+    ductile = is13920.required(project) and project.seismic.enabled
+    col_below = {mem.n2: mem for mem in m.members.values() if mem.kind in ("column", "wall")}
+    col_above = {mem.n1: mem for mem in m.members.values() if mem.kind in ("column", "wall")}
     for mid, mem in m.members.items():
         if mem.kind != "beam":
             continue
-        fck = grade_fck(mem.grade)
-        sag = np.zeros(9)
-        hog = np.zeros(9)
-        vmax = 0.0
-        for c in ult:
-            f = fa.forces(mid, c.factors, 9)
-            M = -f.My  # sagging +
-            sag = np.maximum(sag, M)
-            hog = np.minimum(hog, M)
-            vmax = max(vmax, float(np.max(np.abs(f.Vz))))
-        L = float(f.x[-1])
-        b_mm, D_mm = mem.b * 1000, mem.d * 1000
-        cover = ds.beam_cover * 1000
-        fs = is456.flexure(float(sag.max()), fck, fy, b_mm, D_mm, cover)
-        fl = is456.flexure(float(-hog[0]), fck, fy, b_mm, D_mm, cover)
-        fr = is456.flexure(float(-hog[-1]), fck, fy, b_mm, D_mm, cover)
-        d_eff = D_mm - cover - 18
-        ast_min = 0.85 * b_mm * d_eff / fy
-        # bottom bars also act as compression steel for hogging (and vice versa)
-        n, dia, prov_b = is456.select_bars(max(fs.ast, fl.asc, fr.asc, ast_min), b_mm, cover)
-        nl, dl, prov_l = is456.select_bars(max(fl.ast, fs.asc, ast_min), b_mm, cover)
-        nr, dr, prov_r = is456.select_bars(max(fr.ast, fs.asc, ast_min), b_mm, cover)
-        pt = 100 * max(prov_l, prov_r) / (b_mm * d_eff)
-        sh = is456.shear(vmax, fck, ds.fy_shear, b_mm, d_eff, pt)
-        notes = [x for x in (fs.note, fl.note, fr.note, sh.note) if x]
-        span, basic = _deflection_span(m, mem)
-        mf = is456.deflection_mf(100 * prov_b / (b_mm * d_eff), 0.58 * fy * fs.ast / max(prov_b, 1))
-        allowed = basic * mf * (10.0 / span if span > 10.0 and basic != 7 else 1.0)  # cl 23.2.1 (b)
-        dok = (span * 1000 / d_eff) <= allowed if span > 0 else True
-        if not dok:
-            notes.append(f"deflection span/d {span * 1000 / d_eff:.1f} > {allowed:.1f}")
-        mul = is456.mu_lim(fck, fy, b_mm, d_eff) / 1e6
-        util = max(sag.max(), -hog.min()) / mul if mul else 0
-        rep.beams.append(BeamDesign(mid, mem.mark, levels.get(mem.level, str(mem.level)), mem.b, mem.d, L,
-                                    float(sag.max()), float(hog[0]), float(hog[-1]), vmax,
-                                    f"{n}-T{dia}", f"{nl}-T{dl}", f"{nr}-T{dr}",
-                                    f"{sh.legs}L-T{sh.dia} @ {int(sh.spacing)} c/c" if sh.ok else "FAIL",
-                                    prov_b, prov_l, prov_r, dok, fs.ok and fl.ok and fr.ok and sh.ok and dok,
-                                    float(util), notes))
+        rep.beams.append(_design_beam(fa, project, mid, mem, levels, ductile, col_below, col_above))
     # ------------------------------------------------------------- columns
     for mid, mem in m.members.items():
         if mem.kind != "column":
@@ -166,17 +69,80 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
         # unsupported length = clear height below the deepest beam framing in at the top (cl 25.1.3)
         top = mem.n2
         dmax = max((bm.d for bm in m.members.values() if bm.kind == "beam" and top in (bm.n1, bm.n2)), default=0.0)
-        L = max(abs(m.nodes[mem.n2].z - m.nodes[mem.n1].z) - dmax, 0.5)
-        chk = is456.design_column(demands, mem.b, mem.d, L, fck, fy, ds.column_cover, ds.min_column_steel_pct,
-                                  ds.max_column_steel_pct, ds.effective_length_factor)
-        rep.columns.append(ColumnDesign(mid, mem.mark, levels.get(mem.level, str(mem.level)), mem.b, mem.d,
-                                        Pmax, Mx, My, chk.steel_pct, chk.bars, chk.ties, chk.governing, bool(chk.ok),
-                                        float(chk.ratio), chk.As_req, chk.notes))
+        H = abs(m.nodes[mem.n2].z - m.nodes[mem.n1].z)
+        L = max(H - dmax, 0.5)
+        conf = l0 = None
+        chk = is456.design_column(
+            demands,
+            mem.b,
+            mem.d,
+            L,
+            fck,
+            fy,
+            ds.column_cover,
+            ds.min_column_steel_pct,
+            ds.max_column_steel_pct,
+            ds.effective_length_factor,
+            16 if ductile else 12,
+        )
+        tie = chk.tie
+        if ductile and chk.main_bars is not None:
+            # IS 13920 cl 8: special confining hoops over l0 at both ends; elsewhere ≤ min(b/2, 300) (cl 7.6.1)
+            b_mm, D_mm = mem.b * 1000, mem.d * 1000
+            conf = is13920.column_confinement(
+                b_mm,
+                D_mm,
+                ds.column_cover * 1000,
+                fck,
+                ds.fy_shear,  # IS 13920:2016 cl 8.1(b): fy of the hoops, no IS 456 cl 40.4 cap
+                chk.main_bars.dia,
+                chk.main_bars.count,
+                tie.dia if tie else 8,
+            )
+            l0 = is13920.confining_length(max(b_mm, D_mm), L * 1000) / 1000
+            if tie is not None:
+                s_out = min(tie.spacing, min(b_mm, D_mm) / 2, 300.0)
+                # the hoop legs continue over the full height (cl 7.5 capacity shear uses them)
+                legs = max(tie.legs, conf.legs_b, conf.legs_d)
+                tie = is456.Links(legs, max(tie.dia, conf.dia), float(math.floor(s_out / 25) * 25))
+        ties_txt = chk.ties
+        if conf is not None and tie is not None:
+            ties_txt = _ties_text(conf, conf.s, l0, tie)
+        rep.columns.append(
+            ColumnDesign(
+                mid,
+                mem.mark,
+                levels.get(mem.level, str(mem.level)),
+                mem.b,
+                mem.d,
+                Pmax,
+                Mx,
+                My,
+                chk.steel_pct,
+                chk.bars,
+                ties_txt,
+                chk.governing,
+                bool(chk.ok),
+                float(chk.ratio),
+                chk.As_req,
+                chk.notes,
+                main_bars=chk.main_bars,
+                tie=tie,
+                level_index=mem.level,
+                height=H,
+                clear_height=L,
+                tie_confined=(is456.Links(max(conf.legs_b, conf.legs_d), conf.dia, conf.s) if conf else None),
+                l0=l0 or 0.0,
+            )
+        )
     # ------------------------------------------------------------- footings
     serv = next(c for c in fa.combos if c.kind == "service" and set(c.factors) == {"DL", "LL"})
     lat_serv = [c for c in fa.combos if c.kind == "service" and c is not serv]
-    base_cols = {mem.n1: mem for mem in m.members.values() if mem.kind == "column" and m.nodes[mem.n1].support}
+    base_cols = {
+        mem.n1: mem for mem in m.members.values() if mem.kind in ("column", "wall") and m.nodes[mem.n1].support
+    }
     rects = []
+    loads_at: dict[str, tuple[float, float, int]] = {}  # mark -> (service P, max factored P, base node)
     for nid, mem in base_cols.items():
         R = fa.reaction(nid, serv.factors)
         P = float(R[2])
@@ -188,17 +154,43 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
             r = fa.reaction(nid, c.factors)
             mx, my = abs(float(r[3])), abs(float(r[4]))
             lat.append((float(r[2]), my if swap else mx, mx if swap else my))
+        ult = []
+        for c in fa.ultimate:
+            r = fa.reaction(nid, c.factors)
+            mx, my = abs(float(r[3])), abs(float(r[4]))
+            ult.append((float(r[2]), my if swap else mx, mx if swap else my))
         fck = grade_fck(mem.grade)
-        fr = is456.design_footing(P, mem.b, mem.d, ds.sbc, fck, fy, ds.footing_cover, ds.footing_self_weight_pct, lat)
+        fr = is456.design_footing(
+            P, mem.b, mem.d, ds.sbc, fck, fy, ds.footing_cover, ds.footing_self_weight_pct, lat, ultimate=ult
+        )
         nd = m.nodes[nid]
         rects.append((mem.mark, nd.x, nd.y, fr.B if not swap else fr.L, fr.L if not swap else fr.B))
-        rep.footings.append(FootingDesign(mem.mark, P, fr.L, fr.B, fr.D, fr.bars_L, fr.bars_B, fr.q_max, fr.ok,
-                                          fr.ast_L, fr.ast_B, fr.notes))
-    for i in range(len(rects)):
-        for j in range(i + 1, len(rects)):
-            a, b = rects[i], rects[j]
-            if abs(a[1] - b[1]) < (a[3] + b[3]) / 2 and abs(a[2] - b[2]) < (a[4] + b[4]) / 2:
-                rep.warnings.append(f"Footings {a[0]} and {b[0]} overlap – design a combined footing")
+        loads_at[mem.mark] = (P, max((u[0] for u in ult), default=1.5 * P), nid)
+        rep.footings.append(
+            FootingDesign(
+                mem.mark,
+                P,
+                fr.L,
+                fr.B,
+                fr.D,
+                fr.bars_L,
+                fr.bars_B,
+                fr.q_max,
+                fr.ok,
+                fr.ast_L,
+                fr.ast_B,
+                fr.notes,
+                mesh_L=fr.mesh_L,
+                mesh_B=fr.mesh_B,
+                col_b=mem.b,
+                col_d=mem.d,
+                x=nd.x,
+                y=nd.y,
+                angle=mem.angle,
+            )
+        )
+    _combined_footings(rep, m, project, rects, loads_at, base_cols)
+    _walls(rep, fa, project, levels)
     # ------------------------------------------------------------- slabs
     done = set()
     for lv in project.levels:
@@ -226,17 +218,390 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
                     if any(G.collinear_overlap(a, b, c, d) for c, d in o.edges()):
                         cont += 1
                         break
-            kind = "cantilever" if s.distribution == "cantilever" else (
-                "one_way" if s.distribution in ("one_way", "one_way_long") or ly / max(lx, 1e-6) > ds.two_way_ratio_limit else "two_way")
-            res = is456.design_slab(s.mark, lx, ly, s.dead, s.live_load, s.thickness, fck, fy, kind, cont,
-                                    ds.slab_cover)
+            kind = (
+                "cantilever"
+                if s.distribution == "cantilever"
+                else (
+                    "one_way"
+                    if s.distribution in ("one_way", "one_way_long") or ly / max(lx, 1e-6) > ds.two_way_ratio_limit
+                    else "two_way"
+                )
+            )
+            span = _slab_span(s, kind, ly, pts, lens)
+            res = is456.design_slab(
+                s.mark, lx, ly, s.dead, s.live_load, s.thickness, fck, fy, kind, cont, ds.slab_cover, span
+            )
             rep.slabs.append((plan.name, res))
     rep.drifts = fa.storey_drifts()
+    rep.irregularities = list(getattr(fa, "irregularities", []))
+    rep.modal = getattr(fa, "modal", None)
+    rep.seismic_method = "response spectrum" if getattr(fa, "rs", None) else "static"
+    for ir in rep.irregularities:
+        if ir.irregular:
+            rep.warnings.append(f"IS 1893 {ir.clause} {ir.name}: {ir.detail}")
+    if ductile:
+        rep.ductile = is13920.check_ductility(fa, project, rep)
+        _adopt_ductile_spacing(rep)
     for d in rep.drifts:
         if not d["ok"]:
             rep.warnings.append(f"Storey drift {d['ratio']:.4f} > 0.004 at {d['level']} ({d['case']})")
     rep.boq = quantities(fa, project, rep)
     return rep
+
+
+def _combined_footings(rep: DesignReport, m: FrameModel, project: Project, rects, loads_at, base_cols) -> None:
+    """Overlapping isolated footings: two columns -> a combined footing; larger groups -> strip/raft advice;
+    total footing area > 50 % of the building footprint -> raft advice."""
+    ds = project.design
+    n = len(rects)
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    gap = 0.075  # footings closer than this (m) cannot be cast separately
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = rects[i], rects[j]
+            if abs(a[1] - b[1]) < (a[3] + b[3]) / 2 + gap and abs(a[2] - b[2]) < (a[4] + b[4]) / 2 + gap:
+                parent[find(i)] = find(j)
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+    replaced: set[str] = set()
+    for idx in groups.values():
+        if len(idx) == 1:
+            continue
+        marks = [rects[i][0] for i in idx]
+        if len(idx) > 2:
+            rep.warnings.append(f"Footings {', '.join(marks)} overlap as a group – design a strip footing or raft")
+            continue
+        (m1, x1, y1, *_), (m2, x2, y2, *_) = rects[idx[0]], rects[idx[1]]
+        P1, Pu1, n1 = loads_at[m1]
+        P2, Pu2, n2 = loads_at[m2]
+        s = math.hypot(x2 - x1, y2 - y1)
+        if s < 1e-3:
+            continue
+        ux, uy = (x2 - x1) / s, (y2 - y1) / s
+
+        c1, c2 = base_cols[n1], base_cols[n2]
+        fck = grade_fck(c1.grade)
+        cf = is456.design_combined_footing(
+            P1,
+            P2,
+            Pu1,
+            Pu2,
+            s,
+            _footprint_along(c1, ux, uy),
+            _footprint_along(c2, ux, uy),
+            ds.sbc,
+            fck,
+            ds.fy_main,
+            ds.footing_cover,
+            ds.footing_self_weight_pct,
+        )
+        cx = x1 + ux * (cf.L / 2 - cf.x_start)
+        cy = y1 + uy * (cf.L / 2 - cf.x_start)
+        rep.combined_footings.append(
+            CombinedFootingDesign(
+                (m1, m2),
+                P1 + P2,
+                cf.L,
+                cf.B,
+                cf.D,
+                cx,
+                cy,
+                math.degrees(math.atan2(uy, ux)),
+                cf.q_service,
+                str(cf.top) if cf.top else "-",
+                str(cf.bottom) if cf.bottom else "-",
+                cf.transverse,
+                cf.ok,
+                cf.notes + ["moments from lateral loads not included – check separately"],
+            )
+        )
+        replaced.update((m1, m2))
+    if replaced:
+        rep.footings = [f for f in rep.footings if f.mark not in replaced]
+    # raft advice (common practice: isolated footings covering more than half the plan area)
+    pts = [(r[1], r[2]) for r in rects]
+    if len(pts) >= 3:
+        x0, y0, x1, y1 = G.bbox(pts)
+        foot = (x1 - x0 + 1.0) * (y1 - y0 + 1.0)
+        area = sum(f.L * f.B for f in rep.footings) + sum(c.L * c.B for c in rep.combined_footings)
+        if foot > 0 and area > 0.5 * foot:
+            rep.warnings.append(
+                f"Footings cover {area / foot:.0%} of the building footprint – a raft foundation "
+                "is likely more economical"
+            )
+
+
+def _footprint_along(mem, ux: float, uy: float) -> tuple[float, float]:
+    """Extent of a (rotated) column footprint along the unit vector (ux, uy) and across it (m)."""
+    a = math.radians(mem.angle)
+    ca, sa = math.cos(a), math.sin(a)
+    along = abs(ux * ca + uy * sa) * mem.b + abs(-ux * sa + uy * ca) * mem.d
+    across = abs(-uy * ca + ux * sa) * mem.b + abs(uy * sa + ux * ca) * mem.d
+    return along, across
+
+
+def _walls(rep: DesignReport, fa: FrameAnalysis, project: Project, levels) -> None:
+    """Shear walls: in-plane axial load, moment (about local y) and shear (along the wall)."""
+    m = fa.model
+    ds = project.design
+    ductile = is13920.required(project) and project.seismic.enabled
+    for mid, mem in m.members.items():
+        if mem.kind != "wall":
+            continue
+        demands = []
+        for c in fa.ultimate:
+            f = fa.forces(mid, c.factors, 3)
+            for k in (0, -1):
+                demands.append((c.name, float(-f.N[k]), float(f.My[k]), float(f.Vz[k])))
+        chk = is456.design_wall(
+            demands, mem.b, mem.d, grade_fck(mem.grade), ds.fy_main, ds.fy_shear, ductile, ds.column_cover
+        )
+        H = abs(m.nodes[mem.n2].z - m.nodes[mem.n1].z)
+        rep.walls.append(
+            WallDesign(
+                mid,
+                mem.mark,
+                levels.get(mem.level, str(mem.level)),
+                mem.b,
+                mem.d,
+                max((d[1] for d in demands), default=0.0),
+                max((abs(d[2]) for d in demands), default=0.0),
+                max((abs(d[3]) for d in demands), default=0.0),
+                chk.rho_v,
+                chk.rho_h,
+                chk.curtains,
+                chk.vertical,
+                chk.horizontal,
+                chk.boundary,
+                chk.ok,
+                chk.ratio,
+                chk.notes,
+                mem.level,
+                H,
+            )
+        )
+
+
+def _end_support(mem, a, b, col_below, col_above, node: int) -> float:
+    """Half the width of the column/wall at ``node`` measured along beam a->b (0 if none)."""
+    col = col_below.get(node) or col_above.get(node)
+    if col is None:
+        return 0.0
+    from .quantities import _half_in_column
+
+    return _half_in_column(col, a, b)
+
+
+def _design_beam(fa: FrameAnalysis, project: Project, mid: int, mem, levels, ductile: bool, col_below, col_above):
+    """IS 456 flexure/shear/deflection, cl 41 torsion and – where IS 13920 applies – ductile
+    detailing (cl 6.2 longitudinal steel, cl 6.3.3 capacity shear, cl 6.3.5 hoop spacing)."""
+    m = fa.model
+    ds = project.design
+    fy = ds.fy_main
+    fck = grade_fck(mem.grade)
+    sag = np.zeros(9)
+    hog = np.zeros(9)
+    vmax = tmax = 0.0
+    for c in fa.ultimate:
+        f = fa.forces(mid, c.factors, 9)
+        M = -f.My  # sagging +
+        sag = np.maximum(sag, M)
+        hog = np.minimum(hog, M)
+        vmax = max(vmax, float(np.max(np.abs(f.Vz))))
+        tmax = max(tmax, float(np.max(np.abs(f.T))))
+    L = float(f.x[-1])
+    b_mm, D_mm = mem.b * 1000, mem.d * 1000
+    cover = ds.beam_cover * 1000
+    d_eff = D_mm - cover - 18
+    notes: list[str] = []
+    m_sag, m_hl, m_hr = float(sag.max()), float(-hog[0]), float(-hog[-1])
+    # ---- torsion (cl 41): equilibrium torsion from cantilevers; compatibility torsion is released
+    tors = None
+    if tmax > 1.0:
+        pt0 = 100 * 0.85 * b_mm * d_eff / fy / (b_mm * d_eff)
+        tors = is456.torsion_design(tmax, vmax, m_sag, max(m_hl, m_hr), b_mm, D_mm, cover, fck, fy, ds.fy_shear, pt0)
+        # longitudinal steel for the equivalent moments (cl 41.4.2)
+        m_sag = max(tors.Me1_sag, tors.Me2_hog)
+        m_hl = max(m_hl + tors.Mt, tors.Me2_sag)
+        m_hr = max(m_hr + tors.Mt, tors.Me2_sag)
+        if tors.note:
+            notes.append(tors.note)
+    fs = is456.flexure(m_sag, fck, fy, b_mm, D_mm, cover)
+    fl = is456.flexure(m_hl, fck, fy, b_mm, D_mm, cover)
+    fr = is456.flexure(m_hr, fck, fy, b_mm, D_mm, cover)
+    ast_min = 0.85 * b_mm * d_eff / fy  # cl 26.5.1.1
+    if ductile:  # IS 13920 cl 6.2.1: ρmin = 0.24 √fck / fy on both faces
+        ast_min = max(ast_min, is13920.rho_min(fck, fy) * b_mm * d_eff)
+    # top bars at the supports; hogging compression steel comes from the bottom bars
+    nl, dl, prov_l = is456.select_bars(max(fl.ast, fs.asc, ast_min), b_mm, cover)
+    nr, dr, prov_r = is456.select_bars(max(fr.ast, fs.asc, ast_min), b_mm, cover)
+    bot_req = max(fs.ast, fl.asc, fr.asc, ast_min)
+    if ductile:  # cl 6.2.3: bottom steel at a joint face ≥ ½ the top steel there (bottom bars run through)
+        bot_req = max(bot_req, 0.5 * max(prov_l, prov_r))
+    n, dia, prov_b = is456.select_bars(bot_req, b_mm, cover)
+    if ductile and 100 * max(prov_b, prov_l, prov_r) / (b_mm * d_eff) > 2.5:
+        notes.append("steel > 2.5 % (IS 13920 cl 6.2.2) – increase section")
+    pt = 100 * max(prov_l, prov_r) / (b_mm * d_eff)
+    # ---- shear: analysis envelope, or capacity shear for ductile frames (cl 6.3.3)
+    v_design = vmax
+    a_nd, b_nd = m.nodes[mem.n1], m.nodes[mem.n2]
+    if ductile and (mem.n1 in col_below or mem.n1 in col_above) and (mem.n2 in col_below or mem.n2 in col_above):
+        lc = max(
+            L
+            - _end_support(mem, a_nd, b_nd, col_below, col_above, mem.n1)
+            - _end_support(mem, a_nd, b_nd, col_below, col_above, mem.n2),
+            0.3 * L,
+        )
+        g = fa.forces(mid, {"DL": 1.2, "LL": 1.2}, 3)
+        ms = is13920.beam_moment_capacity(prov_b, b_mm, d_eff, fck, fy) / 1e6
+        v_cap = is13920.beam_capacity_shear(
+            abs(float(g.Vz[0])),
+            abs(float(g.Vz[-1])),
+            ms,
+            is13920.beam_moment_capacity(prov_l, b_mm, d_eff, fck, fy) / 1e6,
+            ms,
+            is13920.beam_moment_capacity(prov_r, b_mm, d_eff, fck, fy) / 1e6,
+            lc,
+        )
+        v_design = max(vmax, v_cap)
+    sh = is456.shear(v_design, fck, ds.fy_shear, b_mm, d_eff, pt)
+    if tors is not None:  # torsion governs the closed stirrups (cl 41.4.3)
+        tors = is456.torsion_design(
+            tmax, v_design, m_sag, max(m_hl, m_hr), b_mm, D_mm, cover, fck, fy, ds.fy_shear, pt, max(dl, dr)
+        )
+        if tors.ok and (not sh.ok or tors.spacing * sh.dia**2 <= sh.spacing * tors.dia**2):
+            sh = is456.ShearResult(v_design, tors.tau_ve, sh.tau_c, 2, tors.dia, tors.spacing, True)
+        elif not tors.ok:
+            sh = is456.ShearResult(v_design, tors.tau_ve, sh.tau_c, 2, 12, 0.0, False, tors.note)
+    links = links_end = None
+    if sh.ok:
+        s_mid = min(sh.spacing, math.floor(d_eff / 2 / 25) * 25) if ductile else sh.spacing  # cl 6.3.5
+        links = is456.Links(sh.legs, sh.dia, float(s_mid))
+        if ductile:  # within 2d of each column face: ≤ min(d/4, 8 db, 100) (cl 6.3.5)
+            s_end = min(sh.spacing, d_eff / 4, 8 * min(dia, dl, dr), 100.0)
+            links_end = is456.Links(sh.legs, max(sh.dia, 8), float(max(math.floor(s_end / 5) * 5, 50)))
+    notes += [x for x in (fs.note, fl.note, fr.note, sh.note) if x]
+    span, basic = _deflection_span(m, mem)
+    mf = is456.deflection_mf(100 * prov_b / (b_mm * d_eff), 0.58 * fy * fs.ast / max(prov_b, 1))
+    allowed = basic * mf * (10.0 / span if span > 10.0 and basic != 7 else 1.0)  # cl 23.2.1 (b)
+    dok = (span * 1000 / d_eff) <= allowed if span > 0 else True
+    if not dok:
+        notes.append(f"deflection span/d {span * 1000 / d_eff:.1f} > {allowed:.1f}")
+    mul = is456.mu_lim(fck, fy, b_mm, d_eff) / 1e6
+    util = max(sag.max(), -hog.min()) / mul if mul else 0
+    stirrups = _stirrups_text(links, links_end)
+    return BeamDesign(
+        mid,
+        mem.mark,
+        levels.get(mem.level, str(mem.level)),
+        mem.b,
+        mem.d,
+        L,
+        float(sag.max()),
+        float(hog[0]),
+        float(hog[-1]),
+        v_design,
+        f"{n}-T{dia}",
+        f"{nl}-T{dl}",
+        f"{nr}-T{dr}",
+        stirrups,
+        prov_b,
+        prov_l,
+        prov_r,
+        dok,
+        fs.ok and fl.ok and fr.ok and sh.ok and dok and (tors is None or tors.ok),
+        float(util),
+        notes,
+        bottom_bars=is456.BarSet(n, dia),
+        top_l_bars=is456.BarSet(nl, dl),
+        top_r_bars=is456.BarSet(nr, dr),
+        links=links,
+        group=mem.group,
+        level_index=mem.level,
+        links_end=links_end,
+        T_max=tmax,
+        side_face=(tors.side_face if tors else _side_face(b_mm, D_mm, cover)),
+    )
+
+
+def _stirrups_text(links, links_end) -> str:
+    if links is None:
+        return "FAIL"
+    if links_end is not None:
+        return f"{links_end} (2d from faces) / {int(links.spacing)} c/c"
+    return str(links)
+
+
+def _ties_text(conf, s_l0: float, l0_m: float, tie) -> str:
+    return (
+        f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(s_l0)} over l0 = {l0_m * 1000:.0f} "
+        f"/ T{tie.dia}{f' ({tie.legs} legs)' if tie.legs > 2 else ''} @ {int(tie.spacing)} c/c"
+    )
+
+
+def _adopt_ductile_spacing(rep: DesignReport) -> None:
+    """Make the reported hoops (which feed the BBS, drawings, schedules and BOQ) honour the
+    IS 13920 frame check: the capacity-design shear (cl 6.3.3 beams, cl 7.5 columns) is only
+    known once every member is designed, so the IS 456 spacings fixed in ``design_all`` are
+    reduced to the governing (smaller) spacing the check derived – already rounded down to
+    5 mm (25 mm for wide beam spacings) – but never below the practical minimum
+    (cl 8.2 for columns).  The check therefore passes on what is reported."""
+    beams = {b.member_id: b for b in rep.beams}
+    cols = {c.member_id: c for c in rep.columns}
+    for dc in rep.ductile:
+        req = dc.spacing
+        if dc.kind == "beam" and dc.member_id in beams and req:
+            bd = beams[dc.member_id]
+            if bd.links is None:
+                continue
+            lo = is13920.MIN_BEAM_HOOP_SPACING
+            bd.links = replace(bd.links, spacing=max(min(bd.links.spacing, req["mid"]), lo))
+            if bd.links_end is not None and "end" in req:
+                bd.links_end = replace(bd.links_end, spacing=max(min(bd.links_end.spacing, req["end"]), lo))
+            bd.is13920_spacing = dict(req)
+            bd.stirrups = _stirrups_text(bd.links, bd.links_end)
+        elif dc.kind == "column" and dc.member_id in cols and req and dc.confinement is not None:
+            cd = cols[dc.member_id]
+            if cd.tie is None or cd.tie_confined is None:
+                continue
+            lo = is13920.MIN_COL_HOOP_SPACING
+            s_l0 = max(min(cd.tie_confined.spacing, req["l0"]), lo)
+            cd.tie_confined = replace(cd.tie_confined, spacing=s_l0)
+            cd.tie = replace(cd.tie, spacing=max(min(cd.tie.spacing, req["out"]), s_l0))
+            cd.is13920_spacing = dict(req)
+            cd.ties = _ties_text(dc.confinement, s_l0, cd.l0, cd.tie)
+
+
+def _slab_span(s, kind: str, ly: float, pts, lens: list[float]) -> float | None:
+    """One-way / cantilever span (m) as the PlanEngine distributes the slab load: ``ly`` for a
+    slab spanning the long way, the projection (area / fixed-edge length) for a cantilever;
+    ``None`` (the short side lx) otherwise.  Shared with the calculation sheets."""
+    if s.distribution == "one_way_long" and kind == "one_way":
+        return ly
+    if kind == "cantilever":
+        k = s.cant_edge if s.cant_edge is not None and 0 <= s.cant_edge < len(lens) else None
+        k = max(range(len(lens)), key=lambda i: lens[i]) if k is None else k
+        return abs(G.polygon_area(pts)) / lens[k] if lens[k] > 0 else None
+    return None
+
+
+def _side_face(b_mm: float, D_mm: float, cover: float) -> str:
+    """IS 456 cl 26.5.1.3: beams deeper than 750 mm need side-face bars of 0.1 % of the web area
+    spread equally on both faces, at most 300 mm apart."""
+    if D_mm <= 750:
+        return ""
+    a_face = 0.001 * b_mm * D_mm / 2
+    n = max(2, math.ceil((D_mm - 2 * cover - 100) / 300))
+    dia = next((d for d in (10, 12, 16) if n * math.pi * d * d / 4 >= a_face), 16)
+    return f"{n}-T{dia} each face (side-face, cl 26.5.1.3)"
 
 
 def _deflection_span(m: FrameModel, mem) -> tuple[float, int]:
@@ -264,238 +629,6 @@ def _deflection_span(m: FrameModel, mem) -> tuple[float, int]:
             continuous = len(xs) >= 3 or (s0.kind == "column" and s1.kind == "column")
             return xs[i + 1] - xs[i], 26 if continuous else 20
     return seg, 20
-
-
-def quantities(fa: FrameAnalysis, project: Project, rep: DesignReport) -> dict:
-    """Concrete, steel, formwork and cost estimate."""
-    m = fa.model
-    conc: dict[str, float] = {}
-    form = 0.0
-    steel = {"columns": 0.0, "beams": 0.0, "slabs": 0.0, "footings": 0.0}
-
-    def add_c(grade, v):
-        conc[grade] = conc.get(grade, 0.0) + v
-
-    cd = {c.member_id: c for c in rep.columns}
-    bd = {b.member_id: b for b in rep.beams}
-    for mid, mem in m.members.items():
-        a, b = m.nodes[mem.n1], m.nodes[mem.n2]
-        L = math.dist((a.x, a.y, a.z), (b.x, b.y, b.z))
-        add_c(mem.grade, mem.b * mem.d * L)
-        if mem.kind == "column":
-            form += 2 * (mem.b + mem.d) * L
-            c = cd.get(mid)
-            if c:
-                n, dia = _parse_bars(c.bars)
-                steel["columns"] += n * math.pi * dia * dia / 4e6 * L * 1.1 * STEEL_DENSITY
-                tie_n = L / 0.15
-                steel["columns"] += tie_n * 2 * (mem.b + mem.d) * math.pi * 0.008 ** 2 / 4 * STEEL_DENSITY
-        else:
-            form += (mem.b + 2 * mem.d) * L
-            d = bd.get(mid)
-            if d:
-                area = d.ast_bot * L + (d.ast_top_l + d.ast_top_r) * L / 3 + 2 * 113 * L
-                steel["beams"] += area / 1e6 * STEEL_DENSITY
-                steel["beams"] += (L / 0.15) * 2 * (mem.b + mem.d) * math.pi * 0.008 ** 2 / 4 * STEEL_DENSITY
-    for lv in project.levels:
-        plan = project.plan(lv.plan)
-        if not plan:
-            continue
-        for s in plan.slabs:
-            if s.distribution == "on_grade":
-                continue
-            add_c(lv.grade, s.area * s.thickness)
-            form += s.area
-            steel["slabs"] += s.area * s.thickness * 80.0  # typical 80 kg/m^3 when not detailed
-    for f in rep.footings:
-        g = project.levels[0].grade if project.levels else "M25"
-        add_c(g, f.L * f.B * f.D)
-        add_c("PCC M10", (f.L + 0.3) * (f.B + 0.3) * 0.1)
-        form += 2 * (f.L + f.B) * f.D
-        steel["footings"] += (f.ast_L * f.B + f.ast_B * f.L) / 1e6 * max(f.L, f.B) * STEEL_DENSITY
-    total_c = sum(v for k, v in conc.items() if not k.startswith("PCC"))
-    total_s = sum(steel.values())
-    rates = project.design.rates
-    cost = 0.0
-    lines = []
-    for g, v in conc.items():
-        r = rates.get(f"concrete_{g.lower().replace(' ', '_')}", rates.get("concrete_m25", 7000.0) if not g.startswith("PCC") else 5000.0)
-        lines.append((f"Concrete {g}", "m³", v, r, v * r))
-        cost += v * r
-    lines.append(("Reinforcement steel", "kg", total_s, rates.get("steel_kg", 75.0), total_s * rates.get("steel_kg", 75.0)))
-    cost += total_s * rates.get("steel_kg", 75.0)
-    lines.append(("Formwork", "m²", form, rates.get("formwork_m2", 550.0), form * rates.get("formwork_m2", 550.0)))
-    cost += form * rates.get("formwork_m2", 550.0)
-    return {"concrete": conc, "steel": steel, "formwork": form, "total_concrete": total_c, "total_steel": total_s,
-            "steel_per_m3": total_s / total_c if total_c else 0.0, "lines": lines, "cost": cost}
-
-
-def _parse_bars(s: str) -> tuple[int, int]:
-    try:
-        n, rest = s.split("-T", 1)
-        return int(n), int(rest.split()[0])
-    except (ValueError, IndexError):
-        return 0, 0
-
-
-# ===================================================================== autosize
-def default_moment_factor(project: Project) -> float:
-    """Allowance for frame moments in axial-load sizing: larger in higher seismic zones."""
-    from ..core.lateral import ZONE_FACTOR
-
-    if not project.seismic.enabled:
-        return 1.25
-    return 1.25 + 2.5 * ZONE_FACTOR.get(project.seismic.zone, 0.16)
-
-
-def autosize_columns(project: Project, breadth: Optional[float] = None, steel_pct: float = 0.8,
-                     same_size: bool = True, max_step: float = 0.05, moment_factor: Optional[float] = None,
-                     below_ground_increase: float = 0.0) -> dict[str, list[float]]:
-    """FrameWin AUTOSIZE: size columns from cumulative factored axial load.
-
-    Returns {mark: [depth per level index 1..n]} and writes overrides into
-    ``project.column_sizes``.
-    """
-    n = len(project.levels)
-    if moment_factor is None:
-        moment_factor = default_moment_factor(project)
-    seismic_min = 0.3 if project.seismic.enabled and project.seismic.zone != "II" else 0.0
-    loads: dict[str, list[float]] = {}
-    info: dict[str, dict] = {}
-    for i, lv in enumerate(project.levels, start=1):
-        plan = project.plan(lv.plan)
-        fha = project.levels[i].height if i < n else plan.floor_height_above
-        res = PlanEngine(plan, fha, project.design.two_way_ratio_limit).run()
-        for c in plan.columns:
-            cl = next((v for v in res.columns.values() if v.column_id == c.id), None)
-            loads.setdefault(c.mark, [0.0] * (n + 1))
-            red = 1 - lv.live_reduction / 100.0
-            loads[c.mark][i] = (cl.dead + cl.live * red) if cl else 0.0
-            info.setdefault(c.mark, {})[i] = c
-    out = {}
-    for mark, per in loads.items():
-        present = sorted(info[mark])
-        sizes = {}
-        cum = 0.0
-        for i in sorted(present, reverse=True):
-            c = info[mark][i]
-            b = max(breadth or c.b, seismic_min)  # IS 13920: min 300 mm in ductile frames
-            h = project.levels[i - 1].height
-            cum += per[i] + b * max(c.d, b) * h * 25.0
-            fck = grade_fck(project.levels[i - 1].grade)
-            d = is456.autosize_depth(1.5 * cum, b, fck, project.design.fy_main, steel_pct, moment_factor, min_d=b)
-            if seismic_min and d > 2.0 * b:
-                # ductile frames: keep d/b <= 2 so both directions have lateral stiffness
-                area = b * d
-                b = max(b, math.ceil(math.sqrt(area / 2.0) / 0.05 - 1e-9) * 0.05)
-                d = max(math.ceil(area / b / 0.05 - 1e-9) * 0.05, b)
-            sizes[i] = [round(b, 3), round(d, 3)]
-        if same_size:
-            bmax = max(v[0] for v in sizes.values())
-            dmax = max(v[1] for v in sizes.values())
-            for i in sizes:
-                sizes[i] = [bmax, dmax]
-        else:  # limit reduction between consecutive levels
-            prev = None
-            for i in sorted(sizes):
-                if prev is not None and sizes[prev][1] - sizes[i][1] > max_step:
-                    sizes[i][1] = round(sizes[prev][1] - max_step, 3)
-                prev = i
-        for i, (b, d) in sizes.items():
-            if i == 1 and below_ground_increase:
-                b, d = b + 2 * below_ground_increase, d + 2 * below_ground_increase
-            project.set_column_size(mark, i, b, d, info[mark][i].angle)
-        out[mark] = [sizes[i][1] for i in sorted(sizes)]
-    return out
-
-
-def optimize_sizes(project: Project, max_iter: int = 8, target_col_pct: float = 3.0,
-                   step: float = 0.05, progress=None) -> tuple[list[str], "DesignReport"]:
-    """Iteratively enlarge failing members (FrameWin "change size, re-run" loop).
-
-    Columns: depth +step (breadth when depth/breadth >= 2.5) for segments that
-    fail or need more than ``target_col_pct`` steel; lower storeys are kept at
-    least as large as upper ones.  Beams: depth +step (breadth +step when the
-    shear stress limit governs).  Returns (change log, final design report).
-    """
-    log: list[str] = []
-    rep = None
-    for it in range(1, max_iter + 1):
-        fm, fa, rep = run_full(project)
-        bad_cols = [c for c in rep.columns if not c.ok or c.steel_pct > target_col_pct]
-        bad_beams = [b for b in rep.beams if not b.ok]
-        bad_drift = [d for d in rep.drifts if not d["ok"]]
-        if progress:
-            progress(it, len(bad_cols), len(bad_beams))
-        if not bad_cols and not bad_beams and not bad_drift:
-            log.append(f"Iteration {it}: all members and storey drifts pass")
-            return log, rep
-        drift_lv: dict[int, set[str]] = {}
-        if bad_drift:  # stiffen columns (in the drift direction) and beams up to the highest drifting storey
-            lvl_idx = {lv.name: i for i, lv in enumerate(project.levels, start=1)}
-            for d in bad_drift:
-                top = lvl_idx.get(d["level"], 0)
-                for k in range(1, top + 1):
-                    drift_lv.setdefault(k, set()).add(d["case"][-1])  # "X" / "Y"
-        lvl_index = {lv.name: i for i, lv in enumerate(project.levels, start=1)}
-        changed = set()
-        for c in bad_cols:
-            i = lvl_index.get(c.level)
-            if i is None or (c.mark, i) in changed:
-                continue
-            plan = project.plan(project.levels[i - 1].plan)
-            col = next((x for x in plan.columns if x.mark == c.mark), None)
-            if col is None:
-                continue
-            b, d, ang = project.column_size(c.mark, i, col)
-            if d / b >= 2.5:
-                b += step
-            else:
-                d += step
-            for k in range(1, i + 1):  # this level and all below
-                plan_k = project.plan(project.levels[k - 1].plan)
-                col_k = next((x for x in plan_k.columns if x.mark == c.mark), None)
-                if col_k is None:
-                    continue
-                bk, dk, ak = project.column_size(c.mark, k, col_k)
-                project.set_column_size(c.mark, k, max(bk, b), max(dk, d), ak)
-                changed.add((c.mark, k))
-        stiffened_plans = set()
-        for i, dirs in drift_lv.items():
-            plan = project.plan(project.levels[i - 1].plan)
-            for col in plan.columns:
-                if (col.mark, i) in changed:
-                    continue
-                b, d, ang = project.column_size(col.mark, i, col)
-                b_along_x = abs(math.cos(math.radians(ang))) >= 0.7
-                grow_b = ("X" in dirs and b_along_x) or ("Y" in dirs and not b_along_x)
-                grow_d = ("Y" in dirs and b_along_x) or ("X" in dirs and not b_along_x)
-                project.set_column_size(col.mark, i, b + step * grow_b, d + step * grow_d, ang)
-                changed.add((col.mark, i))
-            if plan.name not in stiffened_plans:
-                stiffened_plans.add(plan.name)
-                for bm in plan.beams:
-                    if bm.d < bm.length / 8:
-                        bm.d = round(bm.d + step, 3)
-        beam_ids = set()
-        for bd in bad_beams:
-            mem = fm.members.get(bd.member_id)
-            if mem is None or mem.group in beam_ids:
-                continue
-            beam_ids.add(mem.group)
-            for plan in project.plans:
-                bm = next((x for x in plan.beams if x.id == mem.group), None)
-                if bm is None:
-                    continue
-                if any("τv" in n for n in bd.notes) and bm.d / bm.b >= 2.5:
-                    bm.b = round(bm.b + step, 3)
-                else:
-                    bm.d = round(bm.d + step, 3)
-        log.append(f"Iteration {it}: enlarged {len(changed)} column segments and {len(beam_ids)} beams"
-                   + (f" (storey drift at {len(bad_drift)} level/case)" if bad_drift else ""))
-    fm, fa, rep = run_full(project)
-    log.append(f"Stopped after {max_iter} iterations – {rep.failures} member(s) still need attention")
-    return log, rep
 
 
 def run_full(project: Project) -> tuple[FrameModel, FrameAnalysis, DesignReport]:

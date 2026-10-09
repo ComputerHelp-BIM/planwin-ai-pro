@@ -18,11 +18,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Optional
 
 from . import geometry as G
 from .beamcalc import LinLoad, PtLoad, continuous_beam, diagrams, simple_span_reactions, total
-from .model import Beam, Column, Plan, Slab
+from .model import Beam, Column, Plan, Slab, Wall
 
 END_TOL = 0.02  # m – how close a point must be to a beam end to count as "at the end"
 
@@ -32,8 +31,8 @@ class Issue:
     level: str  # "error" | "warning"
     kind: str  # slab | beam | column | topology
     message: str
-    obj_id: Optional[str] = None
-    at: Optional[tuple[float, float]] = None
+    obj_id: str | None = None
+    at: tuple[float, float] | None = None
 
 
 @dataclass
@@ -56,7 +55,7 @@ class BeamResult:
     def total(self, case: str) -> float:
         return total(self.loads, case)
 
-    def equivalent_udl(self, case: Optional[str] = None) -> float:
+    def equivalent_udl(self, case: str | None = None) -> float:
         tot = sum(total(self.loads, c) for c in (("D", "L") if case is None else (case,)))
         return tot / self.length if self.length > 0 else 0.0
 
@@ -90,10 +89,31 @@ class ColumnLoad:
 
 
 @dataclass
+class WallLoad:
+    """Gravity load delivered to a shear wall by slab edges and beams at this plan.
+
+    ``slab_loads`` are line loads along the wall (x from ``wall.p1``); beam reactions are
+    listed in ``parts`` only – in the 3-D model those beams connect to the wall directly.
+    """
+
+    wall_id: str
+    mark: str
+    dead: float = 0.0
+    live: float = 0.0
+    slab_loads: list = field(default_factory=list)  # LinLoad along the wall
+    parts: list[tuple[str, float, float]] = field(default_factory=list)  # (source, D, L)
+
+    @property
+    def total(self) -> float:
+        return self.dead + self.live
+
+
+@dataclass
 class PlanResult:
     plan_name: str
     beams: dict[str, BeamResult] = field(default_factory=dict)
     columns: dict[str, ColumnLoad] = field(default_factory=dict)
+    walls: dict[str, WallLoad] = field(default_factory=dict)
     slab_edges: dict[str, list[list[tuple[float, float]]]] = field(default_factory=dict)
     issues: list[Issue] = field(default_factory=list)
     applied: dict[str, float] = field(default_factory=lambda: {"D": 0.0, "L": 0.0})
@@ -119,7 +139,24 @@ class PlanResult:
         return not self.errors
 
 
-def column_on_beam(c: Column, b: Beam, tol: float = 0.05) -> Optional[float]:
+def wall_on_beam(w: Wall, b: Beam, tol: float = 0.05) -> tuple[list[float], bool]:
+    """Parameters t (0..1) where wall ``w`` supports beam ``b`` and whether the beam runs
+    along the wall (collinear overlap, which the user should normally remove)."""
+    L = b.length
+    if L < 1e-9 or w.length < 1e-9:
+        return [], False
+    grow = w.thickness / 2 + tol
+    ov = G.collinear_overlap(b.p1, b.p2, w.p1, w.p2, tol=grow)
+    if ov and (ov[1] - ov[0]) * L > 0.05:
+        return [ov[0], ov[1]], True
+    ts = [t for t, p in ((0.0, b.p1), (1.0, b.p2)) if w.contains(p, tol)]
+    hit = G.segment_intersection(b.p1, b.p2, w.p1, w.p2, tol=grow)
+    if hit and all(abs(hit[1] - t) * L > END_TOL for t in ts):
+        ts.append(hit[1])
+    return sorted(ts), False
+
+
+def column_on_beam(c: Column, b: Beam, tol: float = 0.05) -> float | None:
     """Parameter t (0..1) where column ``c`` supports beam ``b``, else None.
 
     The column footprint (rotated b x d rectangle) must touch the beam
@@ -154,10 +191,9 @@ def slab_edge_profiles(slab: Slab, ratio_limit: float = 2.0) -> tuple[list[EdgeP
 
     Returns (profiles, method, notes).  Profiles integrate to the slab area.
     """
-    pts = G.ensure_ccw(slab.pts)
-    # keep edge indexing consistent with slab.points ordering
-    if pts != slab.pts:
-        pts = slab.pts
+    # edges are indexed in slab.points order (cant_edge refers to it); every formula
+    # below uses absolute areas, so clockwise slabs need no re-ordering
+    pts = slab.pts
     n = len(pts)
     edges = [(pts[i], pts[(i + 1) % n]) for i in range(n)]
     lens = [G.dist(a, b) for a, b in edges]
@@ -170,7 +206,11 @@ def slab_edge_profiles(slab: Slab, ratio_limit: float = 2.0) -> tuple[list[EdgeP
         return prof, "on grade", notes
 
     if dist == "cantilever":
-        i = slab.cant_edge if slab.cant_edge is not None and 0 <= slab.cant_edge < n else int(max(range(n), key=lambda k: lens[k]))
+        i = (
+            slab.cant_edge
+            if slab.cant_edge is not None and 0 <= slab.cant_edge < n
+            else int(max(range(n), key=lambda k: lens[k]))
+        )
         if slab.cant_edge is None:
             notes.append("cantilever fixed edge not set – longest edge assumed")
         w = area / lens[i]
@@ -269,9 +309,8 @@ def profile_integral(p: EdgeProfile, s0: float = 0.0, s1: float = 1e18) -> float
         a, b = max(sa, s0), min(sb, s1)
         if b <= a:
             continue
-        def w(s):
-            return wa + (wb - wa) * (s - sa) / (sb - sa) if sb > sa else wa
-        tot += 0.5 * (w(a) + w(b)) * (b - a)
+        slope = (wb - wa) / (sb - sa) if sb > sa else 0.0
+        tot += 0.5 * ((wa + slope * (a - sa)) + (wa + slope * (b - sa))) * (b - a)
     return tot
 
 
@@ -289,8 +328,9 @@ class PlanEngine:
         for each level the plan is used at.
     """
 
-    def __init__(self, plan: Plan, floor_height_above: Optional[float] = None,
-                 ratio_limit: float = 2.0, continuity: bool = False):
+    def __init__(
+        self, plan: Plan, floor_height_above: float | None = None, ratio_limit: float = 2.0, continuity: bool = False
+    ):
         self.plan = plan
         self.fha = plan.floor_height_above if floor_height_above is None else floor_height_above
         self.ratio_limit = ratio_limit
@@ -306,14 +346,21 @@ class PlanEngine:
         self._slab_loads()
         self._beam_self_loads()
         self._solve_beams()
-        res.reacted["D"] = sum(c.dead for c in res.columns.values())
-        res.reacted["L"] = sum(c.live for c in res.columns.values())
+        res.reacted["D"] = sum(c.dead for c in res.columns.values()) + sum(w.dead for w in res.walls.values())
+        res.reacted["L"] = sum(c.live for c in res.columns.values()) + sum(w.live for w in res.walls.values())
         imb = res.imbalance_pct
         if abs(imb) > 1.0:
-            res.issues.append(Issue("warning", "topology",
-                                    f"Load imbalance {imb:.2f}% between applied load and column reactions – check errors above"))
+            res.issues.append(
+                Issue(
+                    "warning",
+                    "topology",
+                    f"Load imbalance {imb:.2f}% between applied load and column reactions – check errors above",
+                )
+            )
         for c in p.columns:
             res.columns.setdefault(c.id, ColumnLoad(c.id, c.mark))
+        for w in p.walls:
+            res.walls.setdefault(w.id, WallLoad(w.id, w.mark))
         return res
 
     # ------------------------------------------------------------ validation
@@ -328,6 +375,23 @@ class PlanEngine:
         for b in p.beams:
             if b.length < 0.05:
                 res.issues.append(Issue("error", "beam", f"Beam {b.mark} has zero length", b.id, b.p1))
+        wmarks: set[str] = set()
+        for w in p.walls:
+            if w.mark in wmarks:
+                res.issues.append(Issue("error", "wall", f"Duplicate wall mark {w.mark}", w.id, w.centre))
+            wmarks.add(w.mark)
+            if w.length < 0.3 or w.thickness < 0.1:
+                res.issues.append(Issue("error", "wall", f"Wall {w.mark} is too short or too thin", w.id, w.centre))
+            elif w.length < 4 * w.thickness:
+                res.issues.append(
+                    Issue(
+                        "warning",
+                        "wall",
+                        f"Wall {w.mark}: length < 4 × thickness – design it as a column (IS 13920 cl 10.1.3)",
+                        w.id,
+                        w.centre,
+                    )
+                )
         for s in p.slabs:
             if len(s.points) < 3 or s.area < 1e-4:
                 res.issues.append(Issue("error", "slab", f"Slab {s.mark} is degenerate", s.id))
@@ -336,7 +400,9 @@ class PlanEngine:
             for j in range(i + 1, len(bl)):
                 ov = G.collinear_overlap(bl[i].p1, bl[i].p2, bl[j].p1, bl[j].p2)
                 if ov and (ov[1] - ov[0]) * bl[i].length > 0.05:
-                    res.issues.append(Issue("error", "beam", f"Beams {bl[i].mark} and {bl[j].mark} overlap", bl[j].id, bl[j].p1))
+                    res.issues.append(
+                        Issue("error", "beam", f"Beams {bl[i].mark} and {bl[j].mark} overlap", bl[j].id, bl[j].p1)
+                    )
 
     # ------------------------------------------------------------ topology
     def _rank(self, b: Beam, col_pts) -> int:
@@ -351,6 +417,7 @@ class PlanEngine:
     def _topology(self):
         p, res = self.plan, self.res
         col_on: dict[str, list[tuple[float, Column]]] = {}
+        wall_on: dict[str, list[tuple[float, Wall]]] = {}
         col_pts: dict[str, list[tuple[float, float]]] = {}
         for b in p.beams:
             L = b.length
@@ -360,10 +427,30 @@ class PlanEngine:
                 if t is not None:
                     lst.append((t * L, c))
             col_on[b.id] = lst
-            col_pts[b.id] = [G.lerp(b.p1, b.p2, x / L) for x, _ in lst] if L > 0 else []
+            wall_sup = []
+            for w in p.walls:
+                ts, along = wall_on_beam(w, b)
+                if along:
+                    res.issues.append(
+                        Issue(
+                            "warning",
+                            "wall",
+                            f"Beam {b.mark} runs along wall {w.mark} – the wall carries the slab "
+                            "directly; delete the beam unless it is a lintel",
+                            b.id,
+                            G.lerp(b.p1, b.p2, ts[0]),
+                        )
+                    )
+                wall_sup.extend((t * L, w) for t in ts)
+            wall_on[b.id] = wall_sup
+            col_pts[b.id] = [G.lerp(b.p1, b.p2, x / L) for x, _ in lst + wall_sup] if L > 0 else []
             res.beams[b.id] = BeamResult(b.id, L, rank=self._rank(b, col_pts))
 
-        supports: dict[str, list[Support]] = {b.id: [Support(x, "column", c.id, c.pos) for x, c in col_on[b.id]] for b in p.beams}
+        supports: dict[str, list[Support]] = {
+            b.id: [Support(x, "column", c.id, c.pos) for x, c in col_on[b.id]]
+            + [Support(x, "wall", w.id, G.lerp(b.p1, b.p2, x / b.length)) for x, w in wall_on[b.id]]
+            for b in p.beams
+        }
         self.rests_on: dict[str, set[str]] = {b.id: set() for b in p.beams}
 
         def has_col_near(bid, pt):
@@ -401,10 +488,16 @@ class PlanEngine:
                         carrier, carried = (A, B) if rA > rB else (B, A)
                     else:
                         carrier, carried = (A, B) if (A.d, LA) >= (B.d, LB) else (B, A)
-                        res.issues.append(Issue("warning", "topology",
-                                                f"{carried.mark} assumed to rest on {carrier.mark} at "
-                                                f"({P[0]:.2f}, {P[1]:.2f}); set beam role to change",
-                                                carried.id, P))
+                        res.issues.append(
+                            Issue(
+                                "warning",
+                                "topology",
+                                f"{carried.mark} assumed to rest on {carrier.mark} at "
+                                f"({P[0]:.2f}, {P[1]:.2f}); set beam role to change",
+                                carried.id,
+                                P,
+                            )
+                        )
                 tC = G.project_param(P, carried.p1, carried.p2)
                 supports[carried.id].append(Support(min(max(tC, 0), 1) * carried.length, "beam", carrier.id, P))
                 self.rests_on[carried.id].add(carrier.id)
@@ -415,22 +508,35 @@ class PlanEngine:
             merged: list[Support] = []
             for s in sup:
                 if merged and abs(s.x - merged[-1].x) < END_TOL:
-                    if merged[-1].kind == "beam" and s.kind == "column":
+                    if merged[-1].kind == "beam" and s.kind in ("column", "wall"):
                         merged[-1] = s
                     continue
                 merged.append(s)
             res.beams[b.id].supports = merged
             L = b.length
             if not merged:
-                res.issues.append(Issue("error", "beam", f"Beam {b.mark} has no support (no column or beam under it)", b.id, b.p1))
+                res.issues.append(
+                    Issue(
+                        "error", "beam", f"Beam {b.mark} has no support (no column, wall or beam under it)", b.id, b.p1
+                    )
+                )
                 continue
             for end_x, pt in ((0.0, b.p1), (L, b.p2)):
                 if all(abs(s.x - end_x) > END_TOL for s in merged) and not b.cantilever:
-                    res.issues.append(Issue("error", "beam",
-                                            f"Beam {b.mark}: end at ({pt[0]:.2f}, {pt[1]:.2f}) is not supported – "
-                                            f"add a column/beam or mark the beam as cantilever", b.id, pt))
+                    res.issues.append(
+                        Issue(
+                            "error",
+                            "beam",
+                            f"Beam {b.mark}: end at ({pt[0]:.2f}, {pt[1]:.2f}) is not supported – "
+                            f"add a column/beam or mark the beam as cantilever",
+                            b.id,
+                            pt,
+                        )
+                    )
             if len(merged) == 1 and not b.cantilever:
-                res.issues.append(Issue("error", "beam", f"Beam {b.mark} has a single support – mark as cantilever", b.id, b.p1))
+                res.issues.append(
+                    Issue("error", "beam", f"Beam {b.mark} has a single support – mark as cantilever", b.id, b.p1)
+                )
 
         self.order = self._topo_order()
 
@@ -455,7 +561,9 @@ class PlanEngine:
         if len(order) < len(deps):
             cyc = [k for k in deps if k not in order]
             marks = ", ".join(self.plan.find(k).mark for k in cyc)
-            self.res.issues.append(Issue("error", "topology", f"Circular beam support between: {marks}. Set beam roles."))
+            self.res.issues.append(
+                Issue("error", "topology", f"Circular beam support between: {marks}. Set beam roles.")
+            )
             order.extend(cyc)
         return order
 
@@ -480,6 +588,13 @@ class PlanEngine:
                     continue
                 Le = G.dist(a, b)
                 covered: list[tuple[float, float]] = []
+                for w in p.walls:  # a shear wall under the edge carries the slab directly
+                    ov = G.collinear_overlap(a, b, w.p1, w.p2, tol=max(0.02, w.thickness / 2 + 0.03))
+                    if not ov:
+                        continue
+                    for u0, u1 in _subtract(ov[0] * Le, ov[1] * Le, covered):
+                        self._map_profile_wall(s, w, a, b, prof, u0, u1)
+                        covered.append((u0, u1))
                 for bm in p.beams:
                     # beams drawn face-aligned or digitised from CAD may sit a few cm off the edge
                     ov = G.collinear_overlap(a, b, bm.p1, bm.p2, tol=max(0.02, bm.b / 2 + 0.03))
@@ -494,14 +609,22 @@ class PlanEngine:
                 full = profile_integral(prof)
                 lost = full - sum(profile_integral(prof, c0, c1) for c0, c1 in covered)
                 if lost > max(0.005 * full, 0.01):
-                    res.issues.append(Issue("error", "slab",
-                                            f"Slab {s.mark}: edge ({a[0]:.2f},{a[1]:.2f})–({b[0]:.2f},{b[1]:.2f}) "
-                                            f"is not fully supported by beams ({lost:.2f} m² of load lost)", s.id, a))
+                    res.issues.append(
+                        Issue(
+                            "error",
+                            "slab",
+                            f"Slab {s.mark}: edge ({a[0]:.2f},{a[1]:.2f})–({b[0]:.2f},{b[1]:.2f}) "
+                            f"is not fully supported by beams or walls ({lost:.2f} m² of load lost)",
+                            s.id,
+                            a,
+                        )
+                    )
 
-    def _map_profile(self, slab: Slab, bm: Beam, a, b, prof: EdgeProfile, s0: float, s1: float):
-        """Transfer the edge profile portion [s0, s1] onto beam ``bm``."""
+    @staticmethod
+    def _profile_pieces(a, b, prof: EdgeProfile, s0: float, s1: float, p1, p2):
+        """Pieces (xa, xb, wa, wb) of the edge profile [s0, s1] projected on the line p1->p2."""
         Le = G.dist(a, b)
-        # breakpoints within [s0, s1]
+        L = G.dist(p1, p2)
         ss = sorted({s0, s1, *[s for s, _ in prof if s0 < s < s1]})
 
         def w_at(s):
@@ -510,18 +633,42 @@ class PlanEngine:
                     return wa if sb - sa < 1e-12 else wa + (wb - wa) * (s - sa) / (sb - sa)
             return 0.0
 
-        out = self.res.beams[bm.id].loads
         for sa, sb in zip(ss, ss[1:]):
-            pa = G.lerp(a, b, sa / Le)
-            pb = G.lerp(a, b, sb / Le)
-            xa = G.project_param(pa, bm.p1, bm.p2) * bm.length
-            xb = G.project_param(pb, bm.p1, bm.p2) * bm.length
+            xa = G.project_param(G.lerp(a, b, sa / Le), p1, p2) * L
+            xb = G.project_param(G.lerp(a, b, sb / Le), p1, p2) * L
             wa, wb = w_at(sa), w_at(sb)
             if xa > xb:
                 xa, xb, wa, wb = xb, xa, wb, wa
-            for case, q in (("D", slab.dead), ("L", slab.live_load)):
-                if q and (wa or wb):
-                    out.append(LinLoad(xa, xb, wa * q, wb * q, case, f"slab {slab.mark}"))
+            yield xa, xb, wa, wb
+
+    def _map_profile(self, slab: Slab, bm: Beam, a, b, prof: EdgeProfile, s0: float, s1: float):
+        """Transfer the edge profile portion [s0, s1] onto beam ``bm``."""
+        ecc = None
+        if slab.distribution == "cantilever":
+            # the cantilever's load acts at its centroid, off the beam axis (equilibrium torsion)
+            c = G.polygon_centroid(slab.pts)
+            q = G.lerp(bm.p1, bm.p2, G.project_param(c, bm.p1, bm.p2))
+            ecc = (c[0] - q[0], c[1] - q[1])
+        out = self.res.beams[bm.id].loads
+        for xa, xb, wa, wb in self._profile_pieces(a, b, prof, s0, s1, bm.p1, bm.p2):
+            for case, q_ in (("D", slab.dead), ("L", slab.live_load)):
+                if q_ and (wa or wb):
+                    out.append(LinLoad(xa, xb, wa * q_, wb * q_, case, f"slab {slab.mark}", ecc))
+
+    def _map_profile_wall(self, slab: Slab, w: Wall, a, b, prof: EdgeProfile, s0: float, s1: float):
+        """Transfer the edge profile portion [s0, s1] straight onto shear wall ``w``."""
+        wl = self.res.walls.setdefault(w.id, WallLoad(w.id, w.mark))
+        for xa, xb, wa, wb in self._profile_pieces(a, b, prof, s0, s1, w.p1, w.p2):
+            for case, q_ in (("D", slab.dead), ("L", slab.live_load)):
+                if q_ and (wa or wb):
+                    ld = LinLoad(xa, xb, wa * q_, wb * q_, case, f"slab {slab.mark}")
+                    wl.slab_loads.append(ld)
+                    F = ld.resultant()[0]
+                    if case == "D":
+                        wl.dead += F
+                    else:
+                        wl.live += F
+                    wl.parts.append((f"slab {slab.mark}", F if case == "D" else 0.0, F if case == "L" else 0.0))
 
     # ------------------------------------------------------------ beam loads
     def _beam_self_loads(self):
@@ -544,7 +691,9 @@ class PlanEngine:
             for wl in b.part_loads:
                 a0, a1 = max(wl.start, 0.0), min(wl.start + wl.length, b.length)
                 if a1 > a0:
-                    ld = LinLoad(a0, a1, wl.w1, wl.w2, wl.case, wl.desc)
+                    # a wedge running past a beam end keeps its intensities, only the part on the beam acts
+                    full = LinLoad(wl.start, wl.start + wl.length, wl.w1, wl.w2)
+                    ld = LinLoad(a0, a1, full.w_at(a0), full.w_at(a1), wl.case, wl.desc)
                     br.loads.append(ld)
                     res.applied[wl.case] += ld.resultant()[0]
 
@@ -553,6 +702,7 @@ class PlanEngine:
         p, res = self.plan, self.res
         by_id = {b.id: b for b in p.beams}
         cols = {c.id: c for c in p.columns}
+        walls = {w.id: w for w in p.walls}
         for bid in self.order:
             b = by_id[bid]
             br = res.beams[bid]
@@ -573,6 +723,12 @@ class PlanEngine:
                     cl.dead += rd
                     cl.live += rl
                     cl.parts.append((b.mark, rd, rl))
+                elif s.kind == "wall":
+                    w = walls[s.ref]
+                    wl = res.walls.setdefault(w.id, WallLoad(w.id, w.mark))
+                    wl.dead += rd
+                    wl.live += rl
+                    wl.parts.append((b.mark, rd, rl))
                 else:
                     tgt = by_id[s.ref]
                     x = G.project_param(s.point, tgt.p1, tgt.p2) * tgt.length
@@ -616,8 +772,9 @@ def auto_columns(plan: Plan, b: float = 0.23, d: float = 0.45, grade: str = "M25
     return created
 
 
-def auto_beams(plan: Plan, int_size=(0.23, 0.45), ext_size=(0.23, 0.6), int_wall=0.115, ext_wall=0.23,
-               grade: str = "M25") -> list[Beam]:
+def auto_beams(
+    plan: Plan, int_size=(0.23, 0.45), ext_size=(0.23, 0.6), int_wall=0.115, ext_wall=0.23, grade: str = "M25"
+) -> list[Beam]:
     """Create beams along all slab edges (PlanWin AUTO BEAM).
 
     Collinear edges are merged into maximal lines which are then split at
@@ -638,8 +795,17 @@ def auto_beams(plan: Plan, int_size=(0.23, 0.45), ext_size=(0.23, 0.6), int_wall
     created = []
     for a, b in lines:
         L = G.dist(a, b)
-        cuts = sorted({0.0, 1.0, *[G.project_param(c.pos, a, b) for c in plan.columns
-                                    if G.point_line_distance(c.pos, a, b) < 0.05 and 0.0 < G.project_param(c.pos, a, b) < 1.0]})
+        cuts = sorted(
+            {
+                0.0,
+                1.0,
+                *[
+                    G.project_param(c.pos, a, b)
+                    for c in plan.columns
+                    if G.point_line_distance(c.pos, a, b) < 0.05 and 0.0 < G.project_param(c.pos, a, b) < 1.0
+                ],
+            }
+        )
         for t0, t1 in zip(cuts, cuts[1:]):
             if (t1 - t0) * L < 0.05:
                 continue
@@ -648,11 +814,21 @@ def auto_beams(plan: Plan, int_size=(0.23, 0.45), ext_size=(0.23, 0.6), int_wall
                 continue
             ext = _is_external(plan, p, q)
             bsz = ext_size if ext else int_size
-            bm = Beam(mark="tmp", x1=round(p[0], 4), y1=round(p[1], 4), x2=round(q[0], 4), y2=round(q[1], 4),
-                      b=bsz[0], d=bsz[1], wall_thk=ext_wall if ext else int_wall, external=ext, grade=grade)
+            bm = Beam(
+                mark="tmp",
+                x1=round(p[0], 4),
+                y1=round(p[1], 4),
+                x2=round(q[0], 4),
+                y2=round(q[1], 4),
+                b=bsz[0],
+                d=bsz[1],
+                wall_thk=ext_wall if ext else int_wall,
+                external=ext,
+                grade=grade,
+            )
             plan.beams.append(bm)
             created.append(bm)
-    for i, bm in enumerate(created):
+    for bm in created:
         bm.mark = plan.next_mark("B")
     return created
 
@@ -701,7 +877,7 @@ def _is_external(plan: Plan, p, q) -> bool:
     mx, my = (p[0] + q[0]) / 2, (p[1] + q[1]) / 2
     L = G.dist(p, q)
     nx, ny = -(q[1] - p[1]) / L * 0.05, (q[0] - p[0]) / L * 0.05
-    left = any(G.point_in_polygon((mx + nx, my + ny), s.pts) for s in plan.slabs if s.distribution != "on_grade" or True)
+    left = any(G.point_in_polygon((mx + nx, my + ny), s.pts) for s in plan.slabs)
     right = any(G.point_in_polygon((mx - nx, my - ny), s.pts) for s in plan.slabs)
     return not (left and right)
 

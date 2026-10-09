@@ -30,6 +30,9 @@ class LinLoad:
     w2: float
     case: str = "D"
     src: str = ""
+    #: plan vector (m) from the beam axis to the line of action – set for cantilever slab
+    #: loads, whose eccentricity twists the supporting beam (equilibrium torsion)
+    ecc: tuple[float, float] | None = None
 
     def resultant(self, lo: float = -1e18, hi: float = 1e18) -> tuple[float, float]:
         """Force and centroid of the part of the load inside [lo, hi]."""
@@ -104,8 +107,15 @@ def simple_span_reactions(L: float, supports: list[float], loads, case: str) -> 
     return R
 
 
-def continuous_beam(L: float, supports: list[float], loads, case: str | None = None,
-                    fixed_start: bool = False, fixed_end: bool = False, max_el: float | None = None) -> list[float]:
+def continuous_beam(
+    L: float,
+    supports: list[float],
+    loads,
+    case: str | None = None,
+    fixed_start: bool = False,
+    fixed_end: bool = False,
+    max_el: float | None = None,
+) -> list[float]:
     """Reactions of a prismatic continuous beam on rigid pinned supports.
 
     Uses Euler-Bernoulli elements; reactions are independent of EI for a
@@ -138,8 +148,17 @@ def continuous_beam(L: float, supports: list[float], loads, case: str | None = N
     F = np.zeros(ndof)
     for e in range(nn - 1):
         h = nodes[e + 1] - nodes[e]
-        k = np.array([[12, 6 * h, -12, 6 * h], [6 * h, 4 * h * h, -6 * h, 2 * h * h],
-                      [-12, -6 * h, 12, -6 * h], [6 * h, 2 * h * h, -6 * h, 4 * h * h]]) / h ** 3
+        k = (
+            np.array(
+                [
+                    [12, 6 * h, -12, 6 * h],
+                    [6 * h, 4 * h * h, -6 * h, 2 * h * h],
+                    [-12, -6 * h, 12, -6 * h],
+                    [6 * h, 2 * h * h, -6 * h, 4 * h * h],
+                ]
+            )
+            / h**3
+        )
         dofs = [2 * e, 2 * e + 1, 2 * e + 2, 2 * e + 3]
         K[np.ix_(dofs, dofs)] += k
         xa, xb = nodes[e], nodes[e + 1]
@@ -151,8 +170,14 @@ def continuous_beam(L: float, supports: list[float], loads, case: str | None = N
                 continue
             if abs(a - xa) < 1e-9 and abs(b - xb) < 1e-9:
                 wi, wj = ld.w_at(xa), ld.w_at(xb)
-                f = np.array([h * (7 * wi + 3 * wj) / 20, h * h * (3 * wi + 2 * wj) / 60,
-                              h * (3 * wi + 7 * wj) / 20, -h * h * (2 * wi + 3 * wj) / 60])
+                f = np.array(
+                    [
+                        h * (7 * wi + 3 * wj) / 20,
+                        h * h * (3 * wi + 2 * wj) / 60,
+                        h * (3 * wi + 7 * wj) / 20,
+                        -h * h * (2 * wi + 3 * wj) / 60,
+                    ]
+                )
             else:  # partial cover: lump resultant with lever rule
                 Fr, xc = ld.resultant(a, b)
                 t = (xc - xa) / h
@@ -179,8 +204,9 @@ def continuous_beam(L: float, supports: list[float], loads, case: str | None = N
     return [float(R[2 * i]) for i in sup_nodes]
 
 
-def diagrams(L: float, loads, reactions: list[tuple[float, float]], case: str | None = None,
-             n: int = 81) -> dict[str, np.ndarray]:
+def diagrams(
+    L: float, loads, reactions: list[tuple[float, float]], case: str | None = None, n: int = 81
+) -> dict[str, np.ndarray]:
     """Shear and moment along the beam by statics.
 
     ``reactions`` – list of (x, R) upward forces.  Sagging moment positive,
@@ -218,6 +244,7 @@ def eighth_points(L: float, dia: dict[str, np.ndarray]) -> list[dict[str, float]
     out = []
     for k in range(9):
         xi = L * k / 8
-        out.append({"x": xi, "M": float(np.interp(xi, dia["x"], dia["M"])),
-                    "V": float(np.interp(xi, dia["x"], dia["V"]))})
+        out.append(
+            {"x": xi, "M": float(np.interp(xi, dia["x"], dia["M"])), "V": float(np.interp(xi, dia["x"], dia["V"]))}
+        )
     return out

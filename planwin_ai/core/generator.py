@@ -7,11 +7,9 @@ plinth (ground) plan, typical floor plan, roof plan and the level stack.
 from __future__ import annotations
 
 import math
-
 from dataclasses import dataclass, field
-from typing import Optional
 
-from .model import Beam, Column, Level, Plan, Project, Slab
+from .model import Column, Level, Plan, Project, Slab
 from .plan_engine import auto_beams, mark_external_beams
 
 #: IS 875 (Part 2) imposed loads (kN/m^2) by occupancy, plus typical finishes
@@ -44,7 +42,7 @@ class GridSpec:
     beam_int: tuple[float, float] = (0.23, 0.45)
     beam_ext: tuple[float, float] = (0.23, 0.60)
     grade: str = "M25"
-    balcony: Optional[dict] = None  # {"side": "south", "depth": 1.2}
+    balcony: dict | None = None  # {"side": "south", "depth": 1.2}
     mumty: bool = False  # stair cabin over first bay
     city: str = "Mumbai"
     auto_size: bool = True  # size beams from span and columns from axial load
@@ -72,8 +70,12 @@ def _grid_plan(spec: GridSpec, name: str, floor_type: str, fha: float) -> Plan:
         ys.append(round(ys[-1] + b, 4))
     for j in range(len(ys) - 1):
         for i in range(len(xs) - 1):
-            s = Slab(mark="tmp", points=[[xs[i], ys[j]], [xs[i + 1], ys[j]], [xs[i + 1], ys[j + 1]], [xs[i], ys[j + 1]]],
-                     thickness=spec.slab_thickness, grade=spec.grade)
+            s = Slab(
+                mark="tmp",
+                points=[[xs[i], ys[j]], [xs[i + 1], ys[j]], [xs[i + 1], ys[j + 1]], [xs[i], ys[j + 1]]],
+                thickness=spec.slab_thickness,
+                grade=spec.grade,
+            )
             if floor_type == "ground":
                 s.distribution = "on_grade"
             elif floor_type == "roof":
@@ -92,8 +94,19 @@ def _grid_plan(spec: GridSpec, name: str, floor_type: str, fha: float) -> Plan:
                 pts = [[xs[i], y], [xs[i + 1], y], [xs[i + 1], y + dep], [xs[i], y + dep]]
                 edge = 0
             t_bal = max(0.125, math.ceil((dep / 9 + 0.025) / 0.005) * 0.005)
-            plan.slabs.append(Slab(mark="tmp", points=pts, thickness=t_bal, live=3.0, floor_finish=1.0,
-                                   distribution="cantilever", cant_edge=edge, grade=spec.grade, room="Balcony"))
+            plan.slabs.append(
+                Slab(
+                    mark="tmp",
+                    points=pts,
+                    thickness=t_bal,
+                    live=3.0,
+                    floor_finish=1.0,
+                    distribution="cantilever",
+                    cant_edge=edge,
+                    grade=spec.grade,
+                    room="Balcony",
+                )
+            )
     plan.renumber("slab")
     for y in reversed(ys):
         for x in xs:
@@ -120,7 +133,20 @@ def _span_depth(span: float, current: float, ratio: float = 12.0) -> float:
     return round(max(current, math.ceil(span / ratio / 0.025) * 0.025), 3)
 
 
+#: meta key marking that ``grid_spec`` holds the user's input (before auto-sizing)
+SPEC_IS_INPUT = "grid_spec_is_input"
+
+
 def grid_building(spec: GridSpec) -> Project:
+    """Generate the project.  ``spec`` is not modified: auto-sizing works on a copy and
+    the *input* spec is stored in ``project.meta`` so that later edits (e.g. larger bays)
+    re-size slabs and beams from scratch instead of starting from the old sizes."""
+    import copy
+    import json
+    from dataclasses import asdict
+
+    user_input = json.loads(json.dumps(asdict(spec)))  # JSON-normalised (tuples -> lists)
+    spec = copy.deepcopy(spec)
     occ = OCCUPANCY.get(spec.occupancy, OCCUPANCY["residential"])
     if spec.auto_size:
         from ..io.cities import lookup_city
@@ -141,16 +167,27 @@ def grid_building(spec: GridSpec) -> Project:
     for k in range(spec.upper_floors):
         h = spec.ground_height if k == 0 else spec.floor_height
         prj.levels.append(Level(f"Floor {k + 1}", "Typical", h, spec.grade))
-    prj.levels.append(Level("Roof", "Roof", spec.ground_height if spec.upper_floors == 0 else spec.floor_height, spec.grade))
+    prj.levels.append(
+        Level("Roof", "Roof", spec.ground_height if spec.upper_floors == 0 else spec.floor_height, spec.grade)
+    )
     if spec.mumty and len(spec.bays_x) and len(spec.bays_y):
         m = Plan(name="Mumty", floor_type="roof", floor_height_above=3.0)
         x1, y1 = spec.bays_x[0], spec.bays_y[0]
-        m.slabs.append(Slab(mark="S1", points=[[0, 0], [x1, 0], [x1, y1], [0, y1]],
-                            thickness=auto_slab_thickness([x1], [y1], 26.0),
-                            live=0.75, floor_finish=2.0, grade=spec.grade))
-        for (x, y) in ((0, y1), (x1, y1), (0, 0), (x1, 0)):
+        m.slabs.append(
+            Slab(
+                mark="S1",
+                points=[[0, 0], [x1, 0], [x1, y1], [0, y1]],
+                thickness=auto_slab_thickness([x1], [y1], 26.0),
+                live=0.75,
+                floor_finish=2.0,
+                grade=spec.grade,
+            )
+        )
+        for x, y in ((0, y1), (x1, y1), (0, 0), (x1, 0)):
             src = roof.column_at((x, y), 0.05)
-            m.columns.append(Column(mark=src.mark if src else "C?", x=x, y=y, b=spec.column[0], d=spec.column[1], grade=spec.grade))
+            m.columns.append(
+                Column(mark=src.mark if src else "C?", x=x, y=y, b=spec.column[0], d=spec.column[1], grade=spec.grade)
+            )
         auto_beams(m, spec.beam_int, spec.beam_ext, grade=spec.grade)
         for b in m.beams:
             b.parapet = 0.6
@@ -162,11 +199,8 @@ def grid_building(spec: GridSpec) -> Project:
                 b.parapet = None
                 b.wall_height = 3.0 - b.d
                 b.include_wall = b.include_plaster = True
-    from dataclasses import asdict
-
-    import json
-
-    prj.meta["grid_spec"] = json.loads(json.dumps(asdict(spec)))  # JSON-normalised (tuples -> lists)
+    prj.meta["grid_spec"] = user_input
+    prj.meta[SPEC_IS_INPUT] = True
     if spec.auto_size:
         from ..design.runner import autosize_columns
 
@@ -174,8 +208,8 @@ def grid_building(spec: GridSpec) -> Project:
         autosize_columns(prj, breadth=b, steel_pct=1.0, same_size=spec.upper_floors <= 8, max_step=0.1)
         if prj.seismic.enabled:  # columns at least as deep as the beams framing in (strong column)
             dmin = max(spec.beam_int[1], spec.beam_ext[1]) * 0.75
-            for mark, per in prj.column_sizes.items():
-                for k, v in per.items():
+            for per in prj.column_sizes.values():
+                for v in per.values():
                     v[1] = round(max(v[1], dmin), 3)
     prj.seismic.importance = occ["importance"]
     prj.wind.below_ground = spec.foundation_depth  # plinth ~ ground level

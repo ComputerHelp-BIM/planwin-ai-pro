@@ -46,8 +46,19 @@ class SeismicResult:
     heights: list[float]
 
 
-def seismic_static(weights: list[float], elevations: list[float], base_level: int, zone: str, importance: float,
-                   R: float, soil: str, damping: float, infill: bool, base_dim: float, direction: str) -> SeismicResult:
+def seismic_static(
+    weights: list[float],
+    elevations: list[float],
+    base_level: int,
+    zone: str,
+    importance: float,
+    R: float,
+    soil: str,
+    damping: float,
+    infill: bool,
+    base_dim: float,
+    direction: str,
+) -> SeismicResult:
     """Equivalent static base shear and vertical distribution (cl 7.6 / 7.7).
 
     ``weights[i]`` – seismic weight lumped at level i (index 0 = footing).
@@ -58,7 +69,7 @@ def seismic_static(weights: list[float], elevations: list[float], base_level: in
     if infill:
         T = 0.09 * h / math.sqrt(max(base_dim, 0.5))
     else:
-        T = 0.075 * h ** 0.75
+        T = 0.075 * h**0.75
     sa = sa_by_g(T, soil) * damping_factor(damping)
     Z = ZONE_FACTOR.get(zone.upper(), 0.16)
     Ah = max((Z / 2) * (importance / R) * sa, MIN_AH.get(zone.upper(), 0.0))
@@ -98,7 +109,7 @@ def k2(z: float, terrain: int) -> float:
 def design_pressure(z: float, vb: float, terrain: int, k1=1.0, k3=1.0, k4=1.0, kd=0.9, ka=1.0, kc=0.9) -> float:
     """Design wind pressure pd (kN/m^2) at height z (cl 6.3, 7.2)."""
     vz = vb * k1 * k2(z, terrain) * k3 * k4
-    pz = 0.6 * vz ** 2 / 1000.0
+    pz = 0.6 * vz**2 / 1000.0
     pd = max(kd * ka * kc * pz, 0.7 * pz)
     return pd
 
@@ -110,8 +121,17 @@ class WindResult:
     pressures: list[float]
 
 
-def wind_storey_forces(elevations: list[float], width_perp: float, vb: float, terrain: int, cf: float,
-                       parapet: float, below_ground: float, direction: str, **k) -> WindResult:
+def wind_storey_forces(
+    elevations: list[float],
+    width_perp: float,
+    vb: float,
+    terrain: int,
+    cf: float,
+    parapet: float,
+    below_ground: float,
+    direction: str,
+    **k,
+) -> WindResult:
     """Storey forces from tributary heights (half storey below + half above)."""
     n = len(elevations)
     forces = [0.0] * n
