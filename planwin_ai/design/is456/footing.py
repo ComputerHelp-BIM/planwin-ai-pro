@@ -26,6 +26,46 @@ class FootingResult:
     mesh_B: BarMesh | None = None
 
 
+def peak_pressure(P: float, Mx: float, My: float, L: float, B: float) -> float:
+    """Peak soil pressure (kN/m²) under P (kN) with moments Mx (varying the pressure along L)
+    and My (along B), kN·m, on an L x B footing – soil cannot take tension.
+
+    Inside the kern (6ex/L + 6ey/B ≤ 1) the linear P/A ± M/Z formula applies; outside it the
+    contact area shrinks: uniaxially q_max = 2P/(3B(L/2 − e)), biaxially the no-tension
+    plane q = max(0, a + b·u + c·v) is solved for equilibrium.  ``inf`` when the resultant
+    lies outside the base (overturning).  P ≤ 0 keeps the linear moment term (uplift).
+    """
+    ex, ey = abs(Mx), abs(My)
+    if P <= 0:
+        return 6 * ex / (B * L * L) + 6 * ey / (L * B * B)
+    ex, ey = ex / P, ey / P
+    if 6 * ex / L + 6 * ey / B <= 1 + 1e-9:
+        return P / (L * B) * (1 + 6 * ex / L + 6 * ey / B)
+    if ex >= L / 2 * (1 - 1e-9) or ey >= B / 2 * (1 - 1e-9):
+        return math.inf  # resultant outside the base – no contact solution
+    if ey < 1e-9 * B:
+        return 2 * P / (3 * B * (L / 2 - ex))
+    if ex < 1e-9 * L:
+        return 2 * P / (3 * L * (B / 2 - ey))
+    # biaxial: dimensionless u, v in [-1, 1]; mean(q), mean(q u), mean(q v) give P/A, 3·ex·2/L … etc.
+    n = 120
+    g = (np.arange(n) + 0.5) / n * 2 - 1
+    u, v = np.meshgrid(g, g, indexing="ij")
+    tx, ty = 2 * ex / L, 2 * ey / B  # resultant position in u, v (both in (0, 1))
+    from scipy.optimize import fsolve
+
+    def resid(k):
+        q = np.maximum(k[0] + k[1] * u + k[2] * v, 0.0)
+        m = q.mean()
+        return [m - 1.0, (q * u).mean() - tx * m, (q * v).mean() - ty * m]
+
+    for k0 in ([1.0, 3 * tx, 3 * ty], [1.0, 6 * tx, 6 * ty], [0.0, 4 * tx, 4 * ty]):
+        k = fsolve(resid, k0)
+        if max(abs(x) for x in resid(k)) <= 1e-6:
+            return P / (L * B) * float(k[0] + abs(k[1]) + abs(k[2]))  # at the loaded corner
+    return math.inf  # not resolved – reported as a failure rather than guessed
+
+
 def design_footing(
     P_service: float,
     cb: float,
@@ -46,10 +86,10 @@ def design_footing(
       Full contact is required (q_min >= 0, i.e. e <= L/6), otherwise the
       footing is enlarged.
     * Structural design uses the governing *factored net* pressure including
-      moments.  ``ultimate`` – factored reactions (Pu, Mux, Muy) of every
-      ultimate combination (IS 875-5: 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL),
-      0.9DL±1.5EL).  Without it the service cases are scaled (1.5 gravity,
-      1.2 lateral) as a fallback.
+      moments (no-tension peak when the resultant lies outside the kern).
+      ``ultimate`` – factored reactions (Pu, Mux, Muy) of every ultimate combination
+      (IS 875-5: 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL), 0.9DL±1.5EL).  Without it the
+      service cases are scaled (1.5 gravity, 1.2 lateral) as a fallback.
     * Depth from punching (cl 31.6.3) and one-way shear (cl 31.6.2) with
       tau_c taken at the steel actually provided; flexure at the column face.
     """
@@ -94,7 +134,10 @@ def design_footing(
     q_service = P_service * sw / (L * B)
     # governing factored net upward pressure (self weight of footing excluded)
     fact = ultimate if ultimate else [(f * P, f * Mx, f * My) for P, Mx, My, _a, f in cases]
-    qu = max(max(P, 0.0) / (L * B) + 6 * abs(Mx) / (B * L * L) + 6 * abs(My) / (L * B * B) for P, Mx, My in fact)
+    qu = max(peak_pressure(P, Mx, My, L, B) for P, Mx, My in fact)
+    if not math.isfinite(qu):
+        notes.append("factored resultant at/outside the footing edge (overturning) – enlarge the footing")
+        qu = max((q for q in (peak_pressure(P, Mx, My, L, B) for P, Mx, My in fact) if math.isfinite(q)), default=0.0)
     ast_min_per_m = lambda D_: 0.0012 * 1000 * D_ * 1000  # noqa: E731
     D = 0.3
     ok = True
@@ -138,7 +181,7 @@ def design_footing(
         bar_str(mesh_L),
         bar_str(mesh_B),
         round(q_service, 1),
-        ok and not uplift and not any("could not" in n for n in notes),
+        ok and not uplift and not any(("could not" in n or "overturning" in n) for n in notes),
         notes,
         mesh_L=mesh_L,
         mesh_B=mesh_B,

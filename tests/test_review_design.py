@@ -134,6 +134,51 @@ def test_footing_uplift_case_does_not_inflate_the_plan_size():
     assert any("uplift" in n for n in up.notes)
 
 
+@pytest.mark.parametrize("e_frac", [0.25, 1 / 3, 0.4])
+def test_footing_structural_pressure_with_partial_contact(e_frac):
+    """0.9DL ± 1.5EL often puts the factored resultant outside the kern (e > L/6).  The soil
+    cannot pull, so the peak pressure is the triangular-block value
+    q_max = 2P / (3 B (L/2 − e))  (statics; e.g. Bowles, Foundation Analysis and Design)
+    – not the linear P/A (1 + 6e/L), which is 23–58 % lower for e = L/4 … 0.4 L.
+    Bars along L at the column face (cl 34.2.3.2) must carry that pressure."""
+    sized = is456.design_footing(1000, 0.4, 0.4, 200, 25, 500)
+    L, B = sized.L, sized.B
+    Pu = 600.0
+    Mu = Pu * e_frac * L
+    r = is456.design_footing(1000, 0.4, 0.4, 200, 25, 500, ultimate=[(1500.0, 0.0, 0.0), (Pu, Mu, 0.0)])
+    assert (r.L, r.B) == (L, B)
+    q = max(1500.0 / (L * B), 2 * Pu / (3 * B * (L / 2 - e_frac * L)))
+    d = r.D - 0.05 - 0.012
+    m = q * ((L - 0.4) / 2) ** 2 / 2  # kN·m per metre width
+    assert r.ast_L >= is456.ast_singly(m * 1e6, 25, 500, 1000, d * 1000) - 1e-6
+
+
+@pytest.mark.parametrize(
+    "L,B,a,b",
+    [(2.0, 2.0, 1.6, 1.6), (2.4, 2.0, 2.0, 1.2)],
+)
+def test_biaxial_no_tension_peak_pressure_matches_the_corner_pyramid(L, B, a, b):
+    """Corner contact: pressure q = q_max (1 − x/a − y/b) over the triangle a × b at the loaded
+    corner (a ≤ L, b ≤ B).  Its volume P = q_max a b / 6 acts at (a/4, b/4) from the corner,
+    so e_x = L/2 − a/4, e_y = B/2 − b/4 and q_max = 6 P / (a b)."""
+    from planwin_ai.design.is456.footing import peak_pressure
+
+    P = 100.0
+    ex, ey = L / 2 - a / 4, B / 2 - b / 4
+    assert peak_pressure(P, P * ex, P * ey, L, B) == pytest.approx(6 * P / (a * b), rel=2e-3)
+    # inside the kern the linear formula applies; on the kern line both agree
+    assert peak_pressure(P, P * L / 12, P * B / 12, L, B) == pytest.approx(2 * P / (L * B))
+
+
+def test_footing_overturning_resultant_outside_the_base_fails():
+    """Resultant beyond the footing edge (e ≥ L/2): no bearing pressure can balance it."""
+    sized = is456.design_footing(1000, 0.4, 0.4, 200, 25, 500)
+    r = is456.design_footing(
+        1000, 0.4, 0.4, 200, 25, 500, ultimate=[(1500.0, 0.0, 0.0), (300.0, 300.0 * 0.6 * sized.L, 0.0)]
+    )
+    assert not r.ok
+
+
 # ------------------------------------------------------------------ walls (IS 13920 cl 10)
 def test_wall_vertical_steel_is_provided_or_the_wall_fails():
     """150 mm wall, single curtain, bars ≤ t/10 = 15 mm (cl 10.1.8) at ≥ 100 mm: at most
