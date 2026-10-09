@@ -198,12 +198,6 @@ def bungalow_rep():
     return p, rep
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="known issue: ColumnDesign/BeamDesign hoop spacings ignore the IS 13920 capacity-shear "
-    "spacing computed later by is13920.check_ductility; fixing it needs the calc sheets (io/) to "
-    "mirror the change – reported, not fixed in this review",
-)
 def test_ductile_schedules_use_the_is13920_check_spacing(bungalow_rep):
     """The column/beam schedules (ColumnDesign.tie_confined/tie, BeamDesign.links_end/links)
     feed the BBS, drawings and BOQ; they must not show a wider hoop spacing than the

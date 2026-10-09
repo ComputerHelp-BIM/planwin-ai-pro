@@ -30,7 +30,7 @@ from .common import (
     tau_c_max,
     xu_max_ratio,
 )
-from .footing import CombinedFootingResult, FootingResult, design_combined_footing, design_footing
+from .footing import CombinedFootingResult, FootingResult, design_combined_footing, design_footing, peak_pressure
 from .slab import SlabResult, design_slab
 from .wall import WallCheck, design_wall
 
@@ -56,6 +56,7 @@ __all__ = [
     "deflection_mf",
     "design_column",
     "design_footing",
+    "peak_pressure",
     "design_slab",
     "flexure",
     "fsc_doubly",

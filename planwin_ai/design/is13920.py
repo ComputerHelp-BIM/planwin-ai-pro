@@ -61,6 +61,10 @@ class DuctileCheck:
     member_id: int | None
     checks: list[tuple[str, bool, str]] = field(default_factory=list)  # (clause + name, passed, detail)
     detailing: list[str] = field(default_factory=list)
+    # governing hoop spacings (mm) this check derives – beam: "end" (within 2d of a column face, when
+    # one frames in) and "mid"; column: "l0" and "out".  ``runner`` adopts them in the design report.
+    spacing: dict[str, float] = field(default_factory=dict)
+    confinement: Confinement | None = None  # column: hoop arrangement within l0 (cl 8)
 
     @property
     def ok(self) -> bool:
@@ -238,6 +242,8 @@ class _Ctx:
         self.p = project
         self.ds = project.design
         self.fy = self.ds.fy_main
+        # IS 13920:2016 cl 8.1(b): Ash uses fy of the hoop steel – the IS 456 cl 40.4 cap of 415 MPa
+        # is a shear-design rule and does not apply to confinement
         self.fyh = self.ds.fy_shear
         self.fyv = min(self.ds.fy_shear, 415.0)  # IS 456 cl 40.4: stirrup fy <= 415 MPa
         self.beams = {b.member_id: b for b in rep.beams}
@@ -522,6 +528,7 @@ def _check_beam(ctx: _Ctx, mid: int) -> DuctileCheck:
     s_min_reinf = 0.87 * ctx.fyv * asv / (0.4 * b)  # IS 456 cl 26.5.1.6
     s_mid = _round_down(min(lim_mid, lk.spacing, s_mid_req, s_min_reinf), 25.0 if lim_mid >= 150 else 5.0)
     sp_ok = (s_end >= MIN_BEAM_HOOP_SPACING if has_end else True) and s_mid >= MIN_BEAM_HOOP_SPACING
+    out.spacing = {"end": s_end, "mid": s_mid} if has_end else {"mid": s_mid}
     out.add(
         "6.3.5 Hoop spacing",
         sp_ok,
@@ -638,6 +645,7 @@ def _check_column(ctx: _Ctx, cid: int) -> DuctileCheck:
         f"≤ min(bmin/2 = {bmin / 2:.0f}, 300) and shear → {s_out:.0f} mm (IS 456 design: {int(cd.tie.spacing)} mm)",
     )
     ctx.hoops[cid] = (conf, s_l0, s_out)
+    out.spacing, out.confinement = {"l0": s_l0, "out": s_out}, conf
     legs = f"{conf.legs_b}×{conf.legs_d} legs"
     out.detailing.append(
         f"Special confining zone l0 = {l0:.0f} mm at both ends of the clear height and through the "

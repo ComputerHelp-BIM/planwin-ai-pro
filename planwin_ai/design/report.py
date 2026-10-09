@@ -41,6 +41,8 @@ class BeamDesign:
     links_end: Links | None = None  # IS 13920 cl 6.3.5 hoops within 2d of column faces
     T_max: float = 0.0  # kN·m, factored torsion (IS 456 cl 41)
     side_face: str = ""  # side-face reinforcement (cl 26.5.1.3 / 41.4.1)
+    # IS 13920 frame-check hoop spacings (mm, "end"/"mid") that ``links_end``/``links`` already honour
+    is13920_spacing: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -68,6 +70,8 @@ class ColumnDesign:
     clear_height: float = 0.0  # unsupported length used for slenderness (m)
     tie_confined: Links | None = None  # IS 13920 cl 8 special confining hoops within l0
     l0: float = 0.0  # m, confining length at each end (cl 8.1)
+    # IS 13920 frame-check hoop spacings (mm, "l0"/"out") that ``tie_confined``/``tie`` already honour
+    is13920_spacing: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass

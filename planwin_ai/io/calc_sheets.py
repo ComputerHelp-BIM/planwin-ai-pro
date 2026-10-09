@@ -27,7 +27,7 @@ from ..core import geometry as G
 from ..core.model import grade_fck
 from ..design import is456, is13920
 from ..design.is456 import slab as _slab
-from ..design.runner import _deflection_span, _end_support, _side_face
+from ..design.runner import _deflection_span, _end_support, _side_face, _slab_span
 from .report_common import DISCLAIMER
 
 if TYPE_CHECKING:
@@ -727,10 +727,10 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         )
         if tve <= tcm:
             x1, y1 = b - 2 * cover, D - 2 * cover
-            b1, d1 = x1 - 8 - ld, y1 - 8 - ld
+            b1, d1 = x1 - 2 * 8 - ld, y1 - 2 * 8 - ld  # corner-bar centres inside T8 stirrups on both faces
             B.step(
                 "Closed stirrup dimensions",
-                "x1 = b − 2c, y1 = D − 2c;  b1 = x1 − 8 − φ, d1 = y1 − 8 − φ (corner bar centres)",
+                "x1 = b − 2c, y1 = D − 2c;  b1 = x1 − 2×8 − φ, d1 = y1 − 2×8 − φ (corner bar centres)",
                 f"x1 = {x1:.0f}, y1 = {y1:.0f}; φ = {ld} mm",
                 f"b1 = {b1:.0f}, d1 = {d1:.0f} mm",
                 "cl 41.4.3",
@@ -809,11 +809,14 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
     if tors is not None and D > 450:
         a_side = 0.001 * b * (D - 2 * cover) / 2
         nside = max(2, math.ceil((D - 2 * cover - 100) / 300))
+        dia_s = next((x for x in (10, 12, 16, 20) if math.pi * x * x / 4 >= a_side / nside), 20)
+        side = f"{nside}-T{dia_s} each face (side-face, cl 26.5.1.3)"  # recomputed, compared below
         st = B.step(
             "Side-face bars (torsion, D > 450 mm)",
-            "As = 0.1 % of web area per face; bars ≤ 300 mm apart",
+            "As = 0.1 % of web area per face; bars ≤ 300 mm apart; smallest of T10/12/16/20 with π φ²/4 ≥ As / n",
             f"0.001 × {b:.0f} × ({D:.0f} − 2 × {cover:.0f}) / 2 = {a_side:.0f} mm²;  "
-            f"n = max(2, ⌈({D:.0f} − {2 * cover:.0f} − 100)/300⌉) = {nside}",
+            f"n = max(2, ⌈({D:.0f} − {2 * cover:.0f} − 100)/300⌉) = {nside};  "
+            f"{a_side:.0f}/{nside} = {a_side / nside:.0f} mm² ≤ {math.pi * dia_s**2 / 4:.0f} mm² (T{dia_s})",
             side,
             "cl 26.5.1.3; 26.5.1.7(b)",
         )
@@ -839,6 +842,8 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
     # ------------------------------------------------ 9 links adopted
     B.group("Links adopted" + (" (IS 13920 cl 6.3.5)" if ductile else ""))
     links = links_end = None
+    req = dict(getattr(bd, "is13920_spacing", None) or {}) if ductile else {}
+    s_lo = is13920.MIN_BEAM_HOOP_SPACING
     if sh.ok:
         if ductile:
             s_half = math.floor(d / 2 / 25) * 25
@@ -850,6 +855,17 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
                 f"{s_mid:.0f} mm",
                 "IS 13920 cl 6.3.5",
             )
+            if "mid" in req:
+                s_456 = s_mid
+                s_mid = max(min(s_mid, req["mid"]), s_lo)
+                B.step(
+                    "Governing spacing away from the joints",
+                    "sv = min(spacing above, IS 13920 frame check), ≥ 50 mm",
+                    f"min({s_456:.0f}, {req['mid']:.0f}); frame check: capacity shear 1.4(Ms + Mh)/L0 with the "
+                    "capacities of the members framing in (IS 13920 report)",
+                    f"{s_mid:.0f} mm",
+                    "IS 13920 cl 6.3.3; 6.3.5",
+                )
         else:
             s_mid = sh.spacing
         links = is456.Links(sh.legs, sh.dia, float(s_mid))
@@ -867,14 +883,18 @@ def beam_sheet(project: Project, fa: FrameAnalysis, bd: BeamDesign) -> Sheet:
         if ductile:
             dbmin = min(dbot, dl, dr)
             s_end = min(sh.spacing, d / 4, 8 * dbmin, 100.0)
-            s_end_p = float(max(math.floor(s_end / 5) * 5, 50))
+            s_end_p = float(max(math.floor(s_end / 5) * 5, s_lo))
+            subst = f"min({sh.spacing:.0f}, {d:.0f}/4, 8 × {dbmin}, 100) = {s_end:.1f} mm"
+            if "end" in req:
+                s_end_p = float(max(min(s_end_p, req["end"]), s_lo))
+                subst += f"; IS 13920 frame check (capacity shear near the faces) {req['end']:.0f} mm"
             links_end = is456.Links(sh.legs, max(sh.dia, 8), s_end_p)
             st = B.step(
                 "Hoops within 2d of the column faces",
-                "sv ≤ min(d/4, 8 φmin, 100 mm), rounded down to 5 mm, ≥ 50 mm",
-                f"min({sh.spacing:.0f}, {d:.0f}/4, 8 × {dbmin}, 100) = {s_end:.1f} mm; zone 2d = {2 * d:.0f} mm",
+                "sv ≤ min(d/4, 8 φmin, 100 mm, capacity-shear spacing), rounded down to 5 mm, ≥ 50 mm",
+                subst + f"; zone 2d = {2 * d:.0f} mm",
                 str(links_end),
-                "IS 13920 cl 6.3.5",
+                "IS 13920 cl 6.3.3; 6.3.5",
                 "sv_end",
                 s_end_p,
             )
@@ -1457,7 +1477,7 @@ def column_sheet(project: Project, fa: FrameAnalysis, cd: ColumnDesign) -> Sheet
     if ductile and chk.main_bars is not None:
         B.group("Ductile detailing – special confining hoops (IS 13920)")
         main = chk.main_bars
-        fyh = min(ds.fy_shear, 415.0)
+        fyh = ds.fy_shear  # IS 13920:2016 cl 8.1(b): fy of the hoops (IS 456 cl 40.4 cap is for shear only)
         l0 = is13920.confining_length(max(b, D), Lu * 1000)
         st = B.step(
             "Confining length at each end",
@@ -1502,34 +1522,45 @@ def column_sheet(project: Project, fa: FrameAnalysis, cd: ColumnDesign) -> Sheet
             "s_limit",
             conf.s_limit,
         )
+        req = dict(getattr(cd, "is13920_spacing", None) or {}) if chk.tie is not None else {}
+        s_lo = is13920.MIN_COL_HOOP_SPACING
+        s_conf = conf.s
+        subst = f"min({conf.s_ash:.0f}, {conf.s_limit:.0f}) → {conf.s:.0f} mm"
+        if "l0" in req:
+            s_conf = max(min(conf.s, req["l0"]), s_lo)
+            subst += f"; IS 13920 frame check (cl 7.5 capacity shear 1.4 ΣMb/hst) {req['l0']:.0f} mm → {s_conf:.0f} mm"
         st = B.step(
             "Special confining hoops",
-            "s = min(s,Ash, s,limit) rounded down to 5 mm, ≥ 75 mm",
-            f"min({conf.s_ash:.0f}, {conf.s_limit:.0f}) → {conf.s:.0f} mm; Ash,req = {conf.ash_req:.1f} mm²",
-            f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(conf.s)}" + ("" if conf.ok else " – NOT OK"),
-            "IS 13920 cl 8.1; 8.2",
+            "s = min(s,Ash, s,limit, capacity-shear spacing) rounded down to 5 mm, ≥ 75 mm",
+            subst + f"; Ash,req = {conf.ash_req:.1f} mm²",
+            f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(s_conf)}" + ("" if conf.ok else " – NOT OK"),
+            "IS 13920 cl 7.5; 8.1; 8.2",
             "s_confined",
-            conf.s,
+            s_conf,
         )
         if cd.tie_confined is not None:
-            B.compare("confining hoop spacing", conf.s, cd.tie_confined.spacing, " mm", 0, st)
+            B.compare("confining hoop spacing", s_conf, cd.tie_confined.spacing, " mm", 0, st)
         if chk.tie is not None:
             s_out = min(chk.tie.spacing, min(b, D) / 2, 300.0)
             tie_out = float(math.floor(s_out / 25) * 25)
             tie_dia_out = max(chk.tie.dia, conf.dia)
+            legs_out = max(chk.tie.legs, conf.legs_b, conf.legs_d)  # hoop legs continue (cl 7.5 shear)
+            subst = f"min({chk.tie.spacing:.0f}, {min(b, D):.0f}/2, 300) = {s_out:.0f} mm"
+            if "out" in req:
+                tie_out = float(max(min(tie_out, req["out"]), s_conf))
+                subst += f"; IS 13920 frame check (cl 7.5 capacity shear) {req['out']:.0f} mm"
+            out_txt = f"T{tie_dia_out}{f' ({legs_out} legs)' if legs_out > 2 else ''} @ {int(tie_out)} c/c"
             st = B.step(
                 "Ties outside l0",
-                "s ≤ min(IS 456 pitch, b/2, 300 mm), rounded down to 25 mm; φ ≥ hoop φ",
-                f"min({chk.tie.spacing:.0f}, {min(b, D):.0f}/2, 300) = {s_out:.0f} mm",
-                f"T{tie_dia_out} @ {int(tie_out)} c/c",
-                "IS 13920 cl 7.6.1",
+                "s ≤ min(IS 456 pitch, b/2, 300 mm) rounded down to 25 mm, ≤ capacity-shear spacing; "
+                "φ ≥ hoop φ, hoop legs continued",
+                subst,
+                out_txt,
+                "IS 13920 cl 7.5; 7.6.1",
                 "tie_spacing_out",
                 tie_out,
             )
-            ties_txt = (
-                f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(conf.s)} over l0 = {l0:.0f} "
-                f"/ T{tie_dia_out} @ {int(tie_out)} c/c"
-            )
+            ties_txt = f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(s_conf)} over l0 = {l0:.0f} / {out_txt}"
     B.compare_text("ties", ties_txt, cd.ties, st)
     if cd.tie is not None:
         B.compare("tie spacing", tie_out, cd.tie.spacing, " mm", 0, st)
@@ -1722,14 +1753,16 @@ def footing_sheet(project: Project, fa: FrameAnalysis, fd: FootingDesign) -> She
     B.compare("service pressure", q, fd.q, " kN/m²", 1, st)
     gq_ok = q <= sbc * 1.0001
     lat_ok, contact_ok = True, True
-    if lat:
+    uplift = [x for x in lat if x[1] < 0]  # net uplift: no plan size gives full contact
+    lat_c = [x for x in lat if x[1] > 0]  # is456.design_footing sizes the plan on these
+    if lat_c:
 
         def press(Pp, Mx, My):
             qq = max(Pp, 0.0) * sw / (L * Bw)
             dq = 6 * Mx / (Bw * L * L) + 6 * My / (L * Bw * Bw)
             return qq + dq, qq - dq
 
-        pr = [(name, Pp, Mx, My, *press(Pp, Mx, My)) for name, Pp, Mx, My in lat]
+        pr = [(name, Pp, Mx, My, *press(Pp, Mx, My)) for name, Pp, Mx, My in lat_c]
         gmax = max(pr, key=lambda t: t[4])
         gmin = min(pr, key=lambda t: t[5])
         lat_ok = gmax[4] <= 1.25 * sbc * 1.0001
@@ -1753,29 +1786,56 @@ def footing_sheet(project: Project, fa: FrameAnalysis, fd: FootingDesign) -> She
             "q_min_lateral",
             gmin[5],
         )
+    if uplift:
+        worst = min(uplift, key=lambda t: t[1])
+        B.step(
+            "Net uplift – service with lateral load",
+            "P < 0: the footing cannot stay in contact at any plan size; anchor the column / check tension",
+            f"{len(uplift)} case(s); worst {worst[0]}: P = {worst[1]:.1f} kN",
+            "NOT OK – uplift",
+            "IS 1904 (no tension)",
+            "P_uplift",
+            worst[1],
+        )
     # ------------------------------------------------ factored pressure
     B.group("Factored net upward pressure (footing self weight excluded)")
     if ult:
-        qus = [(name, max(Pp, 0.0) / (L * Bw) + 6 * Mx / (Bw * L * L) + 6 * My / (L * Bw * Bw), Pp, Mx, My)
-               for name, Pp, Mx, My in ult]  # fmt: skip
-        gq = max(qus, key=lambda t: t[1])
-        qu = gq[1]
-        B.step(
-            "Governing factored pressure",
-            "qu = Pu/(LB) + 6Mux/(BL²) + 6Muy/(LB²), max over ultimate combinations",
-            f"{gq[0]}: {max(gq[2], 0):.1f}/({L:.2f}×{Bw:.2f}) + 6×{gq[3]:.1f}/({Bw:.2f}×{L:.2f}²) "
-            f"+ 6×{gq[4]:.1f}/({L:.2f}×{Bw:.2f}²)",
-            f"{qu:.1f} kN/m²",
-            "Table 18; cl 34.2.3.1",
-            "qu",
-            qu,
-        )
+        fact = list(ult)
+        label = "max over ultimate combinations"
     else:  # no ultimate combinations: is456 scales the service cases
-        cases = [(P, 0.0, 0.0, 1.5)] + [(Pp, Mx, My, 1.2) for _n, Pp, Mx, My in lat]
-        qu = max(max(f * Pp, 0.0) / (L * Bw) + 6 * f * Mx / (Bw * L * L) + 6 * f * My / (L * Bw * Bw)
-                 for Pp, Mx, My, f in cases)  # fmt: skip
-        B.step("Governing factored pressure", "service cases × 1.5 (gravity) / 1.2 (lateral)", "", f"{qu:.1f} kN/m²",
-               "Table 18", "qu", qu)  # fmt: skip
+        fact = [("1.5 (DL + LL)", 1.5 * P, 0.0, 0.0)] + [
+            (f"1.2 × {n}", 1.2 * Pp, 1.2 * Mx, 1.2 * My) for n, Pp, Mx, My in lat
+        ]
+        label = "service cases × 1.5 (gravity) / 1.2 (lateral)"
+    qus = [(name, is456.peak_pressure(Pp, Mx, My, L, Bw), Pp, Mx, My) for name, Pp, Mx, My in fact]
+    overturn = [t for t in qus if not math.isfinite(t[1])]
+    gq = max((t for t in qus if math.isfinite(t[1])), key=lambda t: t[1], default=("–", 0.0, 0.0, 0.0, 0.0))
+    qu = gq[1]
+    Pg, ex, ey = gq[2], (abs(gq[3]) / gq[2] if gq[2] > 0 else 0.0), (abs(gq[4]) / gq[2] if gq[2] > 0 else 0.0)
+    kern = 6 * ex / L + 6 * ey / Bw
+    if Pg <= 0 or kern <= 1 + 1e-9:
+        formula = "qu = Pu/(LB) + 6Mux/(BL²) + 6Muy/(LB²)  (resultant inside the kern, 6ex/L + 6ey/B ≤ 1)"
+        subst = (
+            f"{gq[0]}: {max(Pg, 0):.1f}/({L:.2f}×{Bw:.2f}) + 6×{abs(gq[3]):.1f}/({Bw:.2f}×{L:.2f}²) "
+            f"+ 6×{abs(gq[4]):.1f}/({L:.2f}×{Bw:.2f}²)"
+        )
+    elif ey < 1e-9 * Bw or ex < 1e-9 * L:
+        e_, l_, w_ = (ex, L, Bw) if ey < 1e-9 * Bw else (ey, Bw, L)
+        formula = "outside the kern (no soil tension): qu = 2Pu / (3 B' (L'/2 − e))  (triangular contact)"
+        subst = f"{gq[0]}: e = {e_:.3f} m > L'/6 = {l_ / 6:.3f} m; 2×{Pg:.1f} / (3×{w_:.2f}×({l_:.2f}/2 − {e_:.3f}))"
+    else:
+        formula = "outside the kern (no soil tension): peak of the contact plane q = max(0, a + bx + cy) in equilibrium"
+        subst = f"{gq[0]}: Pu = {Pg:.1f} kN, ex = {ex:.3f} m, ey = {ey:.3f} m, 6ex/L + 6ey/B = {kern:.3f} > 1"
+    B.step("Governing factored pressure", formula + "; " + label, subst, f"{qu:.1f} kN/m²",
+           "Table 18; cl 34.2.3.1", "qu", qu)  # fmt: skip
+    if overturn:
+        B.step(
+            "Overturning",
+            "resultant at / outside the footing edge (e ≥ L/2): no bearing pressure can balance it",
+            ", ".join(t[0] for t in overturn),
+            "NOT OK – enlarge the footing",
+            "IS 1904",
+        )
     # ------------------------------------------------ depth / flexure / shear
     Dt = fr.D
     s = _footing_state(Dt, L, Bw, cb, cdd, qu, fck, fy, cov)
@@ -1893,9 +1953,13 @@ def footing_sheet(project: Project, fa: FrameAnalysis, fd: FootingDesign) -> She
             Dt * 1000,
         )
     B.check("Bearing pressure (gravity)", gq_ok, f"q = {q:.1f} ≤ {sbc:g} kN/m²")
-    if lat:
+    if lat_c:
         B.check("Bearing pressure (lateral)", lat_ok, f"qmax ≤ {1.25 * sbc:.0f} kN/m²")
         B.check("Full contact", contact_ok, "qmin ≥ 0")
+    if uplift:
+        B.check("No net uplift", False, f"{len(uplift)} service case(s) with P < 0 – anchor / check tension")
+    if overturn:
+        B.check("Overturning", False, "factored resultant at/outside the footing edge")
     B.check(
         "Flexure", s["flex_ok"], f"T{fr.mesh_L.dia if fr.mesh_L else '-'} / T{fr.mesh_B.dia if fr.mesh_B else '-'} mesh"
     )
@@ -1965,6 +2029,7 @@ def _slab_inputs(project: Project) -> list[dict]:
                     "rect": rect,
                     "cont": cont,
                     "kind": kind,
+                    "span": _slab_span(s, kind, ly, pts, lens),
                     "edges": len(edges),
                 }
             )
@@ -1981,7 +2046,8 @@ def slab_sheet(project: Project, inp: dict, res: is456.SlabResult) -> Sheet:
     w_d, w_l = s.dead, s.live_load
     Dm = s.thickness
     cov = ds.slab_cover
-    design = is456.design_slab(s.mark, lx, ly, w_d, w_l, Dm, fck, fy, kind_in, cont, cov)
+    span = inp.get("span")
+    design = is456.design_slab(s.mark, lx, ly, w_d, w_l, Dm, fck, fy, kind_in, cont, cov, span)
     ref = f"{s.mark} ({inp['plan']})"
     B = _Builder(
         "Slab",
@@ -2043,6 +2109,27 @@ def slab_sheet(project: Project, inp: dict, res: is456.SlabResult) -> Sheet:
         "cl 24.4; Annex D",
     )
     B.compare_text("slab type", kind, res.kind, st)
+    L = lx if span is None or kind == "two_way" else span  # span for M and L/d (as design_slab)
+    if kind == "cantilever":
+        B.step(
+            "Cantilever span",
+            "l = projection from the fixed edge = area / fixed-edge length",
+            "fixed edge " + ("as defined" if s.cant_edge is not None else "taken as the longest edge"),
+            f"l = {L:.3f} m",
+            "cl 22.2(c)",
+            "span",
+            L,
+        )
+    elif kind == "one_way":
+        B.step(
+            "One-way span",
+            "l = ly (slab spans the long way)" if span is not None else "l = lx (short span)",
+            f"distribution {s.distribution}",
+            f"l = {L:.3f} m",
+            "cl 22.2",
+            "span",
+            L,
+        )
     B.group("Loads (per m²)")
     B.step(
         "Dead load",
@@ -2066,9 +2153,9 @@ def slab_sheet(project: Project, inp: dict, res: is456.SlabResult) -> Sheet:
     )
     B.group("Design moments (per metre width)")
     if kind == "cantilever":
-        Mx, My, Mn = wu * lx**2 / 2, 0.0, wu * lx**2 / 2
+        Mx, My, Mn = wu * L**2 / 2, 0.0, wu * L**2 / 2
         basic = 7
-        B.step("Cantilever moment", "M = wu l² / 2", f"{wu:.2f} × {lx:.3f}² / 2", f"{Mx:.2f} kN·m/m",
+        B.step("Cantilever moment", "M = wu l² / 2", f"{wu:.2f} × {L:.3f}² / 2", f"{Mx:.2f} kN·m/m",
                "cl 22.2(c)", "Mx", Mx)  # fmt: skip
     elif kind == "two_way":
         ax = float(np.interp(r, _slab._T27_R, _slab._T27_AX))
@@ -2102,12 +2189,12 @@ def slab_sheet(project: Project, inp: dict, res: is456.SlabResult) -> Sheet:
         basic = 20 if cont == 0 else 26
     else:
         if cont:
-            Mx = 1.5 * w_d * lx**2 / 12 + 1.5 * w_l * lx**2 / 10
-            Mn = 1.5 * w_d * lx**2 / 10 + 1.5 * w_l * lx**2 / 9
+            Mx = 1.5 * w_d * L**2 / 12 + 1.5 * w_l * L**2 / 10
+            Mn = 1.5 * w_d * L**2 / 10 + 1.5 * w_l * L**2 / 9
             B.step(
                 "Span moment (continuous)",
                 "M+ = 1.5 wd l²/12 + 1.5 wl l²/10",
-                f"1.5 × {w_d:.2f} × {lx:.3f}²/12 + 1.5 × {w_l:.2f} × {lx:.3f}²/10",
+                f"1.5 × {w_d:.2f} × {L:.3f}²/12 + 1.5 × {w_l:.2f} × {L:.3f}²/10",
                 f"{Mx:.2f} kN·m/m",
                 "cl 22.5.1; Table 12",
                 "Mx",
@@ -2116,7 +2203,7 @@ def slab_sheet(project: Project, inp: dict, res: is456.SlabResult) -> Sheet:
             B.step(
                 "Support moment (continuous)",
                 "M− = 1.5 wd l²/10 + 1.5 wl l²/9",
-                f"1.5 × {w_d:.2f} × {lx:.3f}²/10 + 1.5 × {w_l:.2f} × {lx:.3f}²/9",
+                f"1.5 × {w_d:.2f} × {L:.3f}²/10 + 1.5 × {w_l:.2f} × {L:.3f}²/9",
                 f"{Mn:.2f} kN·m/m",
                 "cl 22.5.1; Table 12",
                 "Mneg",
@@ -2124,8 +2211,8 @@ def slab_sheet(project: Project, inp: dict, res: is456.SlabResult) -> Sheet:
             )
             basic = 26
         else:
-            Mx, Mn = wu * lx**2 / 8, 0.0
-            B.step("Span moment (simply supported)", "M = wu l² / 8", f"{wu:.2f} × {lx:.3f}² / 8",
+            Mx, Mn = wu * L**2 / 8, 0.0
+            B.step("Span moment (simply supported)", "M = wu l² / 8", f"{wu:.2f} × {L:.3f}² / 8",
                    f"{Mx:.2f} kN·m/m", "cl 22.2", "Mx", Mx)  # fmt: skip
             basic = 20
         My = 0.0
@@ -2197,7 +2284,7 @@ def slab_sheet(project: Project, inp: dict, res: is456.SlabResult) -> Sheet:
         pt = 100 * ax_ / (1000 * d) if ax_ is not None and math.isfinite(ax_) else 1.0
         mf = is456.deflection_mf(pt, fs)
         allowed = basic * mf
-        actual = lx * 1000 / d
+        actual = L * 1000 / d
         dok = actual <= allowed
         B.step(
             "Modification factor",
@@ -2210,8 +2297,8 @@ def slab_sheet(project: Project, inp: dict, res: is456.SlabResult) -> Sheet:
         )
         st = B.step(
             "Span / effective depth",
-            "lx/d ≤ basic × MF",
-            f"{lx * 1000:.0f} / {d:.0f} = {actual:.2f} {'≤' if dok else '>'} {basic} × {mf:.3f} = {allowed:.2f}",
+            "l/d ≤ basic × MF",
+            f"{L * 1000:.0f} / {d:.0f} = {actual:.2f} {'≤' if dok else '>'} {basic} × {mf:.3f} = {allowed:.2f}",
             "OK" if dok else "NOT OK",
             "cl 23.2.1; 24.1",
             "l_over_d",

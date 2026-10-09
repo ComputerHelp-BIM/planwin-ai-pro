@@ -96,8 +96,8 @@ def _parse_barset(text: str) -> BarSet | None:
 
 
 def _parse_links(text: str) -> Links | None:
-    m = re.match(r"\s*(?:(\d+)L-)?T(\d+)\s*@\s*(\d+)", text or "")
-    return Links(int(m.group(1) or 2), int(m.group(2)), float(m.group(3))) if m else None
+    m = re.match(r"\s*(?:(\d+)L-)?T(\d+)\s*(?:\((\d+) legs\)\s*)?@\s*(\d+)", text or "")  # 4L-T8 / T10 (3 legs)
+    return Links(int(m.group(1) or m.group(3) or 2), int(m.group(2)), float(m.group(4))) if m else None
 
 
 def _parse_mesh(text: str) -> BarMesh | None:

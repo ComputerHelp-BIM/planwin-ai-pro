@@ -9,6 +9,7 @@ can be tested in isolation.  Result containers live in :mod:`.report`, quantitie
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import numpy as np
 
@@ -93,7 +94,7 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
                 D_mm,
                 ds.column_cover * 1000,
                 fck,
-                min(ds.fy_shear, 415.0),
+                ds.fy_shear,  # IS 13920:2016 cl 8.1(b): fy of the hoops, no IS 456 cl 40.4 cap
                 chk.main_bars.dia,
                 chk.main_bars.count,
                 tie.dia if tie else 8,
@@ -101,13 +102,12 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
             l0 = is13920.confining_length(max(b_mm, D_mm), L * 1000) / 1000
             if tie is not None:
                 s_out = min(tie.spacing, min(b_mm, D_mm) / 2, 300.0)
-                tie = is456.Links(tie.legs, max(tie.dia, conf.dia), float(math.floor(s_out / 25) * 25))
+                # the hoop legs continue over the full height (cl 7.5 capacity shear uses them)
+                legs = max(tie.legs, conf.legs_b, conf.legs_d)
+                tie = is456.Links(legs, max(tie.dia, conf.dia), float(math.floor(s_out / 25) * 25))
         ties_txt = chk.ties
         if conf is not None and tie is not None:
-            ties_txt = (
-                f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(conf.s)} over l0 = {l0 * 1000:.0f} "
-                f"/ T{tie.dia} @ {int(tie.spacing)} c/c"
-            )
+            ties_txt = _ties_text(conf, conf.s, l0, tie)
         rep.columns.append(
             ColumnDesign(
                 mid,
@@ -227,13 +227,7 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
                     else "two_way"
                 )
             )
-            span = None  # one-way / cantilever span as the PlanEngine distributes the load
-            if s.distribution == "one_way_long" and kind == "one_way":
-                span = ly
-            elif kind == "cantilever":
-                k = s.cant_edge if s.cant_edge is not None and 0 <= s.cant_edge < len(lens) else None
-                k = max(range(len(lens)), key=lambda i: lens[i]) if k is None else k
-                span = abs(G.polygon_area(pts)) / lens[k] if lens[k] > 0 else None
+            span = _slab_span(s, kind, ly, pts, lens)
             res = is456.design_slab(
                 s.mark, lx, ly, s.dead, s.live_load, s.thickness, fck, fy, kind, cont, ds.slab_cover, span
             )
@@ -247,6 +241,7 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
             rep.warnings.append(f"IS 1893 {ir.clause} {ir.name}: {ir.detail}")
     if ductile:
         rep.ductile = is13920.check_ductility(fa, project, rep)
+        _adopt_ductile_spacing(rep)
     for d in rep.drifts:
         if not d["ok"]:
             rep.warnings.append(f"Storey drift {d['ratio']:.4f} > 0.004 at {d['level']} ({d['case']})")
@@ -502,12 +497,7 @@ def _design_beam(fa: FrameAnalysis, project: Project, mid: int, mem, levels, duc
         notes.append(f"deflection span/d {span * 1000 / d_eff:.1f} > {allowed:.1f}")
     mul = is456.mu_lim(fck, fy, b_mm, d_eff) / 1e6
     util = max(sag.max(), -hog.min()) / mul if mul else 0
-    if links is None:
-        stirrups = "FAIL"
-    elif links_end is not None:
-        stirrups = f"{links_end} (2d from faces) / {int(links.spacing)} c/c"
-    else:
-        stirrups = str(links)
+    stirrups = _stirrups_text(links, links_end)
     return BeamDesign(
         mid,
         mem.mark,
@@ -540,6 +530,67 @@ def _design_beam(fa: FrameAnalysis, project: Project, mid: int, mem, levels, duc
         T_max=tmax,
         side_face=(tors.side_face if tors else _side_face(b_mm, D_mm, cover)),
     )
+
+
+def _stirrups_text(links, links_end) -> str:
+    if links is None:
+        return "FAIL"
+    if links_end is not None:
+        return f"{links_end} (2d from faces) / {int(links.spacing)} c/c"
+    return str(links)
+
+
+def _ties_text(conf, s_l0: float, l0_m: float, tie) -> str:
+    return (
+        f"T{conf.dia} ({conf.legs_b}×{conf.legs_d} legs) @ {int(s_l0)} over l0 = {l0_m * 1000:.0f} "
+        f"/ T{tie.dia}{f' ({tie.legs} legs)' if tie.legs > 2 else ''} @ {int(tie.spacing)} c/c"
+    )
+
+
+def _adopt_ductile_spacing(rep: DesignReport) -> None:
+    """Make the reported hoops (which feed the BBS, drawings, schedules and BOQ) honour the
+    IS 13920 frame check: the capacity-design shear (cl 6.3.3 beams, cl 7.5 columns) is only
+    known once every member is designed, so the IS 456 spacings fixed in ``design_all`` are
+    reduced to the governing (smaller) spacing the check derived – already rounded down to
+    5 mm (25 mm for wide beam spacings) – but never below the practical minimum
+    (cl 8.2 for columns).  The check therefore passes on what is reported."""
+    beams = {b.member_id: b for b in rep.beams}
+    cols = {c.member_id: c for c in rep.columns}
+    for dc in rep.ductile:
+        req = dc.spacing
+        if dc.kind == "beam" and dc.member_id in beams and req:
+            bd = beams[dc.member_id]
+            if bd.links is None:
+                continue
+            lo = is13920.MIN_BEAM_HOOP_SPACING
+            bd.links = replace(bd.links, spacing=max(min(bd.links.spacing, req["mid"]), lo))
+            if bd.links_end is not None and "end" in req:
+                bd.links_end = replace(bd.links_end, spacing=max(min(bd.links_end.spacing, req["end"]), lo))
+            bd.is13920_spacing = dict(req)
+            bd.stirrups = _stirrups_text(bd.links, bd.links_end)
+        elif dc.kind == "column" and dc.member_id in cols and req and dc.confinement is not None:
+            cd = cols[dc.member_id]
+            if cd.tie is None or cd.tie_confined is None:
+                continue
+            lo = is13920.MIN_COL_HOOP_SPACING
+            s_l0 = max(min(cd.tie_confined.spacing, req["l0"]), lo)
+            cd.tie_confined = replace(cd.tie_confined, spacing=s_l0)
+            cd.tie = replace(cd.tie, spacing=max(min(cd.tie.spacing, req["out"]), s_l0))
+            cd.is13920_spacing = dict(req)
+            cd.ties = _ties_text(dc.confinement, s_l0, cd.l0, cd.tie)
+
+
+def _slab_span(s, kind: str, ly: float, pts, lens: list[float]) -> float | None:
+    """One-way / cantilever span (m) as the PlanEngine distributes the slab load: ``ly`` for a
+    slab spanning the long way, the projection (area / fixed-edge length) for a cantilever;
+    ``None`` (the short side lx) otherwise.  Shared with the calculation sheets."""
+    if s.distribution == "one_way_long" and kind == "one_way":
+        return ly
+    if kind == "cantilever":
+        k = s.cant_edge if s.cant_edge is not None and 0 <= s.cant_edge < len(lens) else None
+        k = max(range(len(lens)), key=lambda i: lens[i]) if k is None else k
+        return abs(G.polygon_area(pts)) / lens[k] if lens[k] > 0 else None
+    return None
 
 
 def _side_face(b_mm: float, D_mm: float, cover: float) -> str:
