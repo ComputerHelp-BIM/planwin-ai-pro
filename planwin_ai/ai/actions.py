@@ -121,6 +121,8 @@ class ActionResult:
     analysed: bool = False
     files: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    #: the project was replaced by a new building / template (not a modification of the open one)
+    new_project: bool = False
 
 
 def _to_bool(v: Any) -> bool:
@@ -261,6 +263,7 @@ def _new_building(s: Session, p: dict, r: ActionResult):
             f" – {spec.city}" if known else ""
         )
     s.project = grid_building(spec)
+    r.new_project = True
     s.last.clear()
     r.changed = True
     nfl = spec.upper_floors
@@ -296,6 +299,7 @@ def _modify(s: Session, p: dict, r: ActionResult):
 
 def _template(s: Session, p: dict, r: ActionResult):
     s.project = build_template(str(p.get("key", "")))
+    r.new_project = True
     s.last.clear()
     r.changed = True
     r.messages.append(f"Loaded template '{s.project.name}'.")

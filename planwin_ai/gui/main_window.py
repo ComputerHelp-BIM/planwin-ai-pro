@@ -303,6 +303,8 @@ class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWi
         if res.changed:
             if snap is not None:
                 self.push_undo(snap)
+            if getattr(res, "new_project", False):
+                self.path = None  # a new building: Ctrl+S must not overwrite the previous project's file
             self.dirty = True
             self._plan_cache.clear()
             if not self.project.plan(self.current_plan_name):

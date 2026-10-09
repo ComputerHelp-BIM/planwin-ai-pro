@@ -552,3 +552,34 @@ def test_assistant_reply_still_reaches_the_window(win, app):
         time.sleep(0.01)
     assert not win.chat._busy
     assert win.chat._msgs[-1][1] == "plain answer"
+
+
+def test_ai_new_building_does_not_keep_the_previous_file_path(win, tmp_path):
+    """Ctrl+S after 'new building' / 'load template' must not overwrite the previous project's file."""
+    win.path = str(tmp_path / "old.pwai")
+    assert win.save()
+    win.before_ai_change()
+    _, res = win.run_ai_actions("", [{"action": "load_template", "key": "office_g5"}])
+    win.after_ai_change(res)
+    assert res.new_project and win.path is None and win.dirty
+
+
+def test_ai_modification_keeps_the_file_path(win, tmp_path):
+    win.path = str(tmp_path / "keep.pwai")
+    assert win.save()
+    win.before_ai_change()
+    _, res = win.run_ai_actions("", [{"action": "set_sbc", "sbc": 250}])
+    win.after_ai_change(res)
+    assert not res.new_project and win.path == str(tmp_path / "keep.pwai")
+
+
+def test_start_page_prompt_asks_to_save_a_changed_project(win, monkeypatch):
+    sent = []
+    monkeypatch.setattr(win.chat, "send", sent.append)
+    monkeypatch.setattr(win, "maybe_save", lambda: False)  # user pressed Cancel
+    win.dirty = True
+    win.start_with_ai("G+2 office")
+    assert sent == []
+    monkeypatch.setattr(win, "maybe_save", lambda: True)
+    win.start_with_ai("G+2 office")
+    assert sent == ["G+2 office"]

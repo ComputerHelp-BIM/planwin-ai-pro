@@ -471,7 +471,7 @@ def test_names_starting_with_equals_stay_text_in_every_workbook(tmp_path):
 
     prj = build_template("bungalow")
     prj.name = "=Tower"
-    prj.client = "=HYPERLINK(\"http://x\",\"y\")"
+    prj.client = '=HYPERLINK("http://x","y")'
     prj.levels[0].name = "=L0"
     prj.meta["revisions"] = []
     s = Session(prj, out_dir=str(tmp_path))

@@ -73,6 +73,8 @@ class AppCommands:
 
     def start_with_ai(self, text: str):
         """Start-page prompt: open the workspace and send the description to the assistant."""
+        if not self.maybe_save():  # the assistant is about to build a new project
+            return
         self.show_workspace()
         self.chat.show()
         self.chat.raise_()
