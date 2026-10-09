@@ -115,6 +115,7 @@ class FrameModel:
         self._mid = 0
         self.solver: FrameSolver | None = None
         self.rs: dict = {}  # response spectrum results of the last analysis (for exporters)
+        self._joint_dead: dict[int, float] = {}  # node -> dead joint load (kN, down +) for the seismic weight
 
     # ------------------------------------------------------------ nodes
     def _node(self, lvl: int, x: float, y: float, z: float, create: bool = True, tag: str = "") -> int | None:
@@ -429,6 +430,30 @@ class FrameModel:
                     pts.append((*w.centre, max(wl.dead + 0.25 * wl.live, 0.0)))
         return pts
 
+    def _vertical_joints(self, i: int) -> list[tuple[int, float]]:
+        """(joint, gravity load D + 0.25 L) of the columns and shear walls at the top of storey i –
+        the joints that share the storey forces and masses of a floor without a rigid diaphragm."""
+        lv = self.levels[i]
+        res = lv.result
+        out = []
+        for mark, nid in lv.column_nodes.items():
+            cl = next((v for v in res.columns.values() if v.mark == mark), None) if res else None
+            out.append((nid, max(cl.dead + 0.25 * cl.live, 0.0) if cl else 0.0))
+        for mark, nid in lv.wall_nodes.items():
+            wl = next((v for v in res.walls.values() if v.mark == mark), None) if res else None
+            out.append((nid, max(wl.dead + 0.25 * wl.live, 0.0) if wl else 0.0))
+        return out
+
+    def storey_joint_pairs(self, i: int) -> list[tuple[int, int]]:
+        """(top, bottom) joints of the columns and walls of storey i (between levels i-1 and i)."""
+        out = []
+        for attr in ("column_nodes", "wall_nodes"):
+            below = getattr(self.levels[i - 1], attr)
+            for mark, nid in getattr(self.levels[i], attr).items():
+                if below.get(mark) is not None:
+                    out.append((nid, below[mark]))
+        return out
+
     def _diaphragms(self):
         for i in self._diaphragm_levels():
             lv = self.levels[i]
@@ -506,6 +531,8 @@ class FrameModel:
             case = "LL" if str(jl.get("case", "DL")).upper().startswith("L") else "DL"
             vec = self.nodal.setdefault(case, {}).setdefault(nid, np.zeros(6))
             vec[2] -= float(jl.get("fz", 0.0))  # input downward positive
+            if case == "DL":
+                self._joint_dead[nid] = self._joint_dead.get(nid, 0.0) + float(jl.get("fz", 0.0))
 
     def _level_weights(self) -> list[float]:
         weights = [0.0] * len(self.levels)
@@ -526,11 +553,15 @@ class FrameModel:
             weights[i] = res.applied["D"] + live_frac * res.applied["L"]
             weights[i] += 0.5 * col_w.get(i, 0.0) + 0.5 * col_w.get(i + 1, 0.0)
             # walls standing on this level's beams belong half to this floor, half to the floor above
-            weights[i] -= 0.5 * self._wall_weight(i)
+            # (on the top floor there is no floor above: they stay here, like parapets)
+            if i + 1 < len(self.levels):
+                weights[i] -= 0.5 * self._wall_weight(i)
             weights[i] += 0.5 * self._wall_weight(i - 1)
             self.levels[i].weight = weights[i]
-        for nid, vec in self.nodal.get("DL", {}).items():
-            weights[self.nodes[nid].level] += -vec[2]
+        # dead joint loads (water tanks …); the slab loads that shear walls take as nodal loads are
+        # already part of the plan's applied load
+        for nid, fz in self._joint_dead.items():
+            weights[self.nodes[nid].level] += fz
             self.levels[self.nodes[nid].level].weight = weights[self.nodes[nid].level]
         return weights
 
@@ -553,7 +584,7 @@ class FrameModel:
         if lv.master is not None:
             self.nodal.setdefault(case, {}).setdefault(lv.master, np.zeros(6))[5] += mt
             return
-        nids = list(lv.column_nodes.values())
+        nids = [nid for nid, _ in self._vertical_joints(level)]
         if len(nids) < 2:
             return
         other = 1 if axis == 0 else 0  # lever-arm coordinate
@@ -589,18 +620,14 @@ class FrameModel:
                 m = self.nodes[lv.master]
                 vec[5] += (at[0] - m.x) * force if axis == 1 else -(at[1] - m.y) * force
             return
-        cols = list(lv.column_nodes.items())
-        if not cols:
+        joints = self._vertical_joints(level)
+        if not joints:
             return
-        res = lv.result
-        wts = []
-        for mark, _nid in cols:
-            cl = next((v for v in res.columns.values() if v.mark == mark), None) if res else None
-            wts.append(max(cl.dead + 0.25 * cl.live, 0.0) if cl else 0.0)
+        wts = [w for _, w in joints]
         tot = sum(wts)
         if tot <= 1e-9:
-            wts, tot = [1.0] * len(cols), float(len(cols))
-        for (_mark, nid), w in zip(cols, wts):
+            wts, tot = [1.0] * len(joints), float(len(joints))
+        for (nid, _), w in zip(joints, wts):
             vec = nodal.setdefault(case, {}).setdefault(nid, np.zeros(6))
             vec[axis] += force * w / tot
 
@@ -642,6 +669,12 @@ class FrameModel:
                     dname,
                 )
                 self.seismic[dname] = r
+                if r.W <= 0 and dname == "EQX":
+                    self._err(
+                        f"No seismic weight above the seismic base (level index {s.base_level}) – no earthquake "
+                        "load is applied; check the base level in the seismic settings",
+                        level="warning",
+                    )
                 for i, f in enumerate(r.forces):
                     self._distribute(dname, i, f, axis)
                     if s.accidental_torsion:
@@ -675,7 +708,7 @@ class FrameModel:
                         a0, b0, a1, b1 = G.bbox(pl.all_points()) if pl and pl.all_points() else (x0, y0, x1, y1)
                         self._distribute(dname, i, f, axis, at=((a0 + a1) / 2, (b0 + b1) / 2))
                         continue
-                    cols = list(lv_w.column_nodes.values())
+                    cols = [nid for nid, _ in self._vertical_joints(i)]
                     for nid in cols:
                         vec = self.nodal.setdefault(dname, {}).setdefault(nid, np.zeros(6))
                         vec[axis] += f / len(cols)
@@ -837,10 +870,7 @@ class FrameAnalysis:
             for i in range(1, len(mdl.levels)):
                 h = mdl.levels[i].z - mdl.levels[i - 1].z
                 worst = 0.0
-                for mark, nid in mdl.levels[i].column_nodes.items():
-                    below = mdl.levels[i - 1].column_nodes.get(mark)
-                    if below is None:
-                        continue
+                for nid, below in mdl.storey_joint_pairs(i):
                     axis = 0 if case.endswith("X") else 1
                     if case in self.rs:
                         d = self.rs[case].drift_envelope(idx[nid], idx[below], axis)

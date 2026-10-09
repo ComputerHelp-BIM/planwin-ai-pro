@@ -122,22 +122,24 @@ def check_irregularities(fa: FrameAnalysis) -> list[Irregularity]:
     for case, tcase, axis in (("EQX", "ETX", 0), ("EQY", "ETY", 1)):
         if case not in fa.res.disp:
             continue
-        fac = {case: 1.0}
-        if tcase in fa.res.disp:
-            fac[tcase] = 1.0
-        for i in upper:
-            nodes = list(levels[i].column_nodes.values()) + list(levels[i].wall_nodes.values())
-            if len(nodes) < 2:
-                continue
-            other = 1 - axis
-            coord = [(m.nodes[n].y if other == 1 else m.nodes[n].x) for n in nodes]
-            lo, hi = nodes[int(np.argmin(coord))], nodes[int(np.argmax(coord))]
-            d1 = abs(fa.displacement(lo, fac)[axis])
-            d2 = abs(fa.displacement(hi, fac)[axis])
-            if min(d1, d2) > 1e-9:
-                r = max(d1, d2) / min(d1, d2)
-                if r > worst:
-                    worst, where = r, f"{levels[i].name} ({case}+{tcase})"
+        # accidental eccentricity on either side of the centre of mass (cl 7.8.2): the worse one governs
+        variants = [({case: 1.0, tcase: sg}, f"{case}{'+' if sg > 0 else '-'}{tcase}") for sg in (1.0, -1.0)]
+        if tcase not in fa.res.disp:
+            variants = [({case: 1.0}, case)]
+        for fac, label in variants:
+            for i in upper:
+                nodes = list(levels[i].column_nodes.values()) + list(levels[i].wall_nodes.values())
+                if len(nodes) < 2:
+                    continue
+                other = 1 - axis
+                coord = [(m.nodes[n].y if other == 1 else m.nodes[n].x) for n in nodes]
+                lo, hi = nodes[int(np.argmin(coord))], nodes[int(np.argmax(coord))]
+                d1 = abs(fa.displacement(lo, fac)[axis])
+                d2 = abs(fa.displacement(hi, fac)[axis])
+                if min(d1, d2) > 1e-9:
+                    r = max(d1, d2) / min(d1, d2)
+                    if r > worst:
+                        worst, where = r, f"{levels[i].name} ({label})"
     out.append(
         Irregularity(
             "Plan (Table 5)",
@@ -229,11 +231,10 @@ def check_irregularities(fa: FrameAnalysis) -> list[Irregularity]:
         shear = [sum(forces[k] for k in range(i, len(forces))) for i in range(len(forces))]
         k = {}
         for i in range(1, len(levels)):
-            drifts = []
-            for mark, nid in levels[i].column_nodes.items():
-                below = levels[i - 1].column_nodes.get(mark)
-                if below is not None:
-                    drifts.append(abs(fa.displacement(nid, {case: 1})[axis] - fa.displacement(below, {case: 1})[axis]))
+            drifts = [
+                abs(fa.displacement(nid, {case: 1})[axis] - fa.displacement(below, {case: 1})[axis])
+                for nid, below in m.storey_joint_pairs(i)
+            ]
             d = float(np.mean(drifts)) if drifts else 0.0
             if d > 1e-9 and shear[i] > 1e-9:
                 k[i] = shear[i] / d
