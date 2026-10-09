@@ -267,6 +267,17 @@ class FlowLayout(QLayout):
         return y + line_h - rect.y() + m.bottom()
 
 
+class _FitWidth(QWidget):
+    """Scroll-area content that always takes the viewport's width: its minimum width is 0, so a
+    wide child (a table, a long combo) scrolls or wraps inside itself instead of making the whole
+    panel scroll sideways.  The minimum height stays the content's, so vertical scrolling works."""
+
+    def minimumSizeHint(self):  # noqa: N802 (Qt API)
+        lay = self.layout()
+        h = lay.minimumSize().height() if lay is not None else 0
+        return QSize(0, h)
+
+
 class ScrollPanel(QScrollArea):
     """Frameless vertical scroller that stacks sections, with a see-through viewport.
 
@@ -280,14 +291,15 @@ class ScrollPanel(QScrollArea):
         self.setObjectName("PanelScroll")
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.NoFrame)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # never sideways: see _FitWidth
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.inner = QWidget()
+        self.inner = _FitWidth()
         self.inner.setObjectName("PanelScrollInner")
         self.inner.setAttribute(Qt.WA_StyledBackground, True)
         self.inner_layout = QVBoxLayout(self.inner)
         self.inner_layout.setContentsMargins(margins, margins, margins, margins)
         self.inner_layout.setSpacing(spacing)
+        self.inner_layout.setSizeConstraint(QLayout.SetNoConstraint)  # the layout must not force a min width
         self.inner_layout.addStretch(0)  # spare height: growing sections first, else below the last section
         self.setWidget(self.inner)
         # QScrollArea.setWidget() switches auto-fill on for the widget; both must stay transparent

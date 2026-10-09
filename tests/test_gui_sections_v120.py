@@ -355,3 +355,25 @@ def test_project_panel_keeps_public_attributes_and_extras(app):
     pp.levels.setCurrentCell(0, 2)
     pp._add_level()
     assert main.mutations == ["Add level"]
+
+
+def test_scroll_panel_never_scrolls_sideways(app):
+    """A child wider than the dock (Windows fonts made the levels table ~165 px too wide) must not
+    make the whole panel scroll sideways; it is clipped or scrolls inside itself."""
+    from PySide6.QtWidgets import QPushButton
+
+    from planwin_ai.gui.widgets import ScrollPanel
+
+    sp = ScrollPanel()
+    sec = sp.add_section("Wide", "wide")
+    wide = QPushButton("wide")
+    wide.setMinimumWidth(600)
+    sec.body_layout.addWidget(wide)
+    for i in range(30):
+        sec.body_layout.addWidget(QPushButton(f"row {i}"))
+    sp.resize(280, 400)
+    sp.show()
+    _settle(app)
+    assert sp.horizontalScrollBar().maximum() == 0
+    assert sp.inner.width() == sp.viewport().width()
+    assert sp.verticalScrollBar().maximum() > 0  # still scrolls vertically
