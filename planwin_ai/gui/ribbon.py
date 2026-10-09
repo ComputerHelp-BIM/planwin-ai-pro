@@ -119,6 +119,24 @@ class RibbonGroup(QFrame):
             self._col += 1
         return b
 
+    def labelled(self, label: str, w: QWidget) -> QWidget:
+        """A control with a small caption above it, filling a whole column of the group."""
+        box = QWidget()
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(4, 4, 4, 0)
+        lay.setSpacing(2)
+        cap = QLabel(label)
+        cap.setObjectName("RibbonCaption")
+        lay.addWidget(cap)
+        lay.addWidget(w)
+        lay.addStretch(1)
+        if self._small_row:
+            self._col += 1
+            self._small_row = 0
+        self.grid.addWidget(box, 0, self._col, 3, 1)
+        self._col += 1
+        return w
+
     def widget(self, w: QWidget, rows: int = 1) -> QWidget:
         """Arbitrary control (e.g. a combo box) in the small-button column."""
         self.grid.addWidget(w, self._small_row, self._col, rows, 1)
@@ -186,6 +204,9 @@ class Ribbon(QWidget):
         self.tabs.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         h.addWidget(self.tabs)
         h.addStretch(1)
+        self.center = QHBoxLayout()  # command search
+        h.addLayout(self.center)
+        h.addSpacing(8)
         self.title = QLabel(title)
         self.title.setObjectName("RibbonTitle")
         h.addWidget(self.title)
@@ -225,6 +246,10 @@ class Ribbon(QWidget):
 
     def add_right(self, w: QWidget) -> None:
         self.right.addWidget(w)
+
+    def add_center(self, w: QWidget) -> None:
+        """Widget on the title strip between the tabs and the project name (the command search)."""
+        self.center.addWidget(w)
 
     def select(self, name: str) -> None:
         names = list(self.pages)

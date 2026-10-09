@@ -7,6 +7,8 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# GUI preferences (recent files, theme, start page …) go to a throw-away INI file, never the user's
+os.environ["PLANWIN_SETTINGS"] = os.path.join(tempfile.mkdtemp(prefix="pwai-settings-"), "settings.ini")
 
 
 @pytest.fixture(autouse=True)

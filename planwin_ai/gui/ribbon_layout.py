@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QComboBox, QMenu, QToolButton
 
 from .. import APP_NAME, units
 from ..services import exports
+from .command_search import CommandSearch
 from .commands.frame import SEISMIC_METHODS
 from .ribbon import Ribbon
 from .theme import icon
@@ -61,18 +62,122 @@ EXPORT_ICONS = {
     "bbs": "bbs",
     "details": "drawing",
     "project": "save",
+    "boq": "excel",
+    "schedules": "sizes",
+}
+
+#: one-line hover help for every command (shown as "Name (shortcut) – tip" and in the status bar)
+TIPS = {
+    "new": "Start an empty project with one plan and two levels",
+    "template": "Start from one of the 10 pre-optimised template buildings",
+    "open": "Open a PlanWin AI Pro project (.pwai) or a legacy PlanWin plan (.plw)",
+    "save": "Save the project",
+    "save_as": "Save the project under a new name",
+    "start": "Show the start page with recent projects, templates and AI prompt",
+    "search": "Find any command by typing what you want to do",
+    "import_plw": "Add a plan from a legacy PlanWin .plw file to this project",
+    "import_dxf": "Add a plan from a DXF drawing with SLAB / COLUMN / BEAM layers",
+    "exit": "Close PlanWin AI Pro",
+    "undo": "Undo the last change",
+    "redo": "Redo the change you undid",
+    "delete": "Delete the selected objects (Del)",
+    "move": "Move the selection, or copy it in an array",
+    "mirror": "Mirror the selection about a vertical or horizontal line",
+    "to_plan": "Copy the selected objects into a new plan",
+    "renumber": "Renumber slabs, beams or columns left to right, top to bottom",
+    "renumber_slab": "Renumber all slabs of this plan left to right, top to bottom",
+    "renumber_beam": "Renumber all beams of this plan left to right, top to bottom",
+    "renumber_column": "Renumber all columns of this plan (marks link floors – use with care)",
+    "tool_select": "Select objects: click, Shift+click to add, drag a window",
+    "tool_pan": "Drag to pan the plan; the mouse wheel zooms",
+    "tool_rect_slab": "Draw a rectangular slab by dragging corner to corner",
+    "tool_poly_slab": "Draw an irregular slab: click its corners, Enter to close",
+    "tool_column": "Place a column at a junction",
+    "tool_beam": "Draw a beam: click its start and end",
+    "tool_wall": "Draw an RC shear wall: click its two ends",
+    "tool_measure": "Measure the distance between two points",
+    "tool_area": "Measure the area and perimeter of a polygon",
+    "tool_dimension": "Add a dimension: pick two points, then the offset",
+    "zoom": "Fit the whole plan in the window",
+    "auto_columns": "Place columns at every slab corner (PlanWin 'Judge')",
+    "auto_beams": "Create beams along every slab edge",
+    "external": "Mark perimeter beams as external (full wall load)",
+    "grids": "Define grid lines, or generate them from the columns",
+    "analyze_plan": "Slab → beam → column load take-down with equilibrium check",
+    "flag_ortho": "Constrain drawing to horizontal / vertical (hold Shift for one point)",
+    "flag_snap_ends": "Snap to slab corners, beam/wall ends and columns",
+    "flag_snap_mid": "Snap to midpoints of beams, walls and slab edges",
+    "flag_snap_grid": "Snap to grid-line intersections and grid lines",
+    "flag_show_grids": "Show grid lines and their bubbles on the plan",
+    "flag_show_dims": "Show dimensions on the plan",
+    "flag_show_loads": "Show slab loads, beam UDLs and column loads on the plan",
+    "flag_show_marks": "Show slab, beam, column and wall marks on the plan",
+    "stairs": "Staircase wizard: designs the waist slab and loads its support beams",
+    "tank": "Overhead water-tank wizard: tank and water weight on the supporting columns",
+    "joint_loads": "Extra point loads at column tops (equipment, tanks …)",
+    "settings": "Seismic zone, wind, materials, covers, SBC and design options",
+    "copy_floor": "Duplicate the current plan and/or add storeys that use it",
+    "levels": "Show the levels table: storeys and the plan used at each level",
+    "autosize": "Size columns from their axial load",
+    "column_sizes": "Edit column sizes level by level",
+    "method": "Choose the IS 1893-1 seismic analysis method",
+    "method_auto": "Static or response spectrum as IS 1893-1 cl 7.7.1 requires",
+    "method_static": "Equivalent static method (IS 1893-1 cl 7.6)",
+    "method_response_spectrum": "Response spectrum method (IS 1893-1 cl 7.7), scaled to static base shear",
+    "diaphragm": "Treat each floor as a rigid diaphragm (master node at the centre of mass)",
+    "analyze_frame": "Stack the levels, apply IS loads and solve the 3-D frame",
+    "view3d": "Show the 3-D frame view",
+    "plan_view": "Show the plan editor",
+    "design": "Design all columns, beams, walls, footings and slabs to IS 456 / IS 13920",
+    "optimize": "Enlarge failing members and re-run analysis and design (up to 5 times)",
+    "ductile": "IS 13920 ductile detailing checks for beams, columns and walls",
+    "irregular": "Plan and vertical irregularity checks (IS 1893-1 Tables 5 and 6)",
+    "modal": "Modal periods, mass participation and response spectrum scaling",
+    "walls_tab": "Shear wall design results",
+    "calc_sel": "Step-by-step calculation sheets (PDF) for the members selected on the plan",
+    "boq_floor": "Concrete, steel, formwork and cost for each floor",
+    "revisions": "Save the current BOQ as a revision and compare revisions",
+    "dark": "Switch between the light and dark theme",
+    "ai": "Open or close the AI assistant panel",
+    "ai_settings": "Choose the AI provider (offline, Claude, OpenAI, Ollama), model and key",
+    "quick_start": "Step-by-step workflow and keyboard shortcuts",
+    "about": "Version, licence and credits",
+    "licence": "Activate a licence or see the licence status",
+    "log": "Open the folder with the log file (for support)",
+}
+
+#: export keys → one-line descriptions (the export registry gives the names)
+EXPORT_TIPS = {
+    "staad": "STAAD.Pro input file with members, cracked properties, loads and combinations",
+    "etabs": "ETABS .e2k model with stories, sections, diaphragms, loads and combinations",
+    "dxf": "DXF drawing of the current plan on PlanWin layers",
+    "dxf3d": "3-D wire-frame DXF of the whole frame",
+    "excel": "Full design report workbook (all results, checks and BOQ)",
+    "pdf": "Design report (PDF) with summary, checks and BOQ",
+    "calc": "Step-by-step design calculation sheets (PDF) for every member",
+    "bbs": "Bar bending schedule (Excel) for beams, columns, footings and slabs",
+    "details": "Reinforcement detail drawings (DXF): beams, column schedule, footings",
+    "project": "Save a copy of the project file",
+    "boq": "Editable BOQ and cost estimate (Excel) with rates and live formulas",
+    "schedules": "Column, beam, footing, slab and wall schedules (Excel)",
 }
 
 
+def set_tip(a: QAction, tip: str) -> None:
+    """Simple one-line hover help: ``Name (shortcut) – what it does``."""
+    sc = a.shortcut().toString(QKeySequence.NativeText)
+    name = a.text().replace("&", "")
+    a.setToolTip(f"{name}{f' ({sc})' if sc else ''} – {tip}" if tip else name)
+    a.setStatusTip(tip)
+
+
 def _act(win: MainWindow, text, fn, shortcut=None, ic=None, tip=None, checkable=False) -> QAction:
+    """``tip`` is a fallback; :data:`TIPS` holds the hover help of every command."""
     a = QAction(text, win)
     if ic:
         a.setIcon(icon(ic))
     if shortcut:
         a.setShortcut(QKeySequence(shortcut))
-    if tip:
-        a.setStatusTip(tip)
-    a.setToolTip(f"{text}{f' ({shortcut})' if shortcut else ''}" + (f"\n{tip}" if tip else ""))
     a.setCheckable(checkable)
     a.triggered.connect(fn)
     win.addAction(a)  # shortcut active whichever ribbon tab is showing
@@ -167,6 +272,11 @@ def build_actions(win: MainWindow) -> dict[str, QAction]:
     add("about", "About", win.about, None, "help")
     add("licence", "Licence", win.license_dialog, None, "licence", "Activate or view the licence")
     add("log", "Log folder", lambda: win._open_path(_app_dir()), None, "folder")
+    add("start", "Start page", win.show_start, None, "template")
+    add("search", "Search commands", lambda: win.command_search.activate(), "Ctrl+Q", "select")
+    for key, a in A.items():
+        fmt_key = key[len("export_") :] if key.startswith("export_") else None
+        set_tip(a, TIPS.get(key) or (EXPORT_TIPS.get(fmt_key, f"Export: {a.text()}") if fmt_key else a.statusTip()))
     return A
 
 
@@ -178,6 +288,7 @@ def _app_dir() -> str:
 
 def _menu(win: MainWindow, actions: list[QAction]) -> QMenu:
     m = QMenu(win)
+    m.setToolTipsVisible(True)
     for a in actions:
         m.addAction(a) if a is not None else m.addSeparator()
     return m
@@ -187,6 +298,9 @@ def build_ribbon(win: MainWindow, A: dict[str, QAction]) -> Ribbon:
     rb = Ribbon(APP_NAME)
     # ---- File (application) menu and quick access
     fm = rb.app_menu
+    fm.setToolTipsVisible(True)
+    fm.addAction(A["start"])
+    fm.addSeparator()
     for k in ("new", "template", "open"):
         fm.addAction(A[k])
     win.recent_menu = fm.addMenu(icon("folder"), "Open recent")
@@ -196,12 +310,15 @@ def build_ribbon(win: MainWindow, A: dict[str, QAction]) -> Ribbon:
     fm.addAction(A["import_plw"])
     fm.addAction(A["import_dxf"])
     ex = fm.addMenu(icon("export"), "Export")
+    ex.setToolTipsVisible(True)
     for key in exports.keys():
         ex.addAction(A[f"export_{key}"])
     fm.addSeparator()
     fm.addAction(A["exit"])
     for k in ("save", "undo", "redo"):
         rb.add_quick(A[k], icon(k, "#FFFFFF"))
+    win.command_search = CommandSearch(win.search_commands)
+    rb.add_center(win.command_search)
     ai = QToolButton()
     ai.setObjectName("aiButton")
     ai.setDefaultAction(A["ai"])
@@ -265,7 +382,7 @@ def build_ribbon(win: MainWindow, A: dict[str, QAction]) -> Ribbon:
     win.snap_combo.currentIndexChanged.connect(
         lambda _i: setattr(win.canvas, "snap_step", win.snap_combo.currentData())
     )
-    g.widget(win.snap_combo)
+    g.labelled("Snap step", win.snap_combo)
 
     # ---- Loads
     pg = rb.page("Loads")
@@ -326,6 +443,7 @@ def build_ribbon(win: MainWindow, A: dict[str, QAction]) -> Ribbon:
     # ---- View
     pg = rb.page("View")
     g = pg.group("Window")
+    g.large(A["start"])
     g.large(A["plan_view"])
     g.large(A["view3d"])
     g.small(A["zoom"])
@@ -333,9 +451,10 @@ def build_ribbon(win: MainWindow, A: dict[str, QAction]) -> Ribbon:
     for k in ("show_grids", "show_dims", "show_loads", "show_marks"):
         g.small(A[f"flag_{k}"])
     g = pg.group("Panels")
-    for d in win.panel_docks():
+    for d, ic in zip(win.panel_docks(), ("folder", "settings", "ai", "excel"), strict=True):
         a = d.toggleViewAction()
-        a.setIcon(icon("plan"))
+        a.setIcon(icon(ic))
+        set_tip(a, f"Show or hide the {d.windowTitle()} panel")
         g.small(a)
     g = pg.group("Appearance")
     g.large(A["dark"])
@@ -345,7 +464,7 @@ def build_ribbon(win: MainWindow, A: dict[str, QAction]) -> Ribbon:
     win.units_combo.addItem("tonnes (t, t·m)", "MKS")
     win.units_combo.setCurrentIndex(win.units_combo.findData(units.current.system))
     win.units_combo.currentIndexChanged.connect(lambda _i: win.set_units(win.units_combo.currentData()))
-    g.widget(win.units_combo)
+    g.labelled("Display units", win.units_combo)
 
     # ---- Help
     pg = rb.page("Help")

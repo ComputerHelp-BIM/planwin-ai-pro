@@ -50,12 +50,14 @@ class PlanCommands:
         if tool in self.tool_actions:
             self.tool_actions[tool].setChecked(True)
         self.canvas.set_tool(tool)
+        self.show_workspace()
         self.tabs.setCurrentIndex(0)
 
     def set_canvas_flag(self, attr: str, on: bool):
         """Display / snap toggles of the plan canvas (show_grids, snap_mid, ortho …)."""
-        if attr == "ortho" and hasattr(self.canvas, "set_ortho"):
-            self.canvas.set_ortho(on)
+        if attr == "ortho":
+            if self.canvas.ortho != on:  # set_ortho announces the change in the status bar
+                self.canvas.set_ortho(on)
         else:
             setattr(self.canvas, attr, on)
         self.settings.setValue(f"canvas/{attr}", "true" if on else "false")

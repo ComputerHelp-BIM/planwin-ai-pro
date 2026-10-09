@@ -35,10 +35,71 @@ class AppCommands:
         return True
 
     def show_plan_view(self):
+        self.show_workspace()
         self.tabs.setCurrentIndex(0)
 
     def show_3d_view(self):
+        self.show_workspace()
         self.tabs.setCurrentIndex(1)
+
+    # ------------------------------------------------------------------ start page / workspace
+    def on_start_page(self) -> bool:
+        return self.central.currentWidget() is self.start_page
+
+    def show_start(self):
+        """Start page in place of the plan/3-D views; the panels are hidden until work starts."""
+        if not self.on_start_page():
+            self._dock_visible = [d.isVisible() for d in self.panel_docks()]
+            for d in self.panel_docks():
+                d.hide()
+        self.start_page.refresh()
+        self.central.setCurrentWidget(self.start_page)
+
+    def show_workspace(self):
+        if not self.on_start_page():
+            return
+        self.central.setCurrentWidget(self.tabs)
+        for d, vis in zip(self.panel_docks(), self._dock_visible or [True] * 4, strict=False):
+            d.setVisible(vis)
+        self._dock_visible = None
+        self.canvas.zoom_extents()
+
+    def open_results(self, name: str):
+        self.show_workspace()
+        self.results_dock.show()
+        self.results_dock.raise_()
+        self.show_result_tab(name)
+
+    def start_with_ai(self, text: str):
+        """Start-page prompt: open the workspace and send the description to the assistant."""
+        self.show_workspace()
+        self.chat.show()
+        self.chat.raise_()
+        self.chat.send(text)
+
+    def search_commands(self) -> list:
+        """Everything the command search (Ctrl+Q) can find: ribbon commands, results tables, plans."""
+        from ..command_search import Command, from_action
+
+        where: dict[int, str] = {}  # action → ribbon tab, shown as the result's category
+        for name, pg in self.ribbon.pages.items():
+            for g in pg.groups.values():
+                for b in g.buttons:
+                    where.setdefault(id(b.defaultAction()), name)
+        out = [
+            from_action(a, where.get(id(a), ""), "export download file" if k.startswith("export_") else "")
+            for k, a in self.cmd.items()
+            if a.isEnabled() and k not in ("search", "method", "renumber")
+        ]
+        out += [
+            Command(f"Show results: {name}", lambda n=name: self.open_results(n), "Results", "table results tab")
+            for name in self.results.tables
+        ]
+        out += [
+            Command(f"Go to plan: {p.name}", lambda n=p.name: (self.show_workspace(), self.set_current_plan(n)), "Plan")
+            for p in self.project.plans
+        ]
+        return out
 
     def focus_properties(self):
         self.props_dock.show()

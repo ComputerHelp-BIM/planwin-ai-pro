@@ -12,7 +12,15 @@ import os
 from collections.abc import Callable
 
 from PySide6.QtCore import QSettings, Qt, QTimer
-from PySide6.QtWidgets import QApplication, QDockWidget, QLabel, QMainWindow, QMessageBox, QTabWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QDockWidget,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QStackedWidget,
+    QTabWidget,
+)
 
 from .. import APP_NAME, COMPANY, __version__, units
 from ..ai.actions import ActionResult, Session
@@ -28,6 +36,7 @@ from .canvas import PlanCanvas
 from .chat import ChatDock
 from .commands import AppCommands, FileCommands, FrameCommands, PlanCommands
 from .panels import ProjectPanel, PropertiesPanel, ResultsPanel
+from .start_page import StartPage
 from .view3d import Frame3DView
 
 log = logging.getLogger("planwin")
@@ -37,7 +46,8 @@ UNDO_LIMIT = 60
 class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWindow):
     def __init__(self, project: Project | None = None, path: str | None = None):
         super().__init__()
-        self.settings = QSettings(COMPANY, "PlanWinAIPro")
+        ini = os.environ.get("PLANWIN_SETTINGS")  # tests / portable use: an INI file instead of the registry
+        self.settings = QSettings(ini, QSettings.IniFormat) if ini else QSettings(COMPANY, "PlanWinAIPro")
         self.theme_name = self.settings.value("theme", "light")
         units.set_system(self.settings.value("units", "SI"))
         self.license = current_state()
@@ -83,7 +93,12 @@ class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWi
         self.tabs.addTab(self.canvas, "Plan (PlanWin)")
         self.tabs.addTab(self.view3d, "3-D Frame (FrameWin)")
         self.tabs.currentChanged.connect(lambda i: self.view3d.refresh() if i == 1 else None)
-        self.setCentralWidget(self.tabs)
+        self.start_page = StartPage(self)
+        self.central = QStackedWidget()
+        self.central.addWidget(self.tabs)
+        self.central.addWidget(self.start_page)
+        self.setCentralWidget(self.central)
+        self._dock_visible: list[bool] | None = None
 
         self.project_panel = ProjectPanel(self)
         self.props = PropertiesPanel(self)
@@ -117,6 +132,8 @@ class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWi
         if geo is not None:
             self.restoreGeometry(geo)
         self.refresh_all()
+        if project is None and path is None and self.settings.value("start/show", "true") == "true":
+            self.show_start()
         self._autosave = QTimer(self)
         self._autosave.timeout.connect(self._do_autosave)
         self._autosave.start(5 * 60 * 1000)

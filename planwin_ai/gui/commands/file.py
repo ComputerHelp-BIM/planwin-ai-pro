@@ -46,6 +46,7 @@ class FileCommands:
         self.canvas.selection = []
         self.dirty = path is None
         self.refresh_all()
+        self.show_workspace()
         self.canvas.zoom_extents()
 
     def new_blank(self):
@@ -56,6 +57,11 @@ class FileCommands:
         prj.levels = [Level("Plinth", "Typical", 1.5), Level("Floor 1", "Typical", 3.0)]
         self._load_project(prj)
         self.set_tool("rect_slab")
+
+    def load_template(self, key: str):
+        """Start page: open a template as a new, unsaved project."""
+        if self.maybe_save():
+            self._load_project(build_template(key))
 
     def new_from_template(self):
         if not self.maybe_save():
@@ -158,6 +164,7 @@ class FileCommands:
             QMessageBox.critical(self, "Import DXF", f"Could not read {fn}:\n{exc}")
             return
         self.mutate("Import DXF", lambda: self.project.add_plan(plan))
+        self.show_workspace()
         self.set_current_plan(plan.name)
         QMessageBox.information(
             self,
