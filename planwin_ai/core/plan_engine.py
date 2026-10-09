@@ -691,7 +691,9 @@ class PlanEngine:
             for wl in b.part_loads:
                 a0, a1 = max(wl.start, 0.0), min(wl.start + wl.length, b.length)
                 if a1 > a0:
-                    ld = LinLoad(a0, a1, wl.w1, wl.w2, wl.case, wl.desc)
+                    # a wedge running past a beam end keeps its intensities, only the part on the beam acts
+                    full = LinLoad(wl.start, wl.start + wl.length, wl.w1, wl.w2)
+                    ld = LinLoad(a0, a1, full.w_at(a0), full.w_at(a1), wl.case, wl.desc)
                     br.loads.append(ld)
                     res.applied[wl.case] += ld.resultant()[0]
 

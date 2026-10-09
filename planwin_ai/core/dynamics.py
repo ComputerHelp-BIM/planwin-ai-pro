@@ -179,18 +179,15 @@ def _mass_model(model: FrameModel) -> tuple[list[tuple[int, int]], np.ndarray]:
                 dofs.append((lv.master, k))
                 masses.append(mm)
             continue
-        # no diaphragm: lump at column joints by their gravity-load share (matched by column mark)
-        cols = list(lv.column_nodes.items())
-        if not cols:
+        # no diaphragm: lump at the column and wall joints by their gravity-load share
+        share: dict[int, float] = {}
+        for nid, w in model._vertical_joints(i):
+            share[nid] = share.get(nid, 0.0) + w
+        if not share:
             continue
-        res = lv.result
-        share = {}
-        for mark, nid in cols:
-            cl = next((v for v in res.columns.values() if v.mark == mark), None) if res else None
-            share[nid] = max(cl.dead + 0.25 * cl.live, 0.0) if cl else 0.0
         tot = sum(share.values())
-        for _mark, nid in cols:
-            frac = share[nid] / tot if tot > 1e-9 else 1.0 / len(cols)
+        for nid in share:
+            frac = share[nid] / tot if tot > 1e-9 else 1.0 / len(share)
             for k in (0, 1):
                 dofs.append((nid, k))
                 masses.append(mass * frac)
