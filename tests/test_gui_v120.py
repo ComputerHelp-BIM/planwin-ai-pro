@@ -93,3 +93,17 @@ def test_command_search_ranks_and_runs(start_win):
 def test_ctrl_q_focuses_the_search_box(start_win):
     start_win.cmd["search"].trigger()
     assert start_win.cmd["search"].shortcut().toString() == "Ctrl+Q"
+
+
+def test_panels_come_back_after_the_start_page(app):
+    """At start-up the window is not shown yet; leaving the start page must restore the panels."""
+    from planwin_ai.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.settings.setValue("start/show", "true")
+    w.show_start()  # before show(), as in __init__
+    w.show()
+    w.load_template("bungalow")
+    assert all(d.isVisible() for d in (w.project_dock, w.props_dock, w.results_dock))
+    w.dirty = False
+    w.close()

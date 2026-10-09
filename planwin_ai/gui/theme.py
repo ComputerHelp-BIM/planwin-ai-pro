@@ -486,6 +486,10 @@ def qss(theme: str) -> str:
     QTreeWidget#ResultsNav::item:has-children {{ padding: 8px 8px 4px 8px; }}
     QTreeWidget#ResultsNav::item:hover {{ background: {c["hover"]}; }}
     QTreeWidget#ResultsNav::item:selected {{ background: {on_accent_soft}; }}
+    /* name + badge columns read as one pill: square the inner corners and drop the inner padding */
+    QTreeWidget#ResultsNav::item:first {{ border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 2px; }}
+    QTreeWidget#ResultsNav::item:last {{ border-top-left-radius: 0; border-bottom-left-radius: 0; padding-left: 2px; }}
+    QTreeWidget#ResultsNav::item:only-one {{ border-radius: 6px; }}
     QTreeWidget#ResultsNav::branch, QTreeWidget#ResultsNav::branch:selected, QTreeWidget#ResultsNav::branch:hover {{
         background: transparent; image: none; border: none; }}
     QLineEdit#ResultsFilter {{ border-radius: 6px; padding-left: 10px; }}

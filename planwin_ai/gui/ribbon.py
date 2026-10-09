@@ -214,7 +214,7 @@ class Ribbon(QWidget):
         h.addLayout(self.right)
         v.addWidget(top)
         self.stack = QStackedWidget()
-        self.stack.setFixedHeight(100)
+        self.stack.setFixedHeight(116)  # three small rows + group title + room for the sideways scrollbar
         v.addWidget(self.stack)
         self.pages: dict[str, RibbonPage] = {}
         self.tabs.currentChanged.connect(self._tab)

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from ... import APP_NAME, units
 from ...licensing.license import install_license
 from .. import dialogs
-from ..theme import qss
+from ..theme import qpalette, qss
 
 QUICK_START = (
     "1. File ▸ New from template, or press Ctrl+K and describe your building to the AI assistant.\n"
@@ -49,7 +49,8 @@ class AppCommands:
     def show_start(self):
         """Start page in place of the plan/3-D views; the panels are hidden until work starts."""
         if not self.on_start_page():
-            self._dock_visible = [d.isVisible() for d in self.panel_docks()]
+            # isHidden, not isVisible: at start-up the window itself is not shown yet
+            self._dock_visible = [not d.isHidden() for d in self.panel_docks()]
             for d in self.panel_docks():
                 d.hide()
         self.start_page.refresh()
@@ -124,7 +125,9 @@ class AppCommands:
     def apply_theme(self, name: str):
         self.theme_name = name
         self.settings.setValue("theme", name)
-        QApplication.instance().setStyleSheet(qss(name))
+        app = QApplication.instance()
+        app.setPalette(qpalette(name))  # widgets the stylesheet does not reach never pick up the OS palette
+        app.setStyleSheet(qss(name))
         if hasattr(self, "chat"):
             self.chat.rerender()
         if "dark" in getattr(self, "cmd", {}):

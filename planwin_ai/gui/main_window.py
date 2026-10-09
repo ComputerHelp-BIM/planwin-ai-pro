@@ -11,12 +11,13 @@ import logging
 import os
 from collections.abc import Callable
 
-from PySide6.QtCore import QSettings, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QStackedWidget,
     QTabWidget,
@@ -37,10 +38,21 @@ from .chat import ChatDock
 from .commands import AppCommands, FileCommands, FrameCommands, PlanCommands
 from .panels import ProjectPanel, PropertiesPanel, ResultsPanel
 from .start_page import StartPage
+from .theme import round_popup
 from .view3d import Frame3DView
 
 log = logging.getLogger("planwin")
 UNDO_LIMIT = 60
+
+
+class _PopupRounder(QObject):
+    """Every menu (ribbon, context menus, combo drop-downs' menus) gets clean rounded corners."""
+
+    def eventFilter(self, obj, ev):  # noqa: N802 (Qt API)
+        if ev.type() == QEvent.Polish and isinstance(obj, QMenu) and not obj.property("_rounded"):
+            obj.setProperty("_rounded", True)
+            round_popup(obj)
+        return False
 
 
 class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWindow):
@@ -84,6 +96,8 @@ class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWi
             "grade": "M25",
         }
 
+        self._rounder = _PopupRounder(self)
+        QApplication.instance().installEventFilter(self._rounder)
         self.setWindowTitle(APP_NAME)
         self.resize(1500, 920)
         self.canvas = PlanCanvas(self)
@@ -131,6 +145,8 @@ class MainWindow(FileCommands, PlanCommands, FrameCommands, AppCommands, QMainWi
         geo = self.settings.value("geometry")
         if geo is not None:
             self.restoreGeometry(geo)
+        # results get about a quarter of the height so the plan stays the main view
+        self.resizeDocks([self.results_dock], [max(self.height() // 4, 200)], Qt.Vertical)
         self.refresh_all()
         if project is None and path is None and self.settings.value("start/show", "true") == "true":
             self.show_start()

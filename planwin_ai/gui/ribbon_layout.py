@@ -266,7 +266,7 @@ def build_actions(win: MainWindow) -> dict[str, QAction]:
     # ---- view / help
     add("dark", "Dark theme", win.toggle_theme, "Ctrl+T", "theme", checkable=True)
     add("ai", "AI Assistant", win.toggle_chat, "Ctrl+K", None, "Open / close the AI side panel", True)
-    A["ai"].setIcon(icon("ai", "#FFFFFF"))
+    A["ai"].setIcon(icon("ai"))  # accent on the ribbon body; the title-strip button gets a white one
     add("ai_settings", "AI settings", win.ai_settings, None, "settings", "Provider, model and API key")
     add("quick_start", "Quick start", win.quick_start, "F1", "help")
     add("about", "About", win.about, None, "help")
@@ -322,6 +322,9 @@ def build_ribbon(win: MainWindow, A: dict[str, QAction]) -> Ribbon:
     ai = QToolButton()
     ai.setObjectName("aiButton")
     ai.setDefaultAction(A["ai"])
+    white = icon("ai", "#FFFFFF")
+    ai.setIcon(white)
+    A["ai"].changed.connect(lambda: ai.setIcon(white))  # Qt copies the action icon back on every change
     ai.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
     rb.add_right(ai)
 

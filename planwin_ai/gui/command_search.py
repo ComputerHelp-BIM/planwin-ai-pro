@@ -15,6 +15,8 @@ from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QAction, QIcon, QKeyEvent
 from PySide6.QtWidgets import QLineEdit, QListWidget, QListWidgetItem, QWidget
 
+from .theme import round_popup
+
 MAX_RESULTS = 12
 
 
@@ -73,6 +75,7 @@ class CommandSearch(QLineEdit):
         self.popup = QListWidget()
         self.popup.setObjectName("CommandPopup")
         self.popup.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        round_popup(self.popup)
         self.popup.setFocusPolicy(Qt.NoFocus)
         self.popup.setFocusProxy(self)
         self.popup.setMouseTracking(True)
