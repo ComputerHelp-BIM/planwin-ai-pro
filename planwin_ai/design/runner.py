@@ -227,8 +227,15 @@ def design_all(fa: FrameAnalysis, project: Project) -> DesignReport:
                     else "two_way"
                 )
             )
+            span = None  # one-way / cantilever span as the PlanEngine distributes the load
+            if s.distribution == "one_way_long" and kind == "one_way":
+                span = ly
+            elif kind == "cantilever":
+                k = s.cant_edge if s.cant_edge is not None and 0 <= s.cant_edge < len(lens) else None
+                k = max(range(len(lens)), key=lambda i: lens[i]) if k is None else k
+                span = abs(G.polygon_area(pts)) / lens[k] if lens[k] > 0 else None
             res = is456.design_slab(
-                s.mark, lx, ly, s.dead, s.live_load, s.thickness, fck, fy, kind, cont, ds.slab_cover
+                s.mark, lx, ly, s.dead, s.live_load, s.thickness, fck, fy, kind, cont, ds.slab_cover, span
             )
             rep.slabs.append((plan.name, res))
     rep.drifts = fa.storey_drifts()
