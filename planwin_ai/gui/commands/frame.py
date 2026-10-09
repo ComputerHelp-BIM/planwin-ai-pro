@@ -190,8 +190,10 @@ class FrameCommands:
         self.export("calc", {"member_ids": ids, "footing_marks": footings, "slabs": slabs})
 
     def revisions(self):
+        before = self.snapshot()
         dlg = dialogs.RevisionsDialog(self, self.project, self.design_report())
         dlg.exec()
         if getattr(dlg, "changed", False):  # revisions live in project.meta – no re-analysis needed
+            self.push_undo(before)  # one undo step, so undoing an older edit cannot drop the revisions
             self.dirty = True
             self.refresh_all()

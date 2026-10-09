@@ -117,9 +117,17 @@ class LicenseDialog(QDialog):
 
     def _load(self):
         fn, _ = QFileDialog.getOpenFileName(self, "Licence file", "", "Licence (*.lic *.json);;All files (*)")
-        if fn:
-            with open(fn, encoding="utf-8") as f:
-                self.text.setPlainText(f.read())
+        if not fn:
+            return
+        try:
+            with open(fn, "rb") as f:
+                raw = f.read()
+            # Notepad saves "Unicode" as UTF-16 and UTF-8 with a byte-order mark
+            text = raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("utf-8-sig")
+        except (OSError, UnicodeDecodeError) as exc:
+            QMessageBox.warning(self, "Licence", f"Could not read {fn}:\n{exc}")
+            return
+        self.text.setPlainText(text)
 
 
 def about_text(license_label: str) -> str:

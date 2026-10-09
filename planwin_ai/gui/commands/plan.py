@@ -158,7 +158,17 @@ class PlanCommands:
                 != QMessageBox.Yes
             ):
                 return
-        self.mutate(f"Renumber {kind}s", lambda: plan.renumber(kind))
+
+        def fn():
+            old = {b.id: b.mark for b in plan.beams}
+            plan.renumber(kind)
+            if kind == "beam":  # staircases name their support beams by mark
+                new = {old[b.id]: b.mark for b in plan.beams}
+                for st in self.project.stairs:
+                    if st.get("plan") == plan.name:
+                        st["support_beams"] = [new.get(m, m) for m in st.get("support_beams") or []]
+
+        self.mutate(f"Renumber {kind}s", fn)
 
     # ------------------------------------------------------------------ generators
     def auto_columns(self):

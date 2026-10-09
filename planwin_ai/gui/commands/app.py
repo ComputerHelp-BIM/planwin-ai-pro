@@ -130,6 +130,8 @@ class AppCommands:
         app.setStyleSheet(qss(name))
         if hasattr(self, "chat"):
             self.chat.rerender()
+        if hasattr(self, "results"):
+            self.results.restyle()
         if "dark" in getattr(self, "cmd", {}):
             self.cmd["dark"].setChecked(name == "dark")
         self.canvas.update()

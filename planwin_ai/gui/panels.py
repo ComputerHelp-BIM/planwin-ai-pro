@@ -32,7 +32,7 @@ from .. import units
 from ..core.model import Beam, Column, Level, PartLoad, Plan, PointLoad, Slab, Wall
 from . import theme
 from .results_panel import RESULT_TABS, ResultsPanel  # noqa: F401
-from .widgets import CollapsibleSection, FlowLayout, ScrollPanel
+from .widgets import CollapsibleSection, FlowLayout, ScrollPanel, type_to_edit
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
@@ -112,6 +112,57 @@ def _clear_layout(lay) -> None:
 
 
 # =========================================================================== project
+def keep_level_data(project, old_levels: list[Level]) -> None:
+    """Keep the data stored by level number – column sizes, joint loads, water tanks and the seismic base – with its
+    level after ``project.levels`` changed from ``old_levels`` (a level inserted, deleted or moved).
+
+    The data of a deleted level goes with it; a tank on "the top level" (level 0) keeps that meaning."""
+    new_no = {id(lv): i for i, lv in enumerate(project.levels, start=1)}
+    move = {i: new_no.get(id(lv)) for i, lv in enumerate(old_levels, start=1)}
+    if all(k == v for k, v in move.items()):
+        return
+
+    def to(n) -> int | None:
+        """New number of old level ``n`` (None: deleted); numbers that name no level stay as they are."""
+        n = int(n)
+        return move.get(n, n)
+
+    for mark, per in list(project.column_sizes.items()):
+        out = {}
+        for k, v in per.items():
+            try:
+                n = to(k)
+            except (TypeError, ValueError):
+                out[k] = v
+                continue
+            if n is not None:
+                out[str(n)] = v
+        project.column_sizes[mark] = out
+    loads = []
+    for j in project.joint_loads:
+        try:
+            n = to(j.get("level", 0))
+        except (TypeError, ValueError):
+            loads.append(j)
+            continue
+        if n is not None:
+            loads.append({**j, "level": n})
+    project.joint_loads = loads
+    tanks = []
+    for t in project.water_tanks:
+        lvl = t.get("level") or 0
+        if not isinstance(lvl, int) or lvl <= 0:
+            tanks.append(t)  # level 0: on the top level, whichever level that is
+            continue
+        n = to(lvl)
+        if n is not None:  # a tank on a deleted level goes with it, as its joint loads do
+            tanks.append({**t, "level": n})
+    project.water_tanks = tanks
+    base = project.seismic.base_level  # the plinth level, from which the seismic height is measured
+    if isinstance(base, int) and move.get(base):
+        project.seismic.base_level = move[base]
+
+
 class _PlanList(QListWidget):
     """Plan list that prefers its minimum height (about five rows); a growing section gives it any spare
     height, and a short dock scrolls the panel instead of squeezing the levels below it out of view."""
@@ -184,7 +235,7 @@ class ProjectPanel(QWidget):
         hint.setObjectName("PanelHint")
         hint.setToolTip("The first row is the lowest level")
         v2.addWidget(hint)
-        self.levels = QTableWidget(0, len(LEVEL_HEADERS))
+        self.levels = type_to_edit(QTableWidget(0, len(LEVEL_HEADERS)))
         self.levels.setHorizontalHeaderLabels(list(LEVEL_HEADERS))
         for c, tip in enumerate(LEVEL_TIPS):
             self.levels.horizontalHeaderItem(c).setToolTip(tip)
@@ -383,6 +434,9 @@ class ProjectPanel(QWidget):
                 for lv in self.main.project.levels:
                     if lv.plan == old:
                         lv.plan = p.name
+                for st in self.main.project.stairs:  # the staircase wizard finds its beams by plan name
+                    if st.get("plan") == old:
+                        st["plan"] = p.name
 
             self.main.mutate("Rename plan", fn)
             self.main.set_current_plan(p.name)
@@ -400,8 +454,11 @@ class ProjectPanel(QWidget):
 
         def fn():
             pr = self.main.project
+            old = list(pr.levels)
             pr.plans = [q for q in pr.plans if q is not p]
             pr.levels = [lv for lv in pr.levels if lv.plan != p.name]
+            pr.stairs = [s for s in pr.stairs if s.get("plan") != p.name]  # their beams (and loads) are gone
+            keep_level_data(pr, old)
 
         self.main.mutate("Delete plan", fn)
         self.main.set_current_plan(self.main.project.plans[0].name if self.main.project.plans else "")
@@ -427,8 +484,11 @@ class ProjectPanel(QWidget):
         lv = self.main.project.levels[r]
         txt = item.text().strip()
         try:
-            if c == 0 and txt:
-                self.main.mutate("Level name", lambda: setattr(lv, "name", txt))
+            if c == 0:
+                if txt:
+                    self.main.mutate("Level name", lambda: setattr(lv, "name", txt))
+                else:  # a level needs a name: show the stored one again
+                    self.refresh()
             elif c == 2:
                 v = float(txt)
                 if v <= 0:
@@ -459,20 +519,36 @@ class ProjectPanel(QWidget):
         pos = r + 1 if r >= 0 else len(pr.levels)
         h = pr.levels[-1].height if pr.levels else 3.0
         g = pr.levels[-1].grade if pr.levels else "M25"
-        self.main.mutate("Add level", lambda: pr.levels.insert(pos, Level(f"Level {len(pr.levels) + 1}", plan, h, g)))
+
+        def fn():
+            old = list(pr.levels)
+            pr.levels.insert(pos, Level(f"Level {len(pr.levels) + 1}", plan, h, g))
+            keep_level_data(pr, old)  # column sizes and joint loads above move up with their levels
+
+        self.main.mutate("Add level", fn)
 
     def _del_level(self):
         r = self.levels.currentRow()
-        if r >= 0:
-            self.main.mutate("Delete level", lambda: self.main.project.levels.pop(r))
+        pr = self.main.project
+        if 0 <= r < len(pr.levels):
+
+            def fn():
+                old = list(pr.levels)
+                pr.levels.pop(r)
+                keep_level_data(pr, old)
+
+            self.main.mutate("Delete level", fn)
 
     def _move(self, d):
         r = self.levels.currentRow()
-        lv = self.main.project.levels
+        pr = self.main.project
+        lv = pr.levels
         if 0 <= r < len(lv) and 0 <= r + d < len(lv):
 
             def fn():
+                old = list(lv)
                 lv[r], lv[r + d] = lv[r + d], lv[r]
+                keep_level_data(pr, old)
 
             self.main.mutate("Move level", fn)
             self.levels.selectRow(r + d)
@@ -740,6 +816,9 @@ class PropertiesPanel(QWidget):
         outer.addWidget(bar)
         self.widgets: dict[str, tuple[Any, str]] = {}
         self.initial: dict[str, Any] = {}  # value of each field (display units) when the selection was shown
+        #: multi-selection fields whose values differ and that the user edited – applied even when the
+        #: edit ends on the value shown, which is the first object's
+        self._touched: set[str] = set()
         self.objs: list = []
         self.loads_tbl: QTableWidget | None = None
         self.wedge_tbl: QTableWidget | None = None
@@ -769,6 +848,7 @@ class PropertiesPanel(QWidget):
             _clear_layout(self.sections[name].body_layout)
         self.widgets.clear()
         self.initial.clear()
+        self._touched.clear()
         self.loads_tbl = self.wedge_tbl = None
 
     def show_selection(self, ids: list[str]):
@@ -825,6 +905,7 @@ class PropertiesPanel(QWidget):
             if multi and any(getattr(x, name) != v for x in self.objs[1:]):
                 label += " *"
                 w.setToolTip(f"{tip} – values differ in the selection (showing the first); change it to set all")
+                self._track_edits(name, w)
             _add_row(form, label, w, w.toolTip())
             self._enter_applies(w)
             self.widgets[name] = (w, typ if not isinstance(typ, list) else "choice")
@@ -861,6 +942,22 @@ class PropertiesPanel(QWidget):
         if edit is not None:
             edit.returnPressed.connect(lambda: QTimer.singleShot(0, self._apply))
 
+    def _track_edits(self, name: str, w: QWidget) -> None:
+        """Remember that the user edited field ``name`` (typing, stepping, choosing or clicking)."""
+
+        def touched(*_):
+            self._touched.add(name)
+
+        if isinstance(w, QDoubleSpinBox):
+            w.lineEdit().textEdited.connect(touched)
+            w.valueChanged.connect(touched)
+        elif isinstance(w, QLineEdit):
+            w.textEdited.connect(touched)
+        elif isinstance(w, QComboBox):
+            w.activated.connect(touched)
+        elif isinstance(w, QCheckBox):
+            w.clicked.connect(touched)
+
     def _revert(self) -> None:
         self.show_selection([o.id for o in self.objs])
 
@@ -873,7 +970,7 @@ class PropertiesPanel(QWidget):
     def _table(self, headers, rows, qtys, tips=None):
         """Load table; kN based cells keep their engine value so an unedited cell is never re-converted."""
         u = units.current
-        t = QTableWidget(len(rows), len(headers))
+        t = type_to_edit(QTableWidget(len(rows), len(headers)))
         t.setHorizontalHeaderLabels(headers)
         for c, tip in enumerate(tips or ()):
             t.horizontalHeaderItem(c).setToolTip(u.text(tip))
@@ -1002,6 +1099,8 @@ class PropertiesPanel(QWidget):
                 # untouched fields keep each object's own value: "Set Value" on a multi-selection, and no
                 # display-unit round trip (kN -> t -> kN) for a value that was not edited
                 if v == self.initial.get(name):
+                    if name in self._touched:  # set every object to the value shown (the first one's)
+                        vals[name] = getattr(self.objs[0], name)
                     continue
                 q = FIELD_QTY.get(name)
                 vals[name] = units.current.parse(v, q) if q and v is not None else v
