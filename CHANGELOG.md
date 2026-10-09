@@ -2,6 +2,72 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] – 2026-10-09
+Bug-fix release from a full code review of every module. Every fix has a regression test
+(about 230 new tests). **Re-run the design of existing projects**: several fixes make the
+design safer, so some members, footings and slabs may come out larger than in 1.2.0.
+
+### Fixed – design safety
+- **Footings:** for load cases whose resultant lies outside the middle third (typically
+  0.9DL ± 1.5EL) the structural pressure now uses the no-tension peak; 1.2.0 used the linear
+  formula, 23–58 % low. A resultant outside the base fails the footing; uplift cases no longer
+  grow the footing to 10 m.
+- **Combined footings:** one-way shear uses τc for the steel actually provided; the punching
+  perimeter stops at the free edge; transverse band steel is per metre width and is part of
+  the depth/OK decision (results could say OK with half the steel needed).
+- **Slabs:** one-way slabs spanning the long way were designed on the short span, and
+  cantilever slabs on the smaller plan side instead of their projection (moments up to 3×
+  too low).
+- **Beam torsion (IS 456 cl 41):** stirrup spacing used a wrong core size (e.g. 125 mm instead
+  of 100 mm); side-face bars could be smaller than 0.1 % of the web.
+- **Shear walls:** a wall needing more vertical steel than the bars could provide was reported OK.
+- **IS 13920 hoops and links** in the bar bending schedule, drawings, schedules and BOQ now use the
+  spacing the ductility check requires (they could show 85 mm where 80 mm was required); column ties
+  outside l0 carry the hoop legs the shear check assumes; the hoop yield strength is no longer
+  capped at 415 for the confinement area (IS 13920 cl 8.1).
+- **Bar bending schedule** now schedules the IS 13920 end zones (closer beam links over 2d,
+  confining hoops over l0) – it had every link at the mid-span spacing.
+- **Seismic weight of buildings with shear walls** counted the slab load on walls twice
+  (larger W and base shear), and lateral loads, accidental torsion and modal masses were lost on
+  floors carried by walls without a rigid diaphragm.
+- Storey drift and the soft-storey check now include wall joints (wall buildings always showed
+  zero drift); the torsional-irregularity check uses the worse of ±accidental eccentricity.
+- A part load running past the end of a beam kept its full intensity on the shorter length.
+- Staircase wizard: moving a staircase to another plan left its old loads behind.
+
+### Fixed – files and exports
+- Projects saved with a UTF-8 byte-order mark (Notepad) now open; damaged files give a clear
+  message; saving flushes to disk before replacing the old file.
+- Text starting with "=" (e.g. a project named "=Tower") became a formula in every Excel export.
+- STAAD: ";" in project text split the command; ETABS: quotes in the title broke the file.
+- Plan DXF now draws shear walls; 3-D DXF puts walls on the column layer.
+- Bar bending schedule and detail drawings flag combined footings and walls instead of
+  silently leaving their steel out; columns on combined footings are anchored into them.
+- PDF title shows ₹ correctly; calculation sheets agree with the design report again
+  (torsion, slab spans, footing pressures).
+- Export of an unknown plan name now reports an error instead of exporting the first plan.
+
+### Fixed – application
+- The windowed exe printed nothing for `PlanWinAIPro.exe cli …`; it now prints into the console.
+- After the assistant created a new building or loaded a template, Ctrl+S overwrote the
+  previous project's file; the start-page AI prompt now asks to save a changed project first.
+- Joint-loads dialog removed the water-tank tags (tank loads then counted twice); invalid rows in
+  joint loads and column sizes are reported instead of silently dropped.
+- Inserting, moving or deleting a level shifted column sizes, joint loads and tanks onto the wrong
+  storey; renaming/deleting plans and renumbering beams now keep staircases attached.
+- Typing in the levels table, load tables or command search triggered tool shortcuts.
+- Closing the app while the assistant was answering aborted the process; assistant changes
+  wait until an open dialog or menu closes.
+- Saved revisions are an undo step; dimensions no longer discard analysis results; a failed
+  edit no longer leaves the panels pointing at a discarded model; failed "Save as" keeps the old
+  name; "&" in recent-file paths is shown; Unicode licence files load.
+- Assistant: half-applied settings on invalid input, missing range checks (e.g. SBC 0 or a
+  negative floor height crashed design later), "set X to N", "ground + 3", bays in mm/cm,
+  "without balcony", relative export paths, friendly provider errors that never echo the API
+  key, conversation history accepted by the Claude API, CLI `ask` that understood nothing now
+  fails; expired licences can no longer replace a valid one; keygen validates dates.
+- Worker-thread errors are logged; a missing file passed on the command line is reported.
+
 ## [1.2.0] – 2026-10-09
 Interface release: a cleaner, modern look and two new Excel exports. Projects and results are
 unchanged from 1.1.0.

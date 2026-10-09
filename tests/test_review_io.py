@@ -501,3 +501,33 @@ def test_results_table_excel_keeps_equals_text(tmp_path):
     write_tables_xlsx(str(p), {"Beams": (["Mark", "Note"], [["=B1", "=1+1"]])})
     ws = load_workbook(p).active
     assert ws["A2"].data_type == "s" and ws["A2"].value == "=B1"
+
+
+def test_zoned_link_counts():
+    """IS 13920: closer links within the end zones, normal spacing between, boundaries counted once."""
+    from planwin_ai.design.is456.common import Links
+    from planwin_ai.io.bbs import zoned_counts
+
+    mid, end = Links(2, 8, 150), Links(2, 8, 100)
+    # 4000 mm span, 1000 mm zones: 11 links per zone (0..1000 @ 100) and 2000/150 → 15 points - 2 shared = 13
+    assert zoned_counts(4000, mid, end, 1000, 1000) == [(end, 22), (mid, 13)]
+    assert zoned_counts(4000, mid, None, 1000, 1000) == [(mid, 28)]  # not ductile: uniform
+    assert zoned_counts(4000, mid, end, 1000, 0) == [(end, 11), (mid, 20)]  # cantilever: no zone at the tip
+    assert zoned_counts(1500, mid, end, 1000, 1000)[0][1] == 16  # zones capped at half the span
+
+
+def test_bbs_schedules_is13920_end_zones(tmp_path):
+    """Ductile buildings: the BBS had every link at the mid-span spacing (too few links on site)."""
+    from planwin_ai.ai.templates import build_template
+    from planwin_ai.design.runner import run_full
+    from planwin_ai.io.bbs import build_bbs
+
+    prj = build_template("residential_g4")
+    fm, fa, rep = run_full(prj)
+    assert any(b.links_end and b.links_end.spacing < b.links.spacing for b in rep.beams if b.links)
+    bbs = build_bbs(prj, fm, rep)
+    descs = {it.description for it in bbs.items}
+    assert "Stirrup (end zones 2d)" in descs
+    assert any(c.tie_confined and c.tie and c.tie_confined.spacing < c.tie.spacing for c in rep.columns) == (
+        "Confining hoop (l0 zones)" in descs
+    )

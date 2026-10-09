@@ -161,7 +161,7 @@ The exe is a windowed program: it prints into the console it was started from. I
 ```bash
 python -m venv .venv && .venv\Scripts\activate          # Python 3.12, 64-bit
 pip install -r requirements-dev.txt
-python -m pytest -q                                      # 420 tests
+python -m pytest -q                                      # 627 tests
 python -m planwin_ai                                     # run the app
 scripts\build_windows.bat                                # exe + portable + installer (needs Inno Setup 6)
 ```
@@ -195,7 +195,7 @@ planwin_ai/
   data/      cities.csv · legacy_samples/*.plw · templates/*.pwai
 tools/       keygen.py (issue licences – internal) · build_templates.py
 packaging/   PyInstaller spec · Inno Setup script · version info
-tests/       420 tests: closed-form solver/dynamics checks, IS-code values, legacy import, exports, AI, licensing, GUI
+tests/       627 tests: closed-form solver/dynamics checks, IS-code values, legacy import, exports, AI, licensing, GUI
 ```
 
 ## Licensing (Computer Help internal)

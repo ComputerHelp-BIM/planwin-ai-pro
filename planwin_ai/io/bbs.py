@@ -46,7 +46,11 @@ Detailing rules (IS 456:2000, SP 34:1987)
   the cantilever span plus ``Ld`` into the back span (bent down at the tip) and top distribution.
 * Bars longer than the 12 m stock length are scheduled with additional tension laps.
 
-Not included: wastage, chairs/spacers, IS 13920 confining links, slab corner torsion steel
+* **IS 13920 zones**: where the design has closer end hoops, beams get them over ``2d`` from each
+  supported end (cl 6.3.5) and columns over ``l0`` at both ends of every storey (cl 8.1), with the
+  normal links / ties in between.
+
+Not included: wastage, chairs/spacers, slab corner torsion steel
 (Annex D-1.8), nominal top steel at discontinuous slab edges and anchorage of floating columns.
 Shear walls and combined footings are not scheduled; each one is listed in the warnings
 (column bars still get their foot in a combined footing).
@@ -225,6 +229,19 @@ def _natural(s: str):
 
 def _ceil_count(length: float, spacing: float) -> int:
     return int(math.ceil(max(length, 0.0) / spacing - 1e-9)) + 1 if spacing > 0 else 0
+
+
+def zoned_counts(length: float, mid: Links, end: Links | None, z1: float, z2: float) -> list[tuple[Links, int]]:
+    """Links over ``length`` (mm): ``end`` links within ``z1`` / ``z2`` of the two ends (IS 13920 confining
+    zones, 0 = none), ``mid`` links in between.  Links on a zone boundary are counted once."""
+    if end is None or end.spacing <= 0 or end.spacing >= mid.spacing or (z1 <= 0 and z2 <= 0):
+        return [(mid, _ceil_count(length, mid.spacing))]
+    z1, z2 = min(max(z1, 0.0), length / 2), min(max(z2, 0.0), length / 2)
+    if z1 + z2 >= length - 1e-6:  # the zones meet: closer links over the whole length
+        return [(end, _ceil_count(length, end.spacing))]
+    n_end = sum(_ceil_count(z, end.spacing) for z in (z1, z2) if z > 0)
+    n_mid = _ceil_count(length - z1 - z2, mid.spacing) - (z1 > 0) - (z2 > 0)
+    return [(end, n_end), (mid, max(n_mid, 0))]
 
 
 def _larger(*sets):
@@ -449,13 +466,21 @@ class _Builder:
 
         # stirrups
         counts: dict[Links, int] = defaultdict(int)
-        for seg, L in zip(segs, spans):
+        end_links: set[Links] = set()
+        for k, (seg, L) in enumerate(zip(segs, spans)):
             if seg.links is None:
                 self.bbs.warnings.append(f"Beam {mark} ({level}): shear design failed – stirrups not scheduled")
                 continue
-            counts[seg.links] += _ceil_count(L, seg.links.spacing)
+            z = 2 * max(seg.d * 1000 - c - 25, 0.0)  # 2d from the joint face (IS 13920 cl 6.3.5)
+            z1 = z if sup[k][0] != "free" else 0.0
+            z2 = z if sup[k + 1][0] != "free" else 0.0
+            for lk, n in zoned_counts(L, seg.links, seg.links_end, z1, z2):
+                counts[lk] += n
+                if lk is seg.links_end and lk != seg.links:
+                    end_links.add(lk)
         for lk, cnt in counts.items():
-            self._add_links("Beam", mark, level, prefix, "Stirrup", lk, cnt, first.b * 1000, D, c)
+            desc = "Stirrup (end zones 2d)" if lk in end_links else "Stirrup"
+            self._add_links("Beam", mark, level, prefix, desc, lk, cnt, first.b * 1000, D, c)
 
     # ------------------------------------------------------------ columns
     def columns(self):
@@ -501,8 +526,10 @@ class _Builder:
             if cd.tie is None:
                 self.bbs.warnings.append(f"Column {cd.mark} ({cd.level}): no ties in the design – not scheduled")
             else:
-                cnt = _ceil_count(H, cd.tie.spacing)
-                self._add_links("Column", cd.mark, cd.level, prefix, "Tie", cd.tie, cnt, cd.b * 1000, cd.d * 1000, c)
+                z = cd.l0 * 1000  # confining length at each end of the storey (IS 13920 cl 8.1)
+                for lk, cnt in zoned_counts(H, cd.tie, cd.tie_confined, z, z):
+                    desc = "Confining hoop (l0 zones)" if lk is cd.tie_confined and lk != cd.tie else "Tie"
+                    self._add_links("Column", cd.mark, cd.level, prefix, desc, lk, cnt, cd.b * 1000, cd.d * 1000, c)
         for w in self.rep.walls:
             self.bbs.warnings.append(
                 f"Wall {w.mark} ({w.level}): shear wall bars not scheduled – see the wall design "

@@ -118,8 +118,17 @@ def test_plan_beam_segments_are_aggregated():
     assert bottom[0].dims["b"] > 8000  # runs the summed span (+ into the end columns)
     assert any("interior support" in it.description for it in b1)
     assert sum(1 for it in b1 if it.description.startswith("Hanger")) == 2
-    stirrups = sum(it.count for it in b1 if it.description == "Stirrup")
-    assert stirrups == sum(int(-(-4000 // s.links.spacing)) + 1 for s in segs)
+    # IS 13920 applies (zone III): closer links over 2d from each support, design spacing between
+    from planwin_ai.io.bbs import zoned_counts
+
+    c = prj.design.beam_cover * 1000
+    stirrups = sum(it.count for it in b1 if it.description.startswith("Stirrup"))
+    expected = 0
+    for sg in segs:
+        z = 2 * (sg.d * 1000 - c - 25)
+        expected += sum(n for _, n in zoned_counts(4000, sg.links, sg.links_end, z, z))
+    assert stirrups == expected
+    assert stirrups >= sum(int(-(-4000 // sg.links.spacing)) + 1 for sg in segs)
     marks = [it.bar_mark for it in bbs.items]
     assert len(marks) == len(set(marks))
 
