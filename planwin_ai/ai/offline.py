@@ -7,6 +7,7 @@ Understands common engineering phrasing, e.g.::
     "auto size columns"   "analyze"   "design"   "export staad"
     "use response spectrum"   "rigid diaphragm off"   "staircase on beams B3 B4 width 1.2"
     "water tank 10000 litres on C5 C6 C9 C10 at roof"   "save revision R1"   "show BOQ by floor"
+    "export boq" (Excel cost estimate)   "column schedule" / "export schedules"
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ HELP = (
     "• 'add shear wall W1 from 0,0 to 3,0 thickness 230', 'staircase on beams B3 B4 width 1.2'\n"
     "• 'water tank 10000 litres on C5 C6 C9 C10 at roof', 'add grids'\n"
     "• 'save revision R1', 'compare revisions', 'show BOQ by floor', 'units tonnes' / 'use kN'\n"
+    "• 'export boq' (editable Excel cost estimate), 'export schedules' / 'column schedule' / 'beam schedule'\n"
     "• 'template office' – templates: " + ", ".join(t.key for t in TEMPLATES) + "\n"
     "Connect Claude, OpenAI or Ollama in Settings › AI for free-form requests and engineering Q&A."
 )
@@ -72,6 +74,9 @@ _SI = (
     r"\b(?:units?\s*(?:to|=|:|in)?\s*|use\s+|switch\s+to\s+|show\s+(?:in\s+)?|display\s+(?:in\s+)?)"
     r"(?:kn|si|kilo\s*newtons?)\b(?!\s*/)|\b(?:si|kn)\s+units?\b"
 )
+_EXPORT_VERB = r"\b(?:export|download|generate|create|save|give|make|write)\b"
+_BOQ_WORDS = r"(?:boq|bill\s+of\s+quantit(?:y|ies)|quantit(?:y|ies)|(?:cost|material)\s+estimate|estimate)"
+_FILE_WORDS = r"(?:excel|xlsx|spreadsheet|workbook|file)"
 _LABEL_STOP = {"and", "then", "with", "of", "the", "to", "for", "now", "please", "revision", "revisions"}
 
 
@@ -177,6 +182,28 @@ def _water_tank(t: str) -> dict | None:
     if m:
         act["water_depth"] = float(m.group(1))
     return act if ("capacity_l" in act or "columns" in act) else None
+
+
+def _named_exports(t: str) -> list[str]:
+    """Exports named by their content rather than a file type: the BOQ workbook ("export boq", "boq excel",
+    "cost estimate") and the member schedules ("column schedule", "export schedules").  "show boq" stays
+    the chat table and "bar bending schedule" stays the BBS."""
+    if re.search(r"\bbar\s+bending\b|\bbbs\b", t):
+        return []
+    out = []
+    lead = r"(?:(?:the|a|an|me|my|full|complete|editable|detailed)\s+)*"
+    if (
+        re.search(_EXPORT_VERB + r"\s+" + lead + _BOQ_WORDS + r"\b", t)
+        or re.search(r"\b" + _FILE_WORDS + r"\s+(?:(?:of|for)\s+(?:the\s+)?)?" + _BOQ_WORDS + r"\b", t)
+        or re.search(r"\b" + _BOQ_WORDS + r"\s+(?:(?:in|as|to|into)\s+(?:an?\s+)?)?" + _FILE_WORDS + r"\b", t)
+        or (re.search(r"\bcost\s+estimate\b", t) and not re.search(r"\b(?:show|display|list|print|tell|what)\b", t))
+    ):
+        out.append("boq")
+    if re.search(r"\b(?:column|beam|footing|slab|wall|member)s?\s+schedules?\b", t) or (
+        re.search(_EXPORT_VERB, t) and re.search(r"\bschedules?\b", t)
+    ):
+        out.append("schedules")
+    return out
 
 
 def _label(m: re.Match | None, group: int) -> str | None:
@@ -401,11 +428,14 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
     if re.search(r"\bdesign\b", t) and not re.search(r"design a\b", t):
         actions.append({"action": "design"})
     actions += _revisions(text, t)
-    if re.search(
-        r"\b(boq|bill\s+of\s+quantit(?:y|ies)|quantit(?:y|ies)|quantity\s+take\s*-?\s*off|material\s+estimate)\b", t
+    named = _named_exports(t)
+    if "boq" not in named and re.search(
+        r"\b(boq|bill\s+of\s+quantit(?:y|ies)|quantit(?:y|ies)|quantity\s+take\s*-?\s*off|(?:material|cost)\s+estimate)\b",
+        t,
     ):
         by_type = re.search(r"\bby\s+(?:member\s+)?types?\b|\b(?:member|type)\s*-?\s*wise\b|\bby\s+members?\b", t)
         actions.append({"action": "boq", "by": "type" if by_type else "floor"})
+    actions += [{"action": "export", "format": f} for f in named]
     for key, fmt in (
         ("bar bending", "bbs"),
         ("bbs", "bbs"),
@@ -425,7 +455,7 @@ def parse(text: str, has_model: bool = True) -> tuple[str, list[dict]]:
         ("pdf", "pdf"),
         ("report", "pdf"),
     ):
-        if re.search(r"\b(export|generate|create|save|give|make)\b", t) and key in t:
+        if not named and re.search(_EXPORT_VERB, t) and key in t:
             actions.append({"action": "export", "format": fmt})
             break
     if re.search(_MKS, t):
