@@ -50,8 +50,22 @@ def _widget_zoo():
     body = QWidget()
     lay = QVBoxLayout(body)
     named = {
-        QWidget: ["StartPage", "StartHero", "PanelSection", "SectionBody", "Ribbon", "RibbonTop"],
-        QLabel: ["StartTitle", "StartSubtitle", "StartCardTitle", "StartCardText", "Badge", "RibbonTitle"],
+        QWidget: ["StartPage", "StartHero", "StartBody", "PanelSection", "SectionBody", "PanelButtons", "Ribbon"],
+        QLabel: [
+            "StartTitle",
+            "StartSubtitle",
+            "StartSection",
+            "StartCardTitle",
+            "StartCardText",
+            "Badge",
+            "RibbonTitle",
+            "RibbonCaption",
+            "SectionBadge",
+            "PanelHint",
+            "PanelTitle",
+            "ResultsCount",
+            "ResultsEmpty",
+        ],
         QFrame: ["StartCard", "RibbonGroup"],
         QLineEdit: ["StartPrompt", "CommandSearch", "ResultsFilter", ""],
         QListWidget: ["CommandPopup", ""],
@@ -148,6 +162,15 @@ def test_qss_covers_new_object_names_and_scroll_area_fix():
             "QWidget#PanelSection",
             "QToolButton#SectionHeader",
             "QWidget#SectionBody",
+            "QLabel#SectionBadge",
+            "QLabel#PanelHint",
+            "QLabel#PanelTitle",
+            "QWidget#PanelButtons",
+            "QLabel#StartSection",
+            "QWidget#StartBody",
+            "QLabel#RibbonCaption",
+            "QLabel#ResultsCount",
+            "QLabel#ResultsEmpty",
             "QScrollBar:vertical",
             "QScrollBar:horizontal",
             "QToolTip",
@@ -157,6 +180,10 @@ def test_qss_covers_new_object_names_and_scroll_area_fix():
         # the checked ribbon toggle is a soft pill: no visible border
         rule = sheet.split("QToolButton#RibbonLarge:checked, QToolButton#RibbonSmall:checked {")[1].split("}")[0]
         assert "1px solid transparent" in rule and "background" in rule
+        # navigator items keep their per-item colours (badges, group headers)
+        for line in sheet.splitlines():
+            if "ResultsNav::item" in line:
+                assert " color:" not in line, line
 
 
 def test_qss_assets_exist():

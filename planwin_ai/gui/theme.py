@@ -365,15 +365,14 @@ def qss(theme: str) -> str:
     QAbstractItemView:disabled {{ color: {c["disabled_text"]}; }}
     QListView::item, QTreeView::item {{ padding: 3px 4px; border-radius: 4px; }}
     QListView::item:hover, QTreeView::item:hover, QTableView::item:hover {{ background: {c["hover"]}; }}
-    QListView::item:selected, QTreeView::item:selected, QTableView::item:selected {{ background: {c["sel"]};
-        color: {c["text"]}; }}
+    QListView::item:selected, QTreeView::item:selected, QTableView::item:selected {{ background: {c["sel"]}; }}
     QListView::item:selected:hover, QTreeView::item:selected:hover, QTableView::item:selected:hover {{
         background: {c["sel_hover"]}; }}
     QTreeView::branch {{ background: transparent; }}
     QTreeView::branch:has-children:closed {{ {chev_right}; }}
     QTreeView::branch:has-children:open {{ {chev}; }}
     QHeaderView {{ background: {c["header"]}; border: none; border-top-left-radius: 8px; border-top-right-radius: 8px; }}
-    QHeaderView::section {{ background: {c["header"]}; color: {c["muted"]}; padding: 5px 8px; border: none;
+    QHeaderView::section {{ background: {c["header"]}; color: {c["muted"]}; padding: 4px 6px; border: none;
         border-bottom: 1px solid {c["border"]}; border-right: 1px solid {c["gridline"]}; font-weight: 600;
         font-size: 8.5pt; }}
     QHeaderView::section:vertical {{ border-bottom: 1px solid {c["gridline"]}; border-right: 1px solid {c["border"]};
@@ -385,9 +384,9 @@ def qss(theme: str) -> str:
         border-right: 1px solid {c["border"]}; }}
     QAbstractItemView QLineEdit, QAbstractItemView QAbstractSpinBox {{ min-height: 0; padding: 0 4px;
         border-radius: 3px; border: 1px solid {ACCENT}; }}
-    QAbstractItemView QComboBox {{ min-height: 0; padding: 0 16px 0 4px; border-radius: 4px;
+    QAbstractItemView QComboBox {{ min-height: 0; padding: 0 14px 0 3px; border-radius: 4px;
         border: 1px solid transparent; background: {c["card"]}; }}
-    QAbstractItemView QComboBox::drop-down {{ width: 16px; }}
+    QAbstractItemView QComboBox::drop-down {{ width: 14px; }}
     QAbstractItemView QComboBox:hover {{ border-color: {c["border"]}; background: {c["input_hover"]}; }}
     QAbstractItemView QComboBox:focus, QAbstractItemView QComboBox:on {{ border-color: {ACCENT}; }}
 
@@ -440,6 +439,7 @@ def qss(theme: str) -> str:
     QTabBar#RibbonTabs::tab:hover:!selected {{ background: rgba(255, 255, 255, 0.16); color: #FFFFFF; }}
     QFrame#RibbonGroup {{ background: transparent; border: none; border-right: 1px solid {c["border"]}; }}
     QLabel#RibbonGroupTitle {{ color: {c["muted"]}; font-size: 8pt; }}
+    QLabel#RibbonCaption {{ color: {c["muted"]}; font-size: 8pt; padding: 0 2px; }}
     QToolButton#RibbonLarge {{ padding: 3px 6px; border: 1px solid transparent; border-radius: 6px; min-width: 52px; }}
     QToolButton#RibbonSmall {{ padding: 1px 6px; border: 1px solid transparent; border-radius: 4px; text-align: left; }}
     QToolButton#RibbonLarge:hover, QToolButton#RibbonSmall:hover {{ background: {c["hover"]}; }}
@@ -459,7 +459,7 @@ def qss(theme: str) -> str:
         border-radius: 8px; padding: 4px; outline: 0; }}
     QListWidget#CommandPopup::item {{ padding: 6px 10px; border-radius: 4px; margin: 1px 0; }}
     QListWidget#CommandPopup::item:hover {{ background: {c["hover"]}; }}
-    QListWidget#CommandPopup::item:selected {{ background: {c["sel"]}; color: {c["text"]}; }}
+    QListWidget#CommandPopup::item:selected {{ background: {c["sel"]}; }}
 
     /* ------------------------------------------------------------ start page */
     QWidget#StartPage {{ background: {c["bg"]}; }}
@@ -470,19 +470,22 @@ def qss(theme: str) -> str:
     QFrame#StartCard:hover {{ border: 1px solid {ACCENT}; background: {c["input_hover"] if not dark else c["hover"]}; }}
     QLabel#StartCardTitle {{ font-size: 10pt; font-weight: 600; color: {c["text"]}; background: transparent; }}
     QLabel#StartCardText {{ font-size: 8.5pt; color: {c["muted"]}; background: transparent; }}
+    QWidget#StartBody {{ background: {c["bg"]}; }}
+    QLabel#StartSection {{ font-size: 12pt; font-weight: 600; color: {c["text"]}; margin-top: 14px; padding-bottom: 2px; }}
     QLineEdit#StartPrompt {{ background: {c["card"]}; border: 1px solid {c["border_strong"]}; border-radius: 12px;
         padding: 10px 16px; min-height: 24px; font-size: 11pt; }}
     QLineEdit#StartPrompt:focus {{ border: 2px solid {ACCENT}; padding: 9px 15px; }}
 
     /* ------------------------------------------------------------ results navigator and tables
        ResultsNav: setRootIsDecorated(False) + setIndentation(0) (children are indented by the sheet); with a
-       branch area Qt paints the selected pill there too. */
+       branch area Qt paints the selected pill there too. No `color:` on its items: the per-item foreground
+       (group headers, badges) must win. */
     QTreeWidget#ResultsNav {{ background: transparent; border: none; padding: 4px; show-decoration-selected: 0;
         selection-background-color: transparent; }}
     QTreeWidget#ResultsNav::item {{ padding: 5px 8px 5px 22px; margin: 1px 0; border-radius: 6px; }}
-    QTreeWidget#ResultsNav::item:has-children {{ color: {c["muted"]}; font-weight: 600; padding: 8px 8px 4px 8px; }}
+    QTreeWidget#ResultsNav::item:has-children {{ padding: 8px 8px 4px 8px; }}
     QTreeWidget#ResultsNav::item:hover {{ background: {c["hover"]}; }}
-    QTreeWidget#ResultsNav::item:selected {{ background: {on_accent_soft}; color: {c["accent_text"]}; }}
+    QTreeWidget#ResultsNav::item:selected {{ background: {on_accent_soft}; }}
     QTreeWidget#ResultsNav::branch, QTreeWidget#ResultsNav::branch:selected, QTreeWidget#ResultsNav::branch:hover {{
         background: transparent; image: none; border: none; }}
     QLineEdit#ResultsFilter {{ border-radius: 6px; padding-left: 10px; }}
@@ -496,6 +499,8 @@ def qss(theme: str) -> str:
     QLabel#Badge[kind="warn"] {{ background: {BADGE["warn"]}; }}
     QLabel#Badge[kind="ok"] {{ background: {BADGE["ok"]}; }}
     QLabel#Badge[kind="info"] {{ background: {BADGE["info"]}; }}
+    QLabel#ResultsCount {{ color: {c["muted"]}; font-size: 8.5pt; padding: 0 4px; }}
+    QLabel#ResultsEmpty {{ color: {c["muted"]}; font-size: 10pt; qproperty-alignment: AlignCenter; padding: 24px; }}
 
     /* ------------------------------------------------------------ collapsible panel sections
        SectionHeader: QToolButton with ToolButtonTextBesideIcon (text is then left-aligned) and either
@@ -507,6 +512,11 @@ def qss(theme: str) -> str:
     QToolButton#SectionHeader:checked {{ background: transparent; color: {c["text"]}; }}
     QToolButton#SectionHeader:checked:hover {{ background: {c["hover"]}; }}
     QWidget#SectionBody {{ background: transparent; border: none; }}
+    QLabel#SectionBadge {{ background: {c["hover"]}; color: {c["muted"]}; border-radius: 8px; padding: 0 6px;
+                           font-size: 8pt; font-weight: 600; min-width: 8px; }}
+    QLabel#PanelTitle {{ font-size: 11pt; font-weight: 600; color: {c["text"]}; padding: 2px 2px 4px 2px; }}
+    QLabel#PanelHint {{ color: {c["muted"]}; font-size: 8.5pt; qproperty-wordWrap: true; padding: 2px; }}
+    QWidget#PanelButtons {{ background: {c["panel"]}; border-top: 1px solid {c["border"]}; }}
     """
 
 
